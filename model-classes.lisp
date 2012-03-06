@@ -94,8 +94,8 @@
   ((name :type string                           ;the name of the enum value
          :reader proto-name
          :initarg :name)
-   (index :type (integer 1 #.(1- (ash 1 32)))   ;the index of the enum value
-          :accessor proto-index
+   (index :type (integer #.(- (ash 1 31)) #.(1- (ash 1 31)))
+          :accessor proto-index                 ;the index of the enum value
           :initarg :index)
    (value :type (or null symbol)
           :accessor proto-value                 ;the Lisp value of the enum
@@ -164,7 +164,7 @@
    (required :type (member :required :optional :repeated)
              :accessor proto-required
              :initarg :required)
-   (index :type (integer 1 #.(1- (ash 1 32)))   ;the index number for this field
+   (index :type (integer 1 #.(1- (ash 1 29)))   ;the index number for this field
           :accessor proto-index
           :initarg :index)
    (value :type (or null symbol)                ;the Lisp slot holding the value within an object

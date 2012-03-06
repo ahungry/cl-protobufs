@@ -111,6 +111,12 @@
 (equalp (mapcar #'proto-impl:zig-zag-encode64
                 '(0 -1 1 -2 2 -2147483648 2147483647 -1152921504606846976 1152921504606846975))
         '(0 1 2 3 4 4294967295 4294967294 2305843009213693951 2305843009213693950))
+
+(proto:print-text-format test1 tschema)
+(proto:print-text-format test2 tschema)
+(proto:print-text-format test3 tschema)
+(proto:print-text-format test4 tschema)
+(proto:print-text-format test5 tschema)
 ||#
 
 #||

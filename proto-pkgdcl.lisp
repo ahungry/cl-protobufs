@@ -51,7 +51,10 @@
    "SERIALIZE-OBJECT"
    "DESERIALIZE-OBJECT-FROM-STREAM"
    "DESERIALIZE-OBJECT"
-   "OBJECT-SIZE"))
+   "OBJECT-SIZE"
+
+   ;; Text printing
+   "PRINT-TEXT-FORMAT"))
 
 (defpackage protobufs-implementation
   (:nicknames :proto-impl)
