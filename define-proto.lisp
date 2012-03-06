@@ -15,9 +15,9 @@
 
 ;; Define a schema named 'name', corresponding to a .proto file of that name
 ;; 'proto-name' can be used to override the defaultly generated name
-;; 'package' and 'imports' are as in .proto files
+;; 'syntax', 'package', 'imports' and 'options' are as in .proto files
 ;; The body consists of 'define-enum', 'define-message' or 'define-service' forms
-(defmacro define-proto (name (&key proto-name package import syntax options)
+(defmacro define-proto (name (&key proto-name syntax package import options)
                         &body messages &environment env)
   (with-collectors ((enums collect-enum)
                     (msgs  collect-msg)
@@ -61,20 +61,21 @@
 ;; Define an enum type named 'name' and a Lisp 'deftype'
 ;; 'proto-name' can be used to override the defaultly generated name
 ;; The body consists of the enum values in the form (name &key index)
-(defmacro define-enum (name (&key proto-name) &body values)
+(defmacro define-enum (name (&key proto-name conc-name) &body values)
   (with-collectors ((vals  collect-val)
                     (evals collect-eval)
                     (forms collect-form))
     (let ((index 0))
       (dolist (val values)
-        (destructuring-bind (name)
-            (if (listp val) val (list val))             ;---*** &KEY INDEX?
-          (let ((lname (kintern (symbol-name name))))
-            (collect-val lname)
-            (collect-eval `(make-instance 'protobuf-enum-value
-                             :name  ,(proto-enum-name name)
-                             :index ,(incf index)
-                             :value ,lname))))))
+        (let* ((idx  (if (listp val) (second val) (incf index)))
+               (name (if (listp val) (first val)  val))
+               (val-name  (kintern (if conc-name (format nil "~A~A" conc-name name) (symbol-name name))))
+               (enum-name (if conc-name (format nil "~A~A" conc-name name) (symbol-name name))))
+          (collect-val val-name)
+          (collect-eval `(make-instance 'protobuf-enum-value
+                           :name  ,(proto-enum-name enum-name)
+                           :index ,idx
+                           :value ,val-name)))))
     (collect-form `(deftype ,name () '(member ,@vals)))
     `(progn
        define-enum
@@ -88,7 +89,7 @@
 ;; 'proto-name' can be used to override the defaultly generated name
 ;; The body consists of fields, or 'define-enum' or 'define-message' forms
 ;; Fields take the form (name &key type default index)
-(defmacro define-message (name (&key proto-name) &body fields &environment env)
+(defmacro define-message (name (&key proto-name conc-name) &body fields &environment env)
   (with-collectors ((enums collect-enum)
                     (msgs  collect-msg)
                     (flds  collect-field)
@@ -109,22 +110,26 @@
                ((define-message)
                 (collect-msg model)))))
           (otherwise
-           (destructuring-bind (slot &key type default) fld ;---*** &KEY INDEX?
-             (multiple-value-bind (ptype pclass)
-                 (clos-type-to-protobuf-type type)
-               (collect-slot `(,slot :type ,type
-                                     :ACCESSOR ,SLOT    ;---*** BETTER ACCESSOR NAME VIA :CONC-NAME
-                                     :initarg ,(kintern (symbol-name slot))
-                                     ,@(and default (list :initform default))))
-               (collect-field `(make-instance 'protobuf-field
-                                 :name  ,(proto-field-name slot)
-                                 :type  ,ptype
-                                 :class ',pclass
-                                 :required ,(clos-type-to-protobuf-required type)
-                                 :index ,(incf index)
-                                 :value ',slot
-                                 :default ,(and default (FORMAT NIL "~A" DEFAULT))      ;---***
-                                 :packed  ,(packed-type-p pclass)))))))))
+           (destructuring-bind (slot &key type default) fld
+             (let* ((idx  (if (listp slot) (second slot) (incf index)))
+                    (slot (if (listp slot) (first slot) slot))
+                    (accessor (intern (if conc-name (format nil "~A~A" conc-name slot) (symbol-name slot))
+                                      (symbol-package slot))))
+               (multiple-value-bind (ptype pclass)
+                   (clos-type-to-protobuf-type type)
+                 (collect-slot `(,slot :type ,type
+                                       :accessor ,accessor
+                                       :initarg ,(kintern (symbol-name slot))
+                                       ,@(and default (list :initform default))))
+                 (collect-field `(make-instance 'protobuf-field
+                                   :name  ,(proto-field-name slot)
+                                   :type  ,ptype
+                                   :class ',pclass
+                                   :required ,(clos-type-to-protobuf-required type)
+                                   :index ,idx
+                                   :value ',slot
+                                   :default ,(and default (format nil "~A" default))
+                                   :packed  ,(packed-type-p pclass))))))))))
     (collect-form `(defclass ,name () (,@slots)))
     `(progn
        define-message

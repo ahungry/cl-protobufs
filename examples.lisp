@@ -138,7 +138,7 @@
                                                       :value :high)
                                                     (make-instance 'proto:protobuf-enum-value
                                                       :name "HIGH"
-                                                      :index 2
+                                                      :index 100
                                                       :value :low))))
                       :fields (list (make-instance 'proto:protobuf-field
                                       :name "color"
@@ -181,10 +181,10 @@
     red
     green
     blue)
-  (proto:define-message color ()
+  (proto:define-message color (:conc-name color-)
     (proto:define-enum contrast-name ()
-      low
-      high)
+      (low    1)
+      (high 100))
     (color    :type color)
     (contrast :type (or null contrast) :default :low))
   (proto:define-service color-wheel ()
@@ -195,13 +195,15 @@
      (DEFTYPE COLOR-NAME () '(MEMBER :RED :GREEN :BLUE))
      (DEFTYPE CONTRAST-NAME () '(MEMBER :LOW :HIGH))
      (DEFCLASS COLOR ()
-       ((COLOR    :TYPE COLOR              :ACCESSOR COLOR    :INITARG :COLOR)
-        (CONTRAST :TYPE (OR NULL CONTRAST) :ACCESSOR CONTRAST :INITARG :CONTRAST :INITFORM :LOW)))
+       ((COLOR :TYPE COLOR :ACCESSOR COLOR-COLOR :INITARG :COLOR)
+        (CONTRAST :TYPE (OR NULL CONTRAST) :ACCESSOR COLOR-CONTRAST :INITARG :CONTRAST :INITFORM :LOW)))
      (DEFVAR *COLOR-WHEEL*
        (MAKE-INSTANCE 'PROTOBUF
          :NAME "ColorWheel"
          :PACKAGE "ita.color"
          :IMPORTS '("descriptor.proto")
+         :SYNTAX NIL
+         :OPTIONS 'NIL
          :ENUMS (LIST (MAKE-INSTANCE 'PROTOBUF-ENUM
                         :NAME "ColorName"
                         :CLASS 'COLOR-NAME
@@ -229,7 +231,7 @@
                                                           :VALUE :LOW)
                                                         (MAKE-INSTANCE 'PROTOBUF-ENUM-VALUE
                                                           :NAME "HIGH"
-                                                          :INDEX 2
+                                                          :INDEX 100
                                                           :VALUE :HIGH))))
                            :MESSAGES (LIST)
                            :FIELDS (LIST (MAKE-INSTANCE 'PROTOBUF-FIELD

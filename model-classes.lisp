@@ -19,6 +19,10 @@
          :reader proto-name
          :initarg :name
          :initform nil)
+   (syntax :type (or null string)               ;syntax, passed on but otherwise ignored
+           :reader proto-syntax
+           :initarg :syntax
+           :initform nil)
    (package :type (or null string)              ;the package
             :reader proto-package
             :initarg :package
@@ -27,10 +31,6 @@
             :reader proto-imports
             :initarg :imports
             :initform ())
-   (syntax :type (or null string)               ;syntax, passed on but otherwise ignored
-           :reader proto-syntax
-           :initarg :syntax
-           :initform nil)
    (options :type (list-of string)              ;options, passed on but otherwise ignored
            :reader proto-options
            :initarg :options
