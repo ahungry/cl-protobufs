@@ -35,14 +35,14 @@
            :reader proto-options
            :initarg :options
            :initform ())
-   (messages :type (list-of protobuf-message)   ;the set of messages
-             :accessor proto-messages
-             :initarg :messages
-             :initform ())
    (enums :type (list-of protobuf-enum)         ;the set of enum types
           :accessor proto-enums
           :initarg :enums
           :initform ())
+   (messages :type (list-of protobuf-message)   ;the set of messages
+             :accessor proto-messages
+             :initarg :messages
+             :initform ())
    (services :type (list-of protobuf-service)
              :accessor proto-services
              :initarg :services
@@ -65,6 +65,49 @@
       (some #'(lambda (msg) (find-enum-for-type msg type)) (proto-messages protobuf))))
 
 
+;; A protobuf enumeration
+(defclass protobuf-enum ()
+  ((name :type string                           ;the Protobuf name for the enum type
+         :reader proto-name
+         :initarg :name)
+   (class :type (or null symbol)                ;the Lisp type it represents
+          :accessor proto-class
+          :initarg :class
+          :initform nil)
+   (values :type (list-of protobuf-enum-value)  ;all the values for this enum type
+           :accessor proto-values
+           :initarg :values
+           :initform ())
+   (comment :type (or null string)
+            :accessor proto-comment
+            :initarg :comment
+            :initform nil)))
+
+(defmethod print-object ((e protobuf-enum) stream)
+  (print-unprintable-object (e stream :type t :identity t)
+    (format stream "~A~@[ (~S)~]"
+            (proto-name e) (proto-class e))))
+
+
+;; A protobuf value within an enumeration
+(defclass protobuf-enum-value ()
+  ((name :type string                           ;the name of the enum value
+         :reader proto-name
+         :initarg :name)
+   (index :type (integer 1 #.(1- (ash 1 32)))   ;the index of the enum value
+          :accessor proto-index
+          :initarg :index)
+   (value :type (or null symbol)
+          :accessor proto-value                 ;the Lisp value of the enum
+          :initarg :value
+          :initform nil)))
+
+(defmethod print-object ((v protobuf-enum-value) stream)
+  (print-unprintable-object (v stream :type t :identity t)
+    (format stream "~A = ~D~@[ (~S)~]"
+            (proto-name v) (proto-index v) (proto-value v))))
+
+
 ;; A protobuf message
 (defclass protobuf-message ()
   ((name :type string                           ;the Protobuf name for the message
@@ -74,18 +117,18 @@
           :accessor proto-class
           :initarg :class
           :initform nil)
-   (fields :type (list-of protobuf-field)       ;the fields
-           :accessor proto-fields
-           :initarg :fields
-           :initform ())
-   (messages :type (list-of protobuf-message)   ;the embedded messages
-             :accessor proto-messages
-             :initarg :messages
-             :initform ())
    (enums :type (list-of protobuf-enum)         ;the embedded enum types
           :accessor proto-enums
           :initarg :enums
           :initform ())
+   (messages :type (list-of protobuf-message)   ;the embedded messages
+             :accessor proto-messages
+             :initarg :messages
+             :initform ())
+   (fields :type (list-of protobuf-field)       ;the fields
+           :accessor proto-fields
+           :initarg :fields
+           :initform ())
    (comment :type (or null string)
             :accessor proto-comment
             :initarg :comment
@@ -147,49 +190,6 @@
             (proto-type f) (proto-name f)
             (or (proto-value f) (proto-class f)) (proto-value f) (proto-class f)
             (proto-index f))))
-
-
-;; A protobuf enumeration
-(defclass protobuf-enum ()
-  ((name :type string                           ;the Protobuf name for the enum type
-         :reader proto-name
-         :initarg :name)
-   (class :type (or null symbol)                ;the Lisp type it represents
-          :accessor proto-class
-          :initarg :class
-          :initform nil)
-   (values :type (list-of protobuf-enum-value)  ;all the values for this enum type
-           :accessor proto-values
-           :initarg :values
-           :initform ())
-   (comment :type (or null string)
-            :accessor proto-comment
-            :initarg :comment
-            :initform nil)))
-
-(defmethod print-object ((e protobuf-enum) stream)
-  (print-unprintable-object (e stream :type t :identity t)
-    (format stream "~A~@[ (~S)~]"
-            (proto-name e) (proto-class e))))
-
-
-;; A protobuf value within an enumeration
-(defclass protobuf-enum-value ()
-  ((name :type string                           ;the name of the enum value
-         :reader proto-name
-         :initarg :name)
-   (index :type (integer 1 #.(1- (ash 1 32)))   ;the index of the enum value
-          :accessor proto-index
-          :initarg :index)
-   (value :type (or null symbol)
-          :accessor proto-value                 ;the Lisp value of the enum
-          :initarg :value
-          :initform nil)))
-
-(defmethod print-object ((v protobuf-enum-value) stream)
-  (print-unprintable-object (v stream :type t :identity t)
-    (format stream "~A = ~D~@[ (~S)~]"
-            (proto-name v) (proto-index v) (proto-value v))))
 
 
 ;; A protobuf service

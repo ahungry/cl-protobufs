@@ -45,13 +45,14 @@
            (collect-msg model))
           ((define-service)
            (collect-svc model)))))
+    ;;--- This should warn if the old one isn't upgradable to the new one
     (let ((sname   (fintern "*~A*" name)))
       `(progn
          ,@forms
          (defvar ,sname (make-instance 'protobuf
                           :name     ,(or proto-name (proto-class-name name))
                           :package  ,(if (stringp package) package (string-downcase (string package)))
-                          :imports  ',(if (consp import) import (list import))
+                          :imports  ',(if (listp import) import (list import))
                           :syntax   ,syntax
                           :options  '(,@options)
                           :enums    (list ,@enums)

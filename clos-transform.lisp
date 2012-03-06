@@ -37,9 +37,9 @@
 (defun class-to-protobuf-message (class &key slot-filter type-filter enum-filter value-filter)
   (let* ((class (find-class class))
          (slots (class-slots class)))
-    (with-collectors ((fields collect-field)
+    (with-collectors ((enums  collect-enum)
                       (msgs   collect-msg)
-                      (enums  collect-enum))
+                      (fields collect-field))
       (loop with index = 1
             for s in slots doing
         (multiple-value-bind (field msg enum)
@@ -48,19 +48,19 @@
                                     :type-filter type-filter
                                     :enum-filter enum-filter
                                     :value-filter value-filter)
-          (when field
-            (incf index 1)
-            (collect-field field))
+          (when enum
+            (collect-enum enum))
           (when msg
             (collect-msg msg))
-          (when enum
-            (collect-enum enum))))
+          (when field
+            (incf index 1)
+            (collect-field field))))
       (make-instance 'protobuf-message
         :name  (proto-class-name (class-name class))
         :class (class-name class)
-        :fields fields
+        :enums (delete-duplicates enums :key #'proto-name :test #'string-equal)
         :messages (delete-duplicates msgs :key #'proto-name :test #'string-equal)
-        :enums (delete-duplicates enums :key #'proto-name :test #'string-equal)))))
+        :fields fields))))
 
 ;; Returns a field, (optionally) an inner message, and (optionally) an inner enum
 (defun slot-to-protobuf-field (slot index slots &key slot-filter type-filter enum-filter value-filter)

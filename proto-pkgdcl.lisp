@@ -34,12 +34,15 @@
    "PARSE-PROTOBUF"
    "PARSE-PROTOBUF-FROM-STREAM"
 
-   ;; Protobufs defining macros
+   ;; Protobuf defining macros
    "DEFINE-PROTO"
    "DEFINE-ENUM"
    "DEFINE-MESSAGE"
    "DEFINE-SERVICE"
    
+   ;; Upgradability testing
+   "PROTOBUF-UPGRADABLE"
+
    ;; CLOS to Protobufs transformer
    "WRITE-PROTOBUF-SCHEMA-FOR-CLASSES"
 

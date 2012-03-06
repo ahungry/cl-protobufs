@@ -134,6 +134,10 @@
                             (cl    (if (eq (proto-class field) 'boolean) :bool (proto-class field)))
                             (msg   (and cl (or (find-message-for-class protobuf cl)
                                                (find-enum-for-type protobuf cl))))
+                            ;; It's OK for this to be null
+                            ;; That means we're parsing some version of a message
+                            ;; that has the field, but our current message does not
+                            ;; We still have to deserialize everything, though
                             (slot  (proto-value field)))
                        ;;---*** Check for mismatched types, running past end of buffer, etc
                        (declare (ignore type))
@@ -142,40 +146,47 @@
                                      (multiple-value-bind (values idx)
                                          (deserialize-packed cl field buffer index)
                                        (setq index idx)
-                                       (setf (slot-value object slot) values)))
+                                       (when slot
+                                         (setf (slot-value object slot) values))))
                                     ((keywordp cl)
                                      (multiple-value-bind (val idx)
                                          (deserialize-prim cl field buffer index)
                                        (setq index idx)
-                                       (setf (slot-value object slot) (nconc (slot-value object slot) (list val)))))
+                                       (when slot
+                                         (setf (slot-value object slot) (nconc (slot-value object slot) (list val))))))
                                     ((typep msg 'protobuf-enum)
                                      (multiple-value-bind (val idx)
                                          (deserialize-enum msg field buffer index)
                                        (setq index idx)
-                                       (setf (slot-value object slot) (nconc (slot-value object slot) (list val)))))
+                                       (when slot
+                                         (setf (slot-value object slot) (nconc (slot-value object slot) (list val))))))
                                     ((typep msg 'protobuf-message)
                                      (multiple-value-bind (len idx)
                                          (decode-uint32 buffer index)
                                        (setq index idx)
                                        (let ((obj (deserialize cl (cons msg trace) (+ index len))))
-                                         (setf (slot-value object slot) (nconc (slot-value object slot) (list obj))))))))
+                                         (when slot
+                                           (setf (slot-value object slot) (nconc (slot-value object slot) (list obj)))))))))
                              (t
                               (cond ((keywordp cl)
                                      (multiple-value-bind (val idx)
                                          (deserialize-prim cl field buffer index)
                                        (setq index idx)
-                                       (setf (slot-value object slot) val)))
+                                       (when slot
+                                         (setf (slot-value object slot) val))))
                                     ((typep msg 'protobuf-enum)
                                      (multiple-value-bind (val idx)
                                          (deserialize-enum msg field buffer index)
                                        (setq index idx)
-                                       (setf (slot-value object slot) val)))
+                                       (when slot
+                                         (setf (slot-value object slot) val))))
                                     ((typep msg 'protobuf-message)
                                      (multiple-value-bind (len idx)
                                          (decode-uint32 buffer index)
                                        (setq index idx)
                                        (let ((obj (deserialize cl (cons msg trace) (+ index len))))
-                                         (setf (slot-value object slot) obj)))))))))))))
+                                         (when slot
+                                           (setf (slot-value object slot) obj))))))))))))))
       (deserialize class (list protobuf)))))
 
 
