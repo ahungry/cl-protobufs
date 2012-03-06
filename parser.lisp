@@ -15,11 +15,11 @@
 
 (defun parse-protobuf-from-file (filename)
   (with-open-file (stream filename
-		   :direction :input
-		   :external-format :utf-8
-		   :element-type 'character)
+                   :direction :input
+                   :external-format :utf-8
+                   :element-type 'character)
     (parse-protobuf-from-stream stream)))
 
 (defun parse-protobuf-from-stream (stream)
-  STREAM					;---*** DO THIS
+  STREAM                                        ;---*** DO THIS
   )

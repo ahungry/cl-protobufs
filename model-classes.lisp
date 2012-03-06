@@ -23,6 +23,18 @@
             :reader proto-package
             :initarg :package
             :initform nil)
+   (imports :type (list-of string)              ;any imports
+            :reader proto-imports
+            :initarg :imports
+            :initform ())
+   (syntax :type (or null string)               ;syntax, passed on but otherwise ignored
+           :reader proto-syntax
+           :initarg :syntax
+           :initform nil)
+   (options :type (list-of string)              ;options, passed on but otherwise ignored
+           :reader proto-options
+           :initarg :options
+           :initform ())
    (messages :type (list-of protobuf-message)   ;the set of messages
              :accessor proto-messages
              :initarg :messages

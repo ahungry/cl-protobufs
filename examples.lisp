@@ -15,21 +15,21 @@
 
 #||
 (setq cschema (proto:write-protobuf-schema-for-classes '(qres-core::legacy-pnr
-							 qres-core::legacy-pnr-pax
-							 qres-core::legacy-pnr-segment
-							 qres-core::legacy-pnr-pax-segment)
-						       :slot-filter #'quake::quake-slot-filter
-						       :type-filter #'quake::quake-type-filter
-						       :enum-filter #'quake::quake-enum-filter
-						       :value-filter #'quake::quake-value-filter))
+                                                         qres-core::legacy-pnr-pax
+                                                         qres-core::legacy-pnr-segment
+                                                         qres-core::legacy-pnr-pax-segment)
+                                                       :slot-filter #'quake::quake-slot-filter
+                                                       :type-filter #'quake::quake-type-filter
+                                                       :enum-filter #'quake::quake-enum-filter
+                                                       :value-filter #'quake::quake-value-filter))
 
 (proto:serialize-object-to-stream pnr cschema :stream nil)
 ||#
 
 #||
 (setq pschema (proto:write-protobuf-schema-for-classes '(proto:protobuf
-							 proto:protobuf-message proto:protobuf-field
-							 proto:protobuf-enum proto:protobuf-enum-value)))
+                                                         proto:protobuf-message proto:protobuf-field
+                                                         proto:protobuf-enum proto:protobuf-enum-value)))
 
 (setq pser (proto:serialize-object-to-stream pschema pschema :stream nil))
 (describe (proto:deserialize-object 'proto:protobuf pschema pser))
@@ -73,7 +73,7 @@
             :initarg :strvals)))
 
 (setq tschema (proto:write-protobuf-schema-for-classes
-	       '(proto-test1 proto-test2 proto-test3 proto-test4 proto-test5)))
+               '(proto-test1 proto-test2 proto-test3 proto-test4 proto-test5)))
 
 (setq test1 (make-instance 'proto-test1 :intval 150))
 (setq test2 (make-instance 'proto-test2 :strval "testing"))
@@ -106,10 +106,10 @@
 (describe (proto:deserialize-object 'proto-test5 tschema tser5))
 
 (equalp (mapcar #'proto-impl:zig-zag-encode32
-		'(0 -1 1 -2 2 -2147483648 2147483647))
+                '(0 -1 1 -2 2 -2147483648 2147483647))
         '(0 1 2 3 4 4294967295 4294967294))
 (equalp (mapcar #'proto-impl:zig-zag-encode64
-		'(0 -1 1 -2 2 -2147483648 2147483647 -1152921504606846976 1152921504606846975))
+                '(0 -1 1 -2 2 -2147483648 2147483647 -1152921504606846976 1152921504606846975))
         '(0 1 2 3 4 4294967295 4294967294 2305843009213693951 2305843009213693950))
 ||#
 
@@ -164,6 +164,7 @@
                       :rpcs rpcs)))
        (proto (make-instance 'proto:protobuf
                 :package "ita.color"
+                :imports '("descriptor.proto")
                 :enums enums
                 :messages msgs
                 :services svcs)))
@@ -172,7 +173,10 @@
 ||#
 
 #||
-(proto:define-proto color-wheel ()
+(makunbound '*color-wheel*)
+
+(proto:define-proto color-wheel (:package ita.color
+                                 :import "descriptor.proto")
   (proto:define-enum color-name ()
     red
     green
@@ -188,39 +192,50 @@
     (set-color color color)))
 
 => (PROGN
-     (DEFTYPE COLOR-NAME () '(MEMBER :RED :BLUE :GREEN))
+     (DEFTYPE COLOR-NAME () '(MEMBER :RED :GREEN :BLUE))
      (DEFTYPE CONTRAST-NAME () '(MEMBER :LOW :HIGH))
      (DEFCLASS COLOR ()
-       ((COLOR :TYPE COLOR-NAME :ACCESSOR COLOR :INITARG :COLOR)
-        (CONTRAST :TYPE (OR NULL CONTRAST-NAME) :ACCESSOR CONTRAST :INITARG :CONTRAST :INITFORM :LOW)))
+       ((COLOR    :TYPE COLOR              :ACCESSOR COLOR    :INITARG :COLOR)
+        (CONTRAST :TYPE (OR NULL CONTRAST) :ACCESSOR CONTRAST :INITARG :CONTRAST :INITFORM :LOW)))
      (DEFVAR *COLOR-WHEEL*
        (MAKE-INSTANCE 'PROTOBUF
          :NAME "ColorWheel"
-         :PACKAGE NIL
+         :PACKAGE "ita.color"
+         :IMPORTS '("descriptor.proto")
          :ENUMS (LIST (MAKE-INSTANCE 'PROTOBUF-ENUM
-                        :NAME "Color"
-                        :CLASS 'COLOR
+                        :NAME "ColorName"
+                        :CLASS 'COLOR-NAME
                         :VALUES (LIST (MAKE-INSTANCE 'PROTOBUF-ENUM-VALUE
-                                        :NAME "RED" :INDEX 1 :VALUE :RED)
+                                        :NAME "RED"
+                                        :INDEX 1
+                                        :VALUE :RED)
                                       (MAKE-INSTANCE 'PROTOBUF-ENUM-VALUE
-                                        :NAME "BLUE" :INDEX 2 :VALUE :BLUE)
+                                        :NAME "GREEN"
+                                        :INDEX 2
+                                        :VALUE :GREEN)
                                       (MAKE-INSTANCE 'PROTOBUF-ENUM-VALUE
-                                        :NAME "GREEN" :INDEX 3 :VALUE :GREEN))))
+                                        :NAME "BLUE"
+                                        :INDEX 3
+                                        :VALUE :BLUE))))
          :MESSAGES (LIST (MAKE-INSTANCE 'PROTOBUF-MESSAGE
                            :NAME "Color"
                            :CLASS 'COLOR
                            :ENUMS (LIST (MAKE-INSTANCE 'PROTOBUF-ENUM
-                                          :NAME "Contrast"
-                                          :CLASS 'CONTRAST
+                                          :NAME "ContrastName"
+                                          :CLASS 'CONTRAST-NAME
                                           :VALUES (LIST (MAKE-INSTANCE 'PROTOBUF-ENUM-VALUE
-                                                          :NAME "LOW" :INDEX 1 :VALUE :LOW)
+                                                          :NAME "LOW"
+                                                          :INDEX 1
+                                                          :VALUE :LOW)
                                                         (MAKE-INSTANCE 'PROTOBUF-ENUM-VALUE
-                                                          :NAME "HIGH" :INDEX 2 :VALUE :HIGH))))
+                                                          :NAME "HIGH"
+                                                          :INDEX 2
+                                                          :VALUE :HIGH))))
                            :MESSAGES (LIST)
                            :FIELDS (LIST (MAKE-INSTANCE 'PROTOBUF-FIELD
                                            :NAME "color"
-                                           :TYPE "ColorName"
-                                           :CLASS 'COLOR-NAME
+                                           :TYPE "Color"
+                                           :CLASS 'COLOR
                                            :REQUIRED :REQUIRED
                                            :INDEX 1
                                            :VALUE 'COLOR
@@ -228,14 +243,23 @@
                                            :PACKED NIL)
                                          (MAKE-INSTANCE 'PROTOBUF-FIELD
                                            :NAME "contrast"
-                                           :TYPE "ContrastName"
-                                           :CLASS 'CONTRAST-NAME
+                                           :TYPE "Contrast"
+                                           :CLASS 'CONTRAST
                                            :REQUIRED :OPTIONAL
                                            :INDEX 2
                                            :VALUE 'CONTRAST
                                            :DEFAULT "LOW"
                                            :PACKED NIL))))
-         :SERVICES (LIST))))
+         :SERVICES (LIST (MAKE-INSTANCE 'PROTOBUF-SERVICE
+                           :NAME "ColorWheel"
+                           :RPCS (LIST (MAKE-INSTANCE 'PROTOBUF-RPC
+                                         :NAME "GetColor"
+                                         :INPUT-TYPE NIL
+                                         :OUTPUT-TYPE "Color")
+                                       (MAKE-INSTANCE 'PROTOBUF-RPC
+                                         :NAME "SetColor"
+                                         :INPUT-TYPE "Color"
+                                         :OUTPUT-TYPE "Color")))))))
 
 ;; The output should be example the same as the output of 'write-protobuf' above
 (proto:write-protobuf *color-wheel* *standard-output*)

@@ -14,8 +14,18 @@
 ;;; Protobufs pretty printing
 
 (defmethod write-protobuf ((protobuf protobuf) stream &key (indentation 0))
+  (when (proto-syntax protobuf)
+    (format stream "~&syntax = \"~A\";~%~%" (proto-syntax protobuf)))
   (when (proto-package protobuf)
     (format stream "~&package ~A;~%~%" (proto-package protobuf)))
+  (when (proto-imports protobuf)
+    (dolist (import (proto-imports protobuf))
+      (format stream "~&import \"~A\";~%" import))
+    (format stream "~%"))
+  (when (proto-options protobuf)
+    (dolist (option (proto-options protobuf))
+      (format stream "~&option ~A;~%" option))
+    (format stream "~%"))
   (dolist (enum (proto-enums protobuf))
     (write-protobuf enum stream :indentation indentation)
     (terpri stream))

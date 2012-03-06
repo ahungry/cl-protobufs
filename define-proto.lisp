@@ -17,8 +17,8 @@
 ;; 'proto-name' can be used to override the defaultly generated name
 ;; 'package' and 'imports' are as in .proto files
 ;; The body consists of 'define-enum', 'define-message' or 'define-service' forms
-(defmacro define-proto (name (&key proto-name package import) &body messages &environment env)
-  IMPORT                                                ;---*** DO THIS
+(defmacro define-proto (name (&key proto-name package import syntax options)
+                        &body messages &environment env)
   (with-collectors ((enums collect-enum)
                     (msgs  collect-msg)
                     (svcs  collect-svc)
@@ -49,8 +49,11 @@
       `(progn
          ,@forms
          (defvar ,sname (make-instance 'protobuf
-                          :name    ,(or proto-name (proto-class-name name))
-                          :package ,package
+                          :name     ,(or proto-name (proto-class-name name))
+                          :package  ,(if (stringp package) package (string-downcase (string package)))
+                          :imports  ',(if (consp import) import (list import))
+                          :syntax   ,syntax
+                          :options  '(,@options)
                           :enums    (list ,@enums)
                           :messages (list ,@msgs)
                           :services (list ,@svcs)))))))
@@ -110,7 +113,7 @@
              (multiple-value-bind (ptype pclass)
                  (clos-type-to-protobuf-type type)
                (collect-slot `(,slot :type ,type
-                                     :ACCESSOR ,SLOT    ;---*** BETTER ACCESSOR NAME, PLEASE
+                                     :ACCESSOR ,SLOT    ;---*** BETTER ACCESSOR NAME VIA :CONC-NAME
                                      :initarg ,(kintern (symbol-name slot))
                                      ,@(and default (list :initform default))))
                (collect-field `(make-instance 'protobuf-field
