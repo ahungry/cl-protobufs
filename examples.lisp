@@ -33,6 +33,9 @@
 
 (setq pser (proto:serialize-object-to-stream pschema pschema :stream nil))
 (describe (proto:deserialize-object 'proto:protobuf pschema pser))
+
+(proto:print-text-format pschema pschema)
+(proto:print-text-format (proto:deserialize-object 'proto:protobuf pschema pser) pschema)
 ||#
 
 #||
@@ -113,10 +116,19 @@
         '(0 1 2 3 4 4294967295 4294967294 2305843009213693951 2305843009213693950))
 
 (proto:print-text-format test1 tschema)
+(proto:print-text-format (proto:deserialize-object 'proto-test1 tschema tser1) tschema)
+
 (proto:print-text-format test2 tschema)
+(proto:print-text-format (proto:deserialize-object 'proto-test2 tschema tser2) tschema)
+
 (proto:print-text-format test3 tschema)
+(proto:print-text-format (proto:deserialize-object 'proto-test3 tschema tser3) tschema)
+
 (proto:print-text-format test4 tschema)
+(proto:print-text-format (proto:deserialize-object 'proto-test4 tschema tser4) tschema)
+
 (proto:print-text-format test5 tschema)
+(proto:print-text-format (proto:deserialize-object 'proto-test5 tschema tser5) tschema)
 ||#
 
 #||
