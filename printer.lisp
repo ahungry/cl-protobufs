@@ -60,7 +60,7 @@
       (format stream "~&~@[~VT~]// ~A~%"
               (and (not (zerop indentation)) indentation) comment))
     (format stream "~&~@[~VT~]enum ~A {~%"
-            (and (not (zerop indentation)) indentation) enum)
+            (and (not (zerop indentation)) indentation) name)
     (dolist (value (proto-values enum))
       (write-protobuf-as type value stream :indentation (+ indentation 2)))
     (format stream "~&~@[~VT~]}~%"
@@ -223,19 +223,28 @@
     (let ((dflt (cond ((or (null default)
                            (and (stringp default) (string-empty-p default)))
                        nil)
-                      ((member type '(:int32 :uint32 :int64 :uint64 :sint32 :sint64
-                                      :fixed32 :sfixed32 :fixed64 :sfixed64
-                                      :single :double))
+                      ((member class '(:int32 :uint32 :int64 :uint64 :sint32 :sint64
+                                       :fixed32 :sfixed32 :fixed64 :sfixed64
+                                       :single :double))
                        (read-from-string default))
-                      ((eq type :bool)
+                      ((eq class :bool)
                        (if (string= default "true") t nil))
                       (t default)))
-          (clss (cond ((eq required :optional)
-                       `(or null ,class))
-                      ((eq required :repeated)
-                       `(list-of ,class))
-                      (t class))))
-      (format stream (if (keywordp type)
+          (clss (let ((cl (case class
+                            ((:int32 :uint32 :int64 :uint64 :sint32 :sint64
+                              :fixed32 :sfixed32 :fixed64 :sfixed64) 'integer)
+                            ((:single) 'float)
+                            ((:double) 'double-float)
+                            ((:bool)   'boolean)
+                            ((:string) 'string)
+                            ((:symbol) 'symbol)
+                            (otherwise class))))
+                  (cond ((eq required :optional)
+                         `(or null ,cl))
+                        ((eq required :repeated)
+                         `(list-of ,cl))
+                        (t cl)))))
+      (format stream (if (keywordp class)
                        ;; Keyword means a primitive type, print default with ~S
                        "~&~@[~VT~](~(~S~) :type ~(~S~)~@[ :default ~S~])~:[~*~*~;~VT; ~A~]"
                        ;; Non-keyword means an enum type, print default with ~A
