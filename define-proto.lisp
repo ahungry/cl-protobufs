@@ -14,11 +14,12 @@
 ;;; Protocol buffer defining macros
 
 ;; Define a schema named 'name', corresponding to a .proto file of that name
-;; 'proto-name' can be used to override the defaultly generated name
-;; 'syntax', 'package', 'imports' and 'options' are as in .proto files
-;; The body consists of 'define-enum', 'define-message' or 'define-service' forms
 (defmacro define-proto (name (&key proto-name syntax package import options)
                         &body messages &environment env)
+  "Define a schema named 'name', corresponding to a .proto file of that name.
+   'proto-name' can be used to override the defaultly generated name.
+   'syntax', 'package', 'imports' and 'options' are as in .proto files.
+   The body consists of 'define-enum', 'define-message' or 'define-service' forms."
   (with-collectors ((enums collect-enum)
                     (msgs  collect-msg)
                     (svcs  collect-svc)
@@ -51,6 +52,7 @@
          ,@forms
          (defvar ,sname (make-instance 'protobuf
                           :name     ,(or proto-name (proto-class-name name))
+                          :class    ',name
                           :package  ,(if (stringp package) package (string-downcase (string package)))
                           :imports  ',(if (listp import) import (list import))
                           :syntax   ,syntax
@@ -60,9 +62,10 @@
                           :services (list ,@svcs)))))))
 
 ;; Define an enum type named 'name' and a Lisp 'deftype'
-;; 'proto-name' can be used to override the defaultly generated name
-;; The body consists of the enum values in the form (name &key index)
 (defmacro define-enum (name (&key proto-name conc-name) &body values)
+  "Define an enum type named 'name' and a Lisp 'deftype'.
+  'proto-name' can be used to override the defaultly generated name.
+   The body consists of the enum values in the form (name &key index)."
   (with-collectors ((vals  collect-val)
                     (evals collect-eval)
                     (forms collect-form))
@@ -87,10 +90,11 @@
        ,forms)))
 
 ;; Define a message named 'name' and a Lisp 'defclass'
-;; 'proto-name' can be used to override the defaultly generated name
-;; The body consists of fields, or 'define-enum' or 'define-message' forms
-;; Fields take the form (name &key type default index)
 (defmacro define-message (name (&key proto-name conc-name) &body fields &environment env)
+  "Define a message named 'name' and a Lisp 'defclass'.
+   'proto-name' can be used to override the defaultly generated name.
+   The body consists of fields, or 'define-enum' or 'define-message' forms.
+   Fields take the form (name &key type default index)."
   (with-collectors ((enums collect-enum)
                     (msgs  collect-msg)
                     (flds  collect-field)
@@ -137,25 +141,29 @@
        (make-instance 'protobuf-message
          :name  ,(or proto-name (proto-class-name name))
          :class ',name
+         :conc-name ,(and conc-name (string conc-name))
          :enums    (list ,@enums)
          :messages (list ,@msgs)
          :fields   (list ,@flds))
        ,forms)))
 
 ;; Define a service named 'name' and a Lisp 'defun'
-;; 'proto-name' can be used to override the defaultly generated name
-;; The body consists of a set of RPC specs of the form (name input-type output-type)
 (defmacro define-service (name (&key proto-name) &body rpc-specs)
+  "Define a service named 'name' and a Lisp 'defun'.
+   'proto-name' can be used to override the defaultly generated name.
+   The body consists of a set of RPC specs of the form (name input-type output-type)."
   (with-collectors ((rpcs collect-rpc))
     (dolist (rpc rpc-specs)
       (destructuring-bind (name input-type output-type) rpc
         (collect-rpc `(make-instance 'protobuf-rpc
                         :name ,(proto-class-name name)
+                        :class ',name
                         :input-type  ,(and input-type  (proto-class-name input-type))
                         :output-type ,(and output-type (proto-class-name output-type))))))
     `(progn
        define-service
        (make-instance 'protobuf-service
          :name ,(or proto-name (proto-class-name name))
+         :class ',name
          :rpcs (list ,@rpcs))
        ())))                                            ;---*** DEFINE LISP STUB HERE

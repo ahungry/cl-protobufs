@@ -14,14 +14,17 @@
 ;;; Utilities
 
 (defun proto-class-name (x)
+  "Given a Lisp class name, returns a protobufs message or enum name."
   (remove-if-not #'alphanumericp
                  (camel-case (format nil "~A" x) :separators '(#\- #\_ #\/))))
 
 (defun proto-field-name (x)
+  "Given a Lisp slot name, returns a protobufs field name."
   (remove-if-not #'alphanumericp
                  (camel-case-but-one (format nil "~A" x) :separators '(#\- #\_ #\/ #\.))))
 
 (defun proto-enum-name (x &optional prefix)
+  "Given a Lisp enum value name, returns a protobufs enum value name."
   (let* ((x (string-upcase (string x)))
          (x (if (and prefix (starts-with x prefix)) (subseq x (length prefix)) x)))
     (remove-if-not #'(lambda (x) (or (alphanumericp x) (eql x #\_)))

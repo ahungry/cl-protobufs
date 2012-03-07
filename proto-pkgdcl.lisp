@@ -87,6 +87,9 @@
    "FIND-MESSAGE-FOR-CLASS"
    "FIND-ENUM-FOR-TYPE"
 
+   ;; Printing
+   "WRITE-PROTOBUF-AS"
+
    ;; CLOS to Protobufs transformer
    "CLASS-TO-PROTOBUF-MESSAGE"
    "SLOT-TO-PROTOBUF-FIELD"

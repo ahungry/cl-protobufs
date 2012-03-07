@@ -13,8 +13,12 @@
 
 ;;; Print objects using Protobufs text format
 
-(defun print-text-format (object protobuf &optional (stream *standard-output*))
-  (check-type object standard-object)
+(defgeneric print-text-format (object protobuf &key stream)
+  (:documentation
+   "Prints the object 'object' as a protobuf object defined in the schema 'protobuf'
+    onto the stream 'stream' using the textual format."))
+
+(defmethod print-text-format ((object standard-object) protobuf &key (stream *standard-output*))
   (check-type protobuf (or protobuf protobuf-message))
   (let* ((class   (class-of object))
          (message (find-message-for-class protobuf class)))
@@ -25,7 +29,9 @@
                  (slot-value object slot)
                  nil))
              (do-field (object trace indent field)
-               ;;---*** How can we detect cycles?
+               ;; We don't do cycle detection here
+               ;; If the client needs it, he can define his own 'print-text-format'
+               ;; method to clean things up first
                (let* ((cl  (if (eq (proto-class field) 'boolean) :bool (proto-class field)))
                       (msg (and cl (loop for p in trace
                                          thereis (or (find-message-for-class p cl)
@@ -79,7 +85,9 @@
   (when val
     (format stream "~&~VT~A: " (+ indent 2) (proto-name field))
     (ecase type
-      ((:int32 :uint32 :int64 :uint64 :sint32 :sint64 :fixed32 :sfixed32 :fixed64 :sfixed64)
+      ((:int32 :uint32 :int64 :uint64 :sint32 :sint64
+        :fixed32 :sfixed32 :fixed64 :sfixed64
+        :single :double)
        (format stream "~D~%" val))
       ((:string)
        (format stream "\"~A\"~%" val))

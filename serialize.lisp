@@ -19,31 +19,47 @@
 (defconstant $wire-type-32bit  5)
 
 
+;;; Serialization
+
 ;; Serialize the object using the given protobuf "schema"
-;; 'visited' is used to cache object sizes
 (defun serialize-object-to-stream (object protobuf &key (stream *standard-output*) visited)
+  "Serializes the object 'object' as a protobuf object defined in the schema 'protobuf'
+   onto the stream 'stream' using the wire format.
+   'visited' is a hash table used to cache object sizes. If it is supplied, it will be
+   cleared before it is used; otherwise, a fresh table will be created.
+   The return value is the buffer containing the serialized object. If the stream is
+   nil, the buffer is not actually written to anywhere."
   (let* ((visited (let ((v (or visited (make-hash-table))))
                     (clrhash v)
                     v))
          (size    (object-size object protobuf :visited visited))
          (buffer  (make-array size :element-type '(unsigned-byte 8))))
-    (serialize-object object protobuf buffer :visited visited)
+    (serialize-object object protobuf buffer 0 :visited visited)
     (when stream
       (write-sequence buffer stream))
     buffer))
 
-;; Allow specialized methods
-(defgeneric serialize-object (object protobuf buffer &key visited))
+;; Allow clients to add their own methods
+;; This is how we address the problem of cycles, e.g. -- if you have an object
+;; that may contain cycles, serialize the cyclic object using a "handle"
+(defgeneric serialize-object (object protobuf buffer index &key visited)
+  (:documentation
+   "Serializes the object 'object' as a protobuf object defined in the schema 'protobuf'
+    into the byte array given by 'buffer' starting at the fixnum index 'index' using
+    the wire format.
+    'visited' is a hash table used to cache object sizes.
+    The return value is the buffer containing the serialized object."))
 
 ;; 'visited' is used to cache object sizes
 ;; If it's passed in explicitly, it is assumed to already have the sizes within it
 ;; The default method uses meta-data from the protobuf "schema"
-(defmethod serialize-object ((object standard-object) protobuf buffer &key visited)
+(defmethod serialize-object ((object standard-object) protobuf buffer index &key visited)
   (check-type protobuf (or protobuf protobuf-message))
+  (check-type index fixnum)
+  (check-type buffer (simple-array (unsigned-byte 8)))
   (let* ((class   (class-of object))
          (message (find-message-for-class protobuf class))
-         (visited (or visited (make-hash-table)))
-         (index   0))
+         (visited (or visited (make-hash-table))))
     (assert message ()
             "There is no Protobuf message for the class ~S" class)
     (labels ((safe-slot-value (object slot)
@@ -51,7 +67,9 @@
                  (slot-value object slot)
                  nil))
              (do-field (object trace field)
-               ;;---*** How can we detect cycles?
+               ;; We don't do cycle detection here
+               ;; If the client needs it, he can define his own 'serialize-object'
+               ;; method to clean things up first
                (let* ((cl  (if (eq (proto-class field) 'boolean) :bool (proto-class field)))
                       (msg (and cl (loop for p in trace
                                          thereis (or (find-message-for-class p cl)
@@ -101,20 +119,32 @@
       (map () (curry #'do-field object (list message protobuf)) (proto-fields message)))))
 
 
+;;; Deserialization
+
 (defun deserialize-object-from-stream (class protobuf &key (stream *standard-input*))
+  "Deserializes an object of the give class 'class' as a protobuf object defined
+   in the schema 'protobuf' from the stream 'stream' using the wire format.
+   The return value is the object."
   (let* ((size    (file-length stream))
          (buffer  (make-array size :element-type '(unsigned-byte 8))))
     (read-sequence buffer stream)
-    (deserialize-object class protobuf buffer)))
+    (deserialize-object class protobuf buffer 0)))
 
-;; Allow specialized methods
-(defgeneric deserialize-object (class protobuf buffer))
+;; Allow clients to add their own methods
+;; This is you might preserve object identity, e.g.
+(defgeneric deserialize-object (class protobuf buffer index)
+  (:documentation
+   "Deserializes an object of the give class 'class' as a protobuf object defined
+    in the schema 'protobuf' from the byte array given by 'buffer' starting at
+    the fixnum index 'index' using the wire format.
+    The return value is the object."))
 
 ;; The default method uses meta-data from the protobuf "schema"
-(defmethod deserialize-object ((class symbol) protobuf buffer)
+(defmethod deserialize-object ((class symbol) protobuf buffer index)
   (check-type protobuf (or protobuf protobuf-message))
-  (let ((length (length buffer))
-        (index  0))
+  (check-type index fixnum)
+  (check-type buffer (simple-array (unsigned-byte 8)))
+  (let ((length (length buffer)))
     (labels ((deserialize (class trace &optional (end length))
                (let ((object  (make-instance class))
                      (message (loop for p in trace
@@ -190,8 +220,16 @@
       (deserialize class (list protobuf)))))
 
 
-;; Allow specialized methods
-(defgeneric object-size (object protobuf &key visited))
+;;; Object sizes
+
+;; Allow clients to add their own methods
+;; This is how we address the problem of cycles, e.g. -- if you have an object
+;; that may contain cycles, return the size of the "handle" to the object
+(defgeneric object-size (object protobuf &key visited)
+  (:documentation
+   "Computes the size in bytes of the object 'object' defined in the schema 'protobuf'.
+    'visited' is a hash table used to cache object sizes.
+    The return value is the size of the object in bytes."))
 
 ;; 'visited' is used to cache object sizes
 ;; The default method uses meta-data from the protobuf "schema"
@@ -210,7 +248,9 @@
                  (slot-value object slot)
                  nil))
              (do-field (object trace field)
-               ;;---*** How can we detect cycles?
+               ;; We don't do cycle detection here
+               ;; If the client needs it, he can define his own 'object-size'
+               ;; method to clean things up first
                (let* ((cl  (if (eq (proto-class field) 'boolean) :bool (proto-class field)))
                       (msg (and cl (loop for p in trace
                                          thereis (or (find-message-for-class p cl)

@@ -13,10 +13,16 @@
 
 ;;; Protocol buffers wire format
 
-;; Serialize 'object' of primitive type 'type', described by the protobuf field 'field'
-;; Serializes into the byte vector 'buffer' starting at 'index'
-;; Returns the new index into the buffer
+;;; Serializers
+
+;; Serialize 'val' of primitive type 'type' into the buffer
 (defun serialize-prim (val type field buffer index)
+  "Serializes a protobufs primitive (scalar) value into the buffer at the given index.
+   The value is given by 'val', the primitive type by 'type'.
+   'field' is the protobuf-field describing the value.
+   Modifies the buffer in place, and returns the new index into the buffer."
+  (declare (type fixnum index)
+           (type (simple-array (unsigned-byte 8)) buffer))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
     (ecase type
       ((:int32 :uint32)
@@ -89,6 +95,12 @@
          (encode-uint64 val buffer idx))))))
 
 (defun serialize-packed (values type field buffer index)
+  "Serializes a set of packed values into the buffer at the given index.
+   The values are given by 'values', the primitive type by 'type'.
+   'field' is the protobuf-field describing the value.
+   Modifies the buffer in place, and returns the new index into the buffer."
+  (declare (type fixnum index)
+           (type (simple-array (unsigned-byte 8)) buffer))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
     (let* ((wtype (ecase type
                     ((:int32 :int64)   $wire-type-varint)
@@ -131,10 +143,14 @@
          (dolist (val values idx)
            (setq idx (encode-double val buffer idx))))))))
 
-;; Serialize 'object' of enum type 'type', described by the protobuf field 'field'
-;; Serializes into the byte vector 'buffer' starting at 'index'
-;; Returns the new index into the buffer
+;; Serialize 'val' of enum type 'type' into the buffer
 (defun serialize-enum (val enum field buffer index)
+  "Serializes a protobufs enum value into the buffer at the given index.
+   The value is given by 'val', the enum type by 'enum'.
+   'field' is the protobuf-field describing the value.
+   Modifies the buffer in place, and returns the new index into the buffer."
+  (declare (type fixnum index)
+           (type (simple-array (unsigned-byte 8)) buffer))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
     (let* ((val (let ((e (find val (proto-values enum) :key #'proto-value)))
                   (and e (proto-index e))))
@@ -144,10 +160,15 @@
       (encode-uint32 val buffer idx))))
 
 
-;; Deserialize the next object 'type', described by the protobuf field 'field'
-;; Deserializes from the byte vector 'buffer' starting at 'index'
-;; Returns the value and and the new index into the buffer
+;;; Deserializers
+
+;; Deserialize the next object of type 'type', described by the protobuf field 'field'
 (defun deserialize-prim (type field buffer index)
+  "Deserializes the next object of primitive type 'type', described by the protobuf-field 'field'.
+   Deserializes from the byte vector 'buffer' starting at 'index'.
+   Returns the value and and the new index into the buffer."
+  (declare (type fixnum index)
+           (type (simple-array (unsigned-byte 8)) buffer))
   (declare (ignore field))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
     (ecase type
@@ -194,6 +215,11 @@
        (decode-uint64 buffer index)))))
 
 (defun deserialize-packed (type field buffer index)
+  "Deserializes the next packed values of type 'type', described by the protobuf-field 'field'.
+   Deserializes from the byte vector 'buffer' starting at 'index'.
+   Returns the value and and the new index into the buffer."
+  (declare (type fixnum index)
+           (type (simple-array (unsigned-byte 8)) buffer))
   (declare (ignore field))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
     (multiple-value-bind (len idx)
@@ -231,6 +257,11 @@
               (setq idx nidx))))))))
 
 (defun deserialize-enum (enum field buffer index)
+  "Deserializes the next enum of type 'type', described by the protobuf-field 'field'.
+   Deserializes from the byte vector 'buffer' starting at 'index'.
+   Returns the value and and the new index into the buffer."
+  (declare (type fixnum index)
+           (type (simple-array (unsigned-byte 8)) buffer))
   (declare (ignore field))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
     (multiple-value-bind (val idx)
@@ -240,8 +271,10 @@
         (values val idx)))))
 
 
-;; Returns the size in bytes that the primitive object will take when serialized
+;;; Object sizing
+
 (defun prim-size (val type field)
+  "Returns the size in bytes that the primitive object will take when serialized."
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
     (ecase type
       ((:int32 :uint32)
@@ -290,6 +323,7 @@
          (i+ (length32 tag) 8))))))
 
 (defun packed-size (values type field)
+  "Returns the size in bytes that the packed object will take when serialized."
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
     (let ((tag (ilogior $wire-type-varint (iash (proto-index field) 3)))
           (len (loop for val in values
@@ -307,8 +341,8 @@
       ;; of just the payload
       (values (i+ (length32 tag) (length32 len) len) len))))
 
-;; Returns the size in bytes that the enum object will take when serialized
 (defun enum-size (val enum field)
+  "Returns the size in bytes that the enum object will take when serialized."
   (let ((val (let ((e (find val (proto-values enum) :key #'proto-value)))
                (and e (proto-index e))))
         (tag (ilogior $wire-type-varint (iash (proto-index field) 3))))
@@ -317,9 +351,9 @@
 
 ;;; Raw encoders
 
-;; Encode the value into the buffer at the given index,
-;; then return the new index into the buffer
 (defun encode-uint32 (val buffer index)
+  "Encodes the 32-bit integer 'val' into the buffer at the given index.
+   Modifies the buffer, and returns the new index into the buffer."
   (declare (type fixnum index)
            (type (simple-array (unsigned-byte 8)) buffer))
   (assert (< val #.(ash 1 32)) ()
@@ -335,6 +369,8 @@
   (values index buffer))                        ;return the buffer to improve 'trace'
 
 (defun encode-uint64 (val buffer index)
+  "Encodes the 64-bit integer 'val' into the buffer at the given index.
+   Modifies the buffer, and returns the new index into the buffer."
   (declare (type fixnum index)
            (type (simple-array (unsigned-byte 8)) buffer))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
@@ -347,6 +383,8 @@
   (values index buffer))
 
 (defun encode-single (val buffer index)
+  "Encodes the single float 'val' into the buffer at the given index.
+   Modifies the buffer, and returns the new index into the buffer."
   (declare (type fixnum index)
            (type (simple-array (unsigned-byte 8)) buffer))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
@@ -354,6 +392,8 @@
     val buffer index))
 
 (defun encode-double (val buffer index)
+  "Encodes the double float 'val' into the buffer at the given index.
+   Modifies the buffer, and returns the new index into the buffer."
   (declare (type fixnum index)
            (type (simple-array (unsigned-byte 8)) buffer))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
@@ -361,6 +401,8 @@
     val buffer index))
 
 (defun encode-octets (octets buffer index)
+  "Encodes the octets into the buffer at the given index.
+   Modifies the buffer, and returns the new index into the buffer."
   (declare (type fixnum index)
            (type (simple-array (unsigned-byte 8)) buffer))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
@@ -386,6 +428,8 @@
 ;; Decode the value from the buffer at the given index,
 ;; then return the value and new index into the buffer
 (defun decode-uint32 (buffer index)
+  "Decodes the next 32-bit integer in the buffer at the given index.
+   Returns both the decoded value and the new index into the buffer."
   (declare (type fixnum index)
            (type (simple-array (unsigned-byte 8)) buffer))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
@@ -401,6 +445,8 @@
                     (return (values val index))))))
 
 (defun decode-uint64 (buffer index)
+  "Decodes the next 64-bit integer in the buffer at the given index.
+   Returns both the decoded value and the new index into the buffer."
   (declare (type fixnum index)
            (type (simple-array (unsigned-byte 8)) buffer))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
@@ -413,6 +459,8 @@
           finally (return (values val index)))))
 
 (defun decode-single (buffer index)
+  "Decodes the next single float in the buffer at the given index.
+   Returns both the decoded value and the new index into the buffer."
   (declare (type fixnum index)
            (type (simple-array (unsigned-byte 8)) buffer))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
@@ -420,6 +468,8 @@
     buffer index))
 
 (defun decode-double (buffer index)
+  "Decodes the next double float in the buffer at the given index.
+   Returns both the decoded value and the new index into the buffer."
   (declare (type fixnum index)
            (type (simple-array (unsigned-byte 8)) buffer))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
@@ -427,6 +477,8 @@
     buffer index))
 
 (defun decode-octets (buffer index)
+  "Decodes the next octets in the buffer at the given index.
+   Returns both the decoded value and the new index into the buffer."
   (declare (type fixnum index)
            (type (simple-array (unsigned-byte 8)) buffer))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
@@ -447,6 +499,7 @@
 ;;; Raw lengths
 
 (defun length32 (val)
+  "Returns the length that 'val' will take when encoded as a 32-bit integer."
   (assert (< val #.(ash 1 32)) ()
           "The value ~D is longer than 32 bits" val)
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
@@ -459,6 +512,7 @@
       size)))
 
 (defun length64 (val)
+  "Returns the length that 'val' will take when encoded as a 64-bit integer."
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
     (let ((size 0))
       (declare (type fixnum size))

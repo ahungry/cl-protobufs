@@ -17,8 +17,11 @@
 ;;  - How do we decide if there's an ownership hierarchy that should produce embedded messages?
 ;;  - How do we decide if there are volatile slots that should not be included in the message?
 (defun write-protobuf-schema-for-classes (classes
-                                          &key (stream *standard-output*)
+                                          &key (stream *standard-output*) (type :proto) proto-name
                                                package slot-filter type-filter enum-filter value-filter)
+  "Given a set of CLOS classes, generates a Protobufs schema for the classes
+   and pretty prints the schema to the stream.
+   The return value is the schema."
   (let* ((messages (mapcar #'(lambda (c)
                                (class-to-protobuf-message c :slot-filter slot-filter
                                                             :type-filter type-filter
@@ -26,11 +29,13 @@
                                                             :value-filter value-filter))
                            classes))
          (protobuf (make-instance 'protobuf
+                     :name proto-name
                      :package package
                      :messages messages)))
-    (fresh-line stream)
-    (write-protobuf protobuf stream)
-    (terpri stream)
+    (when stream
+      (fresh-line stream)
+      (write-protobuf protobuf :stream stream :type type)
+      (terpri stream))
     protobuf))
 
 

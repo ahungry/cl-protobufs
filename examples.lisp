@@ -14,28 +14,30 @@
 ;;; Examples, for manual testing
 
 #||
-(setq cschema (proto:write-protobuf-schema-for-classes '(qres-core::legacy-pnr
-                                                         qres-core::legacy-pnr-pax
-                                                         qres-core::legacy-pnr-segment
-                                                         qres-core::legacy-pnr-pax-segment)
-                                                       :slot-filter #'quake::quake-slot-filter
-                                                       :type-filter #'quake::quake-type-filter
-                                                       :enum-filter #'quake::quake-enum-filter
-                                                       :value-filter #'quake::quake-value-filter))
+(setq cschema (proto:write-protobuf-schema-for-classes
+               '(qres-core::legacy-pnr
+                 qres-core::legacy-pnr-pax
+                 qres-core::legacy-pnr-segment
+                 qres-core::legacy-pnr-pax-segment)
+               :slot-filter #'quake::quake-slot-filter
+               :type-filter #'quake::quake-type-filter
+               :enum-filter #'quake::quake-enum-filter
+               :value-filter #'quake::quake-value-filter))
 
 (proto:serialize-object-to-stream pnr cschema :stream nil)
 ||#
 
 #||
-(setq pschema (proto:write-protobuf-schema-for-classes '(proto:protobuf
-                                                         proto:protobuf-message proto:protobuf-field
-                                                         proto:protobuf-enum proto:protobuf-enum-value)))
+(setq pschema (proto:write-protobuf-schema-for-classes
+               '(proto:protobuf
+                 proto:protobuf-message proto:protobuf-field
+                 proto:protobuf-enum proto:protobuf-enum-value)))
 
 (setq pser (proto:serialize-object-to-stream pschema pschema :stream nil))
-(describe (proto:deserialize-object 'proto:protobuf pschema pser))
+(describe (proto:deserialize-object 'proto:protobuf pschema pser 0))
 
 (proto:print-text-format pschema pschema)
-(proto:print-text-format (proto:deserialize-object 'proto:protobuf pschema pser) pschema)
+(proto:print-text-format (proto:deserialize-object 'proto:protobuf pschema pser 0) pschema)
 ||#
 
 #||
@@ -86,27 +88,27 @@
 
 (setq tser1 (proto:serialize-object-to-stream test1 tschema :stream nil))
 (equalp tser1 #(#x08 #x96 #x01))
-(describe (proto:deserialize-object 'proto-test1 tschema tser1))
+(describe (proto:deserialize-object 'proto-test1 tschema tser1 0))
 
 (setq tser2 (proto:serialize-object-to-stream test2 tschema :stream nil))
 (equalp tser2 #(#x12 #x07 #x74 #x65 #x73 #x74 #x69 #x6E #x67))
-(describe (proto:deserialize-object 'proto-test2 tschema tser2))
+(describe (proto:deserialize-object 'proto-test2 tschema tser2 0))
 
 (setq tser3 (proto:serialize-object-to-stream test3 tschema :stream nil))
 (equalp tser3 #(#x1A #x03 #x08 #x96 #x01))
-(describe (proto:deserialize-object 'proto-test3 tschema tser3))
-(describe (slot-value (proto:deserialize-object 'proto-test3 tschema tser3) 'recval))
+(describe (proto:deserialize-object 'proto-test3 tschema tser3 0))
+(describe (slot-value (proto:deserialize-object 'proto-test3 tschema tser3 0) 'recval))
 
 (setq tser4 (proto:serialize-object-to-stream test4 tschema :stream nil))
 (equalp tser4 #(#x1A #x09 #x12 #x07 #x74 #x65 #x73 #x74 #x69 #x6E #x67))
-(describe (proto:deserialize-object 'proto-test4 tschema tser4))
-(describe (slot-value (proto:deserialize-object 'proto-test4 tschema tser4) 'recval))
+(describe (proto:deserialize-object 'proto-test4 tschema tser4 0))
+(describe (slot-value (proto:deserialize-object 'proto-test4 tschema tser4 0) 'recval))
 
 (setq tser5 (proto:serialize-object-to-stream test5 tschema :stream nil))
 (equalp tser5 #(#x08 #x01
                 #x10 #x04 #x02 #x03 #x05 #x07
                 #x1A #x03 #x74 #x77 #x6F #x1A #x05 #x74 #x68 #x72 #x65 #x65 #x1A #x04 #x66 #x69 #x76 #x65 #x1A #x05 #x73 #x65 #x76 #x65 #x6E))
-(describe (proto:deserialize-object 'proto-test5 tschema tser5))
+(describe (proto:deserialize-object 'proto-test5 tschema tser5 0))
 
 (equalp (mapcar #'proto-impl:zig-zag-encode32
                 '(0 -1 1 -2 2 -2147483648 2147483647))
@@ -116,19 +118,19 @@
         '(0 1 2 3 4 4294967295 4294967294 2305843009213693951 2305843009213693950))
 
 (proto:print-text-format test1 tschema)
-(proto:print-text-format (proto:deserialize-object 'proto-test1 tschema tser1) tschema)
+(proto:print-text-format (proto:deserialize-object 'proto-test1 tschema tser1 0) tschema)
 
 (proto:print-text-format test2 tschema)
-(proto:print-text-format (proto:deserialize-object 'proto-test2 tschema tser2) tschema)
+(proto:print-text-format (proto:deserialize-object 'proto-test2 tschema tser2 0) tschema)
 
 (proto:print-text-format test3 tschema)
-(proto:print-text-format (proto:deserialize-object 'proto-test3 tschema tser3) tschema)
+(proto:print-text-format (proto:deserialize-object 'proto-test3 tschema tser3 0) tschema)
 
 (proto:print-text-format test4 tschema)
-(proto:print-text-format (proto:deserialize-object 'proto-test4 tschema tser4) tschema)
+(proto:print-text-format (proto:deserialize-object 'proto-test4 tschema tser4 0) tschema)
 
 (proto:print-text-format test5 tschema)
-(proto:print-text-format (proto:deserialize-object 'proto-test5 tschema tser5) tschema)
+(proto:print-text-format (proto:deserialize-object 'proto-test5 tschema tser5 0) tschema)
 ||#
 
 #||
@@ -160,12 +162,12 @@
                                                       :value :low))))
                       :fields (list (make-instance 'proto:protobuf-field
                                       :name "color"
-                                      :type "Color"
+                                      :type "ColorName"
                                       :required :required
                                       :index 1)
                                     (make-instance 'proto:protobuf-field
                                       :name "contrast"
-                                      :type "Contrast"
+                                      :type "ContrastName"
                                       :required :optional
                                       :index 2
                                       :default "LOW")))))
@@ -187,12 +189,11 @@
                 :messages msgs
                 :services svcs)))
   ;; The output should be example the same as the output of 'write-protobuf' below
-  (proto:write-protobuf proto *standard-output*))
+  (proto:write-protobuf proto))
 ||#
 
 #||
 (makunbound '*color-wheel*)
-
 (proto:define-proto color-wheel (:package ita.color
                                  :import "descriptor.proto")
   (proto:define-enum color-name ()
@@ -203,8 +204,8 @@
     (proto:define-enum contrast-name ()
       (low    1)
       (high 100))
-    (color    :type color)
-    (contrast :type (or null contrast) :default :low))
+    (color    :type color-name)
+    (contrast :type (or null contrast-name) :default :low))
   (proto:define-service color-wheel ()
     (get-color nil color)
     (set-color color color)))
@@ -213,8 +214,8 @@
      (DEFTYPE COLOR-NAME () '(MEMBER :RED :GREEN :BLUE))
      (DEFTYPE CONTRAST-NAME () '(MEMBER :LOW :HIGH))
      (DEFCLASS COLOR ()
-       ((COLOR :TYPE COLOR :ACCESSOR COLOR-COLOR :INITARG :COLOR)
-        (CONTRAST :TYPE (OR NULL CONTRAST) :ACCESSOR COLOR-CONTRAST :INITARG :CONTRAST :INITFORM :LOW)))
+       ((COLOR :TYPE COLOR-NAME :ACCESSOR COLOR-COLOR :INITARG :COLOR)
+        (CONTRAST :TYPE (OR NULL CONTRAST-NAME) :ACCESSOR COLOR-CONTRAST :INITARG :CONTRAST :INITFORM :LOW)))
      (DEFVAR *COLOR-WHEEL*
        (MAKE-INSTANCE 'PROTOBUF
          :NAME "ColorWheel"
@@ -282,5 +283,13 @@
                                          :OUTPUT-TYPE "Color")))))))
 
 ;; The output should be example the same as the output of 'write-protobuf' above
-(proto:write-protobuf *color-wheel* *standard-output*)
+(proto:write-protobuf *color-wheel*)
+
+;; How does the Lisp version look?
+(proto:write-protobuf *color-wheel* :type :lisp)
+
+(setq clr (make-instance 'color :color :red))
+(setq cser (proto:serialize-object-to-stream clr *color-wheel* :stream nil))
+(proto:print-text-format clr *color-wheel*)
+(proto:print-text-format (proto:deserialize-object 'color *color-wheel* cser 0) *color-wheel*)
 ||#

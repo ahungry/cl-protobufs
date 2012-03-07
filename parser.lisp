@@ -14,6 +14,7 @@
 ;;; .proto file parsing
 
 (defun parse-protobuf-from-file (filename)
+  "Parses the named file as a .proto file, and returns the protobufs schema."
   (with-open-file (stream filename
                    :direction :input
                    :external-format :utf-8
@@ -21,5 +22,6 @@
     (parse-protobuf-from-stream stream)))
 
 (defun parse-protobuf-from-stream (stream)
+  "Parses the contents of the stream as a .proto file, and returns the protobufs schema."
   STREAM                                        ;---*** DO THIS
   )
