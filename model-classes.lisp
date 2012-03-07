@@ -13,6 +13,10 @@
 
 ;;; Protol buffers model classes
 
+;; A few things (the pretty printer) want to keep track of the current schema
+(defvar *protobuf* nil)
+
+
 ;; The protobuf, corresponds to one .proto file
 (defclass protobuf ()
   ((name :type (or null string)                 ;the name of this .proto file
@@ -76,8 +80,16 @@
 (defmethod find-message-for-class ((protobuf protobuf) (class class))
   (find-message-for-class protobuf (class-name class)))
 
+(defmethod find-message-for-class ((protobuf protobuf) (class string))
+  (or (find class (proto-messages protobuf) :key #'proto-name :test #'string=)
+      (some #'(lambda (msg) (find-message-for-class msg class)) (proto-messages protobuf))))
+
 (defmethod find-enum-for-type ((protobuf protobuf) type)
   (or (find type (proto-enums protobuf) :key #'proto-class)
+      (some #'(lambda (msg) (find-enum-for-type msg type)) (proto-messages protobuf))))
+
+(defmethod find-enum-for-type ((protobuf protobuf) (type string))
+  (or (find type (proto-enums protobuf) :key #'proto-name :test #'string=)
       (some #'(lambda (msg) (find-enum-for-type msg type)) (proto-messages protobuf))))
 
 
@@ -171,8 +183,14 @@
 (defmethod find-message-for-class ((message protobuf-message) (class class))
   (find-message-for-class message (class-name class)))
 
+(defmethod find-message-for-class ((message protobuf-message) (class string))
+  (find class (proto-messages message) :key #'proto-name :test #'string=))
+
 (defmethod find-enum-for-type ((message protobuf-message) type)
   (find type (proto-enums message) :key #'proto-class))
+
+(defmethod find-enum-for-type ((message protobuf-message) (type string))
+  (find type (proto-enums message) :key #'proto-name :test #'string=))
 
 
 ;; A protobuf field within a message
