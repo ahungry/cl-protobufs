@@ -208,7 +208,7 @@
     (contrast :type (or null contrast-name) :default :low))
   (proto:define-service color-wheel ()
     (get-color nil color)
-    (set-color color color)))
+    (set-color color color :options ("deadline" "1.0"))))
 
 => (PROGN
      (DEFTYPE COLOR-NAME () '(MEMBER :RED :GREEN :BLUE))
@@ -219,44 +219,36 @@
      (DEFVAR *COLOR-WHEEL*
        (MAKE-INSTANCE 'PROTOBUF
          :NAME "ColorWheel"
+         :CLASS 'COLOR-WHEEL
          :PACKAGE "ita.color"
          :IMPORTS '("descriptor.proto")
          :SYNTAX NIL
-         :OPTIONS 'NIL
+         :OPTIONS ()
          :ENUMS (LIST (MAKE-INSTANCE 'PROTOBUF-ENUM
                         :NAME "ColorName"
                         :CLASS 'COLOR-NAME
                         :VALUES (LIST (MAKE-INSTANCE 'PROTOBUF-ENUM-VALUE
-                                        :NAME "RED"
-                                        :INDEX 1
-                                        :VALUE :RED)
+                                        :NAME "RED" :INDEX 1 :VALUE :RED)
                                       (MAKE-INSTANCE 'PROTOBUF-ENUM-VALUE
-                                        :NAME "GREEN"
-                                        :INDEX 2
-                                        :VALUE :GREEN)
+                                        :NAME "GREEN" :INDEX 2 :VALUE :GREEN)
                                       (MAKE-INSTANCE 'PROTOBUF-ENUM-VALUE
-                                        :NAME "BLUE"
-                                        :INDEX 3
-                                        :VALUE :BLUE))))
+                                        :NAME "BLUE" :INDEX 3 :VALUE :BLUE))))
          :MESSAGES (LIST (MAKE-INSTANCE 'PROTOBUF-MESSAGE
                            :NAME "Color"
                            :CLASS 'COLOR
+                           :CONC-NAME "COLOR-"
                            :ENUMS (LIST (MAKE-INSTANCE 'PROTOBUF-ENUM
                                           :NAME "ContrastName"
                                           :CLASS 'CONTRAST-NAME
                                           :VALUES (LIST (MAKE-INSTANCE 'PROTOBUF-ENUM-VALUE
-                                                          :NAME "LOW"
-                                                          :INDEX 1
-                                                          :VALUE :LOW)
+                                                          :NAME "LOW" :INDEX 1 :VALUE :LOW)
                                                         (MAKE-INSTANCE 'PROTOBUF-ENUM-VALUE
-                                                          :NAME "HIGH"
-                                                          :INDEX 100
-                                                          :VALUE :HIGH))))
+                                                          :NAME "HIGH" :INDEX 100 :VALUE :HIGH))))
                            :MESSAGES (LIST)
                            :FIELDS (LIST (MAKE-INSTANCE 'PROTOBUF-FIELD
                                            :NAME "color"
-                                           :TYPE "Color"
-                                           :CLASS 'COLOR
+                                           :TYPE "ColorName"
+                                           :CLASS 'COLOR-NAME
                                            :REQUIRED :REQUIRED
                                            :INDEX 1
                                            :VALUE 'COLOR
@@ -264,8 +256,8 @@
                                            :PACKED NIL)
                                          (MAKE-INSTANCE 'PROTOBUF-FIELD
                                            :NAME "contrast"
-                                           :TYPE "Contrast"
-                                           :CLASS 'CONTRAST
+                                           :TYPE "ContrastName"
+                                           :CLASS 'CONTRAST-NAME
                                            :REQUIRED :OPTIONAL
                                            :INDEX 2
                                            :VALUE 'CONTRAST
@@ -273,14 +265,20 @@
                                            :PACKED NIL))))
          :SERVICES (LIST (MAKE-INSTANCE 'PROTOBUF-SERVICE
                            :NAME "ColorWheel"
+                           :CLASS 'COLOR-WHEEL
                            :RPCS (LIST (MAKE-INSTANCE 'PROTOBUF-RPC
                                          :NAME "GetColor"
+                                         :CLASS 'GET-COLOR
                                          :INPUT-TYPE NIL
-                                         :OUTPUT-TYPE "Color")
+                                         :OUTPUT-TYPE "Color"
+                                         :OPTIONS (LIST))
                                        (MAKE-INSTANCE 'PROTOBUF-RPC
                                          :NAME "SetColor"
+                                         :CLASS 'SET-COLOR
                                          :INPUT-TYPE "Color"
-                                         :OUTPUT-TYPE "Color")))))))
+                                         :OUTPUT-TYPE "Color"
+                                         :OPTIONS (LIST (MAKE-INSTANCE 'PROTOBUF-OPTION
+                                                          :NAME "deadline" :VALUE "1.0")))))))))
 
 ;; The output should be example the same as the output of 'write-protobuf' above
 (proto:write-protobuf *color-wheel*)

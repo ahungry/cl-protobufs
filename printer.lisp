@@ -40,7 +40,7 @@
       (terpri stream))
     (when options
       (dolist (option options)
-        (format stream "~&option ~A;~%" option))
+        (format stream "~&option ~A~@[ = ~S~];~%" (proto-name option) (proto-value option)))
       (terpri stream))
     (dolist (enum (proto-enums protobuf))
       (write-protobuf-as type enum stream :indentation indentation)
@@ -118,10 +118,20 @@
 
 (defmethod write-protobuf-as ((type (eql :proto)) (rpc protobuf-rpc) stream
                               &key (indentation 0))
-  (with-prefixed-accessors (name input-type output-type) (proto- rpc)
-    (format stream "~&~@[~VT~]rpc ~A (~@[~A~])~@[ returns (~A)~];~%"
+  (with-prefixed-accessors (name input-type output-type options) (proto- rpc)
+    (format stream "~&~@[~VT~]rpc ~A (~@[~A~])~@[ returns (~A)~]"
             (and (not (zerop indentation)) indentation)
-            name input-type output-type)))
+            name input-type output-type)
+    (cond (options
+           (format stream " {~%")
+           (dolist (option options)
+             (format stream "~&~@[~VT~]option ~A~@[ = ~S~];~%"
+                     (+ indentation 2)
+                     (proto-name option) (proto-value option)))
+           (format stream "~@[~VT~]}"
+                   (and (not (zerop indentation)) indentation)))
+          (t
+           (format stream ";~%")))))
 
 
 ;;; Pretty print as a .lisp file
@@ -154,7 +164,7 @@
         (setq spaces "     "))
       (when options
         (format stream "~A:options (" spaces)
-        (format stream "~{\"~A\"~^ ~}" options)
+        (format stream "~{~/protobuf-option/~^ ~}" options)
         (format stream ")~%"))))
   (format stream ")")
   (dolist (enum (proto-enums protobuf))
@@ -270,10 +280,21 @@
 
 (defmethod write-protobuf-as ((type (eql :lisp)) (rpc protobuf-rpc) stream
                               &key (indentation 0))
-  (with-prefixed-accessors (class input-type output-type) (proto- rpc)
+  (with-prefixed-accessors (class input-type output-type options) (proto- rpc)
     (let ((in  (find-message-for-class *protobuf* input-type))
           (out (find-message-for-class *protobuf* output-type)))
-      (format stream "~&~@[~VT~](~(~S~) ~(~S~) ~(~S~))"
+      (format stream "~&~@[~VT~](~(~S~) ~(~S~) ~(~S~)"
               (and (not (zerop indentation)) indentation) class
               (if in  (proto-class in)  input-type)
-              (if out (proto-class out) output-type)))))
+              (if out (proto-class out) output-type))
+      (cond (options
+             (format stream "~%~VT:options ("
+                     (+ indentation 3))
+             (loop for (option . more) on options doing
+               (format stream "~S ~S"
+                       (proto-name option) (proto-value option))
+               (when more
+                 (format stream " ")))
+             (format stream "))"))
+            (t
+             (format stream ")"))))))

@@ -19,6 +19,7 @@
   (:export
    ;; Model classes
    "PROTOBUF"
+   "PROTOBUF-OPTION"
    "PROTOBUF-MESSAGE"
    "PROTOBUF-ENUM"
    "PROTOBUF-ENUM"

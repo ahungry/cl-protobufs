@@ -18,7 +18,9 @@
                         &body messages &environment env)
   "Define a schema named 'name', corresponding to a .proto file of that name.
    'proto-name' can be used to override the defaultly generated name.
-   'syntax', 'package', 'imports' and 'options' are as in .proto files.
+   'syntax' and 'package' are as in .proto files.
+   'imports' is a list of pathname strings to be imported.
+   'options' is a property list, i.e., (\"key1\" \"val1\" \"key2\" \"val2\" ...).
    The body consists of 'define-enum', 'define-message' or 'define-service' forms."
   (with-collectors ((enums collect-enum)
                     (msgs  collect-msg)
@@ -47,7 +49,11 @@
           ((define-service)
            (collect-svc model)))))
     ;;--- This should warn if the old one isn't upgradable to the new one
-    (let ((sname   (fintern "*~A*" name)))
+    (let ((sname   (fintern "*~A*" name))
+          (options (loop for (key val) on options by #'cddr
+                         collect `(make-instance 'protobuf-option
+                                    :name ,key
+                                    :value ,val))))
       `(progn
          ,@forms
          (defvar ,sname (make-instance 'protobuf
@@ -56,7 +62,7 @@
                           :package  ,(if (stringp package) package (string-downcase (string package)))
                           :imports  ',(if (listp import) import (list import))
                           :syntax   ,syntax
-                          :options  '(,@options)
+                          :options  (list ,@options)
                           :enums    (list ,@enums)
                           :messages (list ,@msgs)
                           :services (list ,@svcs)))))))
@@ -154,12 +160,17 @@
    The body consists of a set of RPC specs of the form (name input-type output-type)."
   (with-collectors ((rpcs collect-rpc))
     (dolist (rpc rpc-specs)
-      (destructuring-bind (name input-type output-type) rpc
-        (collect-rpc `(make-instance 'protobuf-rpc
-                        :name ,(proto-class-name name)
-                        :class ',name
-                        :input-type  ,(and input-type  (proto-class-name input-type))
-                        :output-type ,(and output-type (proto-class-name output-type))))))
+      (destructuring-bind (name input-type output-type &key options) rpc
+        (let ((options (loop for (key val) on options by #'cddr
+                             collect `(make-instance 'protobuf-option
+                                        :name ,key
+                                        :value ,val))))
+          (collect-rpc `(make-instance 'protobuf-rpc
+                          :name ,(proto-class-name name)
+                          :class ',name
+                          :input-type  ,(and input-type  (proto-class-name input-type))
+                          :output-type ,(and output-type (proto-class-name output-type))
+                          :options (list ,@options))))))
     `(progn
        define-service
        (make-instance 'protobuf-service

@@ -1,4 +1,4 @@
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;                                                                  ;;;
 ;;; Confidential and proprietary information of ITA Software, Inc.   ;;;
 ;;;                                                                  ;;;
@@ -39,7 +39,7 @@
             :reader proto-imports
             :initarg :imports
             :initform ())
-   (options :type (list-of string)              ;options, passed on but otherwise ignored
+   (options :type (list-of protobuf-option)     ;options, passed on but otherwise ignored
            :reader proto-options
            :initarg :options
            :initform ())
@@ -91,6 +91,26 @@
 (defmethod find-enum-for-type ((protobuf protobuf) (type string))
   (or (find type (proto-enums protobuf) :key #'proto-name :test #'string=)
       (some #'(lambda (msg) (find-enum-for-type msg type)) (proto-messages protobuf))))
+
+
+(defclass protobuf-option ()
+  ((name :type string                           ;the key
+         :reader proto-name
+         :initarg :name)
+   (value :type (or null string)                ;the value
+          :accessor proto-value
+          :initarg :value
+          :initform nil))
+  (:documentation
+   "The model class that represents a protobufs options, i.e., a keyword/value pair."))
+
+(defmethod print-object ((o protobuf-option) stream)
+  (print-unprintable-object (o stream :type t :identity t)
+    (format stream "~A~@[ = ~S~]" (proto-name o) (proto-value o))))
+
+(defun cl-user::protobuf-option (stream option colon-p atsign-p)
+  (declare (ignore colon-p atsign-p))
+  (format stream "~A~@[ = ~S~]" (proto-name option) (proto-value option)))
 
 
 ;; A protobuf enumeration
@@ -279,6 +299,10 @@
    (output :type (or null string)               ;the name of the output message type
            :accessor proto-output-type
            :initarg :output-type)
+   (options :type (list-of protobuf-option)     ;options, passed on but otherwise ignored
+            :reader proto-options
+            :initarg :options
+            :initform ())
    (comment :type (or null string)
             :accessor proto-comment
             :initarg :comment
