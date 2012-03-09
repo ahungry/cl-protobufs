@@ -86,8 +86,7 @@
     (format stream "~&~VT~A: " (+ indent 2) (proto-name field))
     (ecase type
       ((:int32 :uint32 :int64 :uint64 :sint32 :sint64
-        :fixed32 :sfixed32 :fixed64 :sfixed64
-        :single :double)
+        :fixed32 :sfixed32 :fixed64 :sfixed64)
        (format stream "~D~%" val))
       ((:string)
        (format stream "\"~A\"~%" val))

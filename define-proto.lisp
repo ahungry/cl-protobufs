@@ -109,7 +109,7 @@
     (let ((index 0))
       (dolist (fld fields)
         (case (car fld)
-          ((define-enum define-message)
+          ((define-enum define-message define-extension)
            (destructuring-bind (&optional progn type model definers)
                (macroexpand-1 fld env)
              (assert (eq progn 'progn) ()
@@ -119,6 +119,8 @@
                ((define-enum)
                 (collect-enum model))
                ((define-message)
+                (collect-msg model))
+               ((define-extension)
                 (collect-msg model)))))
           (otherwise
            (destructuring-bind (slot &key type default) fld
@@ -152,6 +154,16 @@
          :messages (list ,@msgs)
          :fields   (list ,@flds))
        ,forms)))
+
+(defmacro define-extension (from to)
+  "Define an extension range within a message.
+   The \"body\" is the start and end of the range, both inclusive."
+  `(progn
+     define-extension
+     (make-instance 'protobuf-extension
+       :from ,from
+       :to   ,to)
+     ()))
 
 ;; Define a service named 'name' and a Lisp 'defun'
 (defmacro define-service (name (&key proto-name) &body rpc-specs)

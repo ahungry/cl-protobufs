@@ -87,6 +87,8 @@
       (write-protobuf-as type msg stream :indentation (+ indentation 2)))
     (dolist (field (proto-fields message))
       (write-protobuf-as type field stream :indentation (+ indentation 2)))
+    (dolist (extension (proto-extensions message))
+      (write-protobuf-as type extension stream :indentation (+ indentation 2)))
     (format stream "~&~@[~VT~]}~%"
             (and (not (zerop indentation)) indentation))))
 
@@ -101,6 +103,13 @@
               (and (not (zerop indentation)) indentation)
               required type name index dflt packed
               comment *protobuf-field-comment-column* comment))))
+
+(defmethod write-protobuf-as ((type (eql :proto)) (extension protobuf-extension) stream
+                              &key (indentation 0))
+  (with-prefixed-accessors (from to) (proto-extension- extension)
+    (format stream "~&~@[~VT~]extensions ~D to ~D;~%"
+            (and (not (zerop indentation)) indentation)
+            from to)))
 
 
 (defmethod write-protobuf-as ((type (eql :proto)) (service protobuf-service) stream
@@ -224,6 +233,10 @@
       (write-protobuf-as type field stream :indentation (+ indentation 2))
       (when more
         (terpri stream)))
+    (loop for (extension . more) on (proto-extensions message) doing
+      (write-protobuf-as type extension stream :indentation (+ indentation 2))
+      (when more
+        (terpri stream)))
     (format stream ")")))
 
 (defparameter *protobuf-slot-comment-column* 56)
@@ -262,6 +275,13 @@
               (and (not (zerop indentation)) indentation)
               value clss dflt
               comment *protobuf-slot-comment-column* comment))))
+
+(defmethod write-protobuf-as ((type (eql :lisp)) (extension protobuf-extension) stream
+                              &key (indentation 0))
+  (with-prefixed-accessors (from to) (proto-extension- extension)
+    (format stream "~&~@[~VT~](define-extension ~D ~D)"
+            (and (not (zerop indentation)) indentation)
+            from to)))
 
 
 (defmethod write-protobuf-as ((type (eql :lisp)) (service protobuf-service) stream

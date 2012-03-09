@@ -35,6 +35,7 @@
             :reader proto-package
             :initarg :package
             :initform nil)
+   ;;--- Support imports properly
    (imports :type (list-of string)              ;any imports
             :reader proto-imports
             :initarg :imports
@@ -93,6 +94,8 @@
       (some #'(lambda (msg) (find-enum-for-type msg type)) (proto-messages protobuf))))
 
 
+;;--- For now, we support only the built-in options in the .proto file
+;;--- and in RPCs. We will want to extend this to custom options.
 (defclass protobuf-option ()
   ((name :type string                           ;the key
          :reader proto-name
@@ -185,6 +188,10 @@
            :accessor proto-fields
            :initarg :fields
            :initform ())
+   (extensions :type (list-of protobuf-extension) ;any extensions
+               :accessor proto-extensions
+               :initarg :extensions
+               :initform ())
    (comment :type (or null string)
             :accessor proto-comment
             :initarg :comment
@@ -256,6 +263,24 @@
             (proto-type f) (proto-name f)
             (or (proto-value f) (proto-class f)) (proto-value f) (proto-class f)
             (proto-index f))))
+
+
+;; An extension within a message
+;;--- We still need to support 'extend', which depends on supporting 'import'
+(defclass protobuf-extension ()
+  ((from :type (integer 1 #.(1- (ash 1 29)))    ;the index number for this field
+         :accessor proto-extension-from
+         :initarg :from)
+   (to :type (integer 1 #.(1- (ash 1 29)))      ;the index number for this field
+       :accessor proto-extension-to
+       :initarg :to))
+  (:documentation
+   "The model class that represents an extension with a protobufs message."))
+
+(defmethod print-object ((e protobuf-extension) stream)
+  (print-unprintable-object (e stream :type t :identity t)
+    (format stream "~D - ~D"
+            (proto-extension-from e) (proto-extension-from e))))
 
 
 ;; A protobuf service
