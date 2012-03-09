@@ -13,6 +13,8 @@
 
 ;;; Examples, for manual testing
 
+;;--- Turn these into a test suite
+
 #||
 (setq cschema (proto:write-protobuf-schema-for-classes
                '(qres-core::legacy-pnr
@@ -29,9 +31,10 @@
 
 #||
 (setq pschema (proto:write-protobuf-schema-for-classes
-               '(proto:protobuf
-                 proto:protobuf-message proto:protobuf-field
-                 proto:protobuf-enum proto:protobuf-enum-value)))
+               '(proto:protobuf proto:protobuf-option
+                 proto:protobuf-enum proto:protobuf-enum-value
+                 proto:protobuf-message proto:protobuf-field proto:protobuf-extension
+                 proto:protobuf-service proto:protobuf-rpc)))
 
 (setq pser (proto:serialize-object-to-stream pschema pschema :stream nil))
 (describe (proto:deserialize-object 'proto:protobuf pschema pser 0))
@@ -178,7 +181,9 @@
                     (make-instance 'proto:protobuf-rpc
                       :name "SetColor"
                       :input-type "Color"
-                      :output-type "Color")))
+                      :output-type "Color"
+                      :options (list (make-instance 'protobuf-option
+                                       :name "deadline" :value "1.0")))))
        (svcs  (list (make-instance 'proto:protobuf-service
                       :name "ColorWheel"
                       :rpcs rpcs)))
@@ -193,7 +198,6 @@
 ||#
 
 #||
-(makunbound '*color-wheel*)
 (proto:define-proto color-wheel (:package ita.color
                                  :import "descriptor.proto")
   (proto:define-enum color-name ()
@@ -291,3 +295,36 @@
 (proto:print-text-format clr *color-wheel*)
 (proto:print-text-format (proto:deserialize-object 'color *color-wheel* cser 0) *color-wheel*)
 ||#
+
+#||
+(proto:define-proto read-air-reservation (:package qres-core)
+  (proto:define-message air-reservation-spec ()
+    (locator :type (list-of pnr-locator))
+    (customer :type (or null string))
+    (contract-group-id :type (or null integer))
+    (last-name :type (or null string))
+    (first-name :type (or null string))
+    (phone-number :type (or null string))
+    (email-address :type (or null string))
+    (cc-number :type (or null string))
+    (ticket-number :type (or null string))
+    (ff-account :type (or null ff-account))
+    (flights :type (list-of flight-spec)))
+  (proto:define-message pnr-locator ()
+    (system :type string)
+    (locator :type string))
+  (proto:define-message ff-account ()
+    (carrier :type string)
+    (number :type string))
+  (proto:define-message flight-spec ()
+    (carrier :type string)
+    (flight-number :type integer)
+    (suffix :type (or null string))
+    (date :type string)
+    (origin :type (or null string))
+    (destination :type (or null string))))
+
+(proto:write-protobuf *read-air-reservation*)
+(proto:write-protobuf *read-air-reservation* :type :lisp)
+||#
+

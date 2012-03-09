@@ -13,6 +13,10 @@
 
 ;;; Protol buffers model classes
 
+(defvar *all-protobufs* (make-hash-table :test #'equal))
+(defun find-protobuf (name)
+  (gethash name *all-protobufs*))
+
 ;; A few things (the pretty printer) want to keep track of the current schema
 (defvar *protobuf* nil)
 

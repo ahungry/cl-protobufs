@@ -49,23 +49,30 @@
           ((define-service)
            (collect-svc model)))))
     ;;--- This should warn if the old one isn't upgradable to the new one
-    (let ((sname   (fintern "*~A*" name))
+    (let ((vname (fintern "*~A*" name))
+          (pname (or proto-name (proto-class-name name)))
+          (cname name)
           (options (loop for (key val) on options by #'cddr
                          collect `(make-instance 'protobuf-option
                                     :name ,key
                                     :value ,val))))
       `(progn
          ,@forms
-         (defvar ,sname (make-instance 'protobuf
-                          :name     ,(or proto-name (proto-class-name name))
-                          :class    ',name
-                          :package  ,(if (stringp package) package (string-downcase (string package)))
-                          :imports  ',(if (listp import) import (list import))
-                          :syntax   ,syntax
-                          :options  (list ,@options)
-                          :enums    (list ,@enums)
-                          :messages (list ,@msgs)
-                          :services (list ,@svcs)))))))
+         (defvar ,vname nil)
+         (let ((protobuf (make-instance 'protobuf
+                           :name     ',pname
+                           :class    ',cname
+                           :package  ,(if (stringp package) package (string-downcase (string package)))
+                           :imports  ',(if (listp import) import (list import))
+                           :syntax   ,syntax
+                           :options  (list ,@options)
+                           :enums    (list ,@enums)
+                           :messages (list ,@msgs)
+                           :services (list ,@svcs))))
+           (setq ,vname protobuf)
+           (setf (gethash ',pname *all-protobufs*) protobuf)
+           (setf (gethash ',cname *all-protobufs*) protobuf)
+           protobuf)))))
 
 ;; Define an enum type named 'name' and a Lisp 'deftype'
 (defmacro define-enum (name (&key proto-name conc-name) &body values)
