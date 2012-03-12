@@ -13,15 +13,340 @@
 
 ;;; .proto file parsing
 
+(defun-inline proto-whitespace-char-p (ch)
+  (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
+    (and ch (member ch '(#\space #\tab #\return #\newline)))))
+
+(defun-inline proto-eol-char-p (ch)
+  (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
+    (and ch (member ch '(#\return #\newline)))))
+
+(defun-inline proto-token-char-p (ch)
+  (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
+    (and ch (or (alpha-char-p ch)
+                (digit-char-p ch)
+                (member ch '(#\_ #\.))))))
+
+
+(defun skip-whitespace (stream)
+  "Skip all the whitespace characters that are coming up in the stream."
+  (loop for ch = (peek-char nil stream nil)
+        until (or (null ch) (not (proto-whitespace-char-p ch)))
+        do (read-char stream nil)))
+
+(defun skip-comment (stream)
+  "Skip to the end of a comment, that is, to the end of the line.
+   Then skip any following whitespace."
+  (loop for ch = (read-char stream nil)
+        until (or (null ch) (proto-eol-char-p ch)))
+  (skip-whitespace stream))
+
+(defun maybe-skip-comments (stream)
+  "If what appears next in the stream is a comment, skip it and any following comments,
+   then skip any following whitespace."
+  (when (eql (peek-char nil stream nil) #\/)
+    (read-char stream)
+    (if (eql (peek-char nil stream nil) #\/)
+      (skip-comment stream)
+      (error "Found a '~C' at position ~D to start a comment, but no following '~C'"
+             #\/ (file-position stream) #\/)))
+  (skip-whitespace stream))
+
+(defun expect-char (stream ch &optional within)
+  "Expect to see 'ch' as the next character in the stream; signal an error if it's not there.
+   Then skip all of the following whitespace."
+  (if (if (listp ch)
+        (member (peek-char nil stream) ch)
+        (eql (peek-char nil stream) ch))
+    (read-char stream)
+    (error "No '~C' found~@[ within '~A'~] at position ~D"
+           ch within (file-position stream)))
+  (skip-whitespace stream))
+
+
+(defun parse-token (stream)
+  "Parse the next token in the stream, then skip the following whitespace.
+   The returned value is the token."
+  (when (proto-token-char-p (peek-char nil stream nil))
+    (loop for ch = (read-char stream nil)
+          for ch1 = (peek-char nil stream nil)
+          collect ch into token
+          until (or (null ch1) (not (proto-token-char-p ch1)))
+          finally (progn
+                    (skip-whitespace stream)
+                    (return (coerce token 'string))))))
+
+(defun parse-int (stream)
+  "Parse the next token in the stream as an integer, then skip the following whitespace.
+   The returned value is the integer."
+  (when (digit-char-p (peek-char nil stream nil))
+    (loop for ch = (read-char stream nil)
+          for ch1 = (peek-char nil stream nil)
+          collect ch into token
+          until (or (null ch1) (not (digit-char-p ch1)))
+          finally (progn
+                    (skip-whitespace stream)
+                    (return (parse-integer (coerce token 'string)))))))
+
+(defun parse-string (stream)
+  "Parse the next quoted string in the stream, then skip the following whitespace.
+   The returned value is the string, without the quotation marks."
+  (loop with ch0 = (read-char stream nil)
+        for ch = (read-char stream nil)
+        until (or (null ch) (char= ch ch0))
+        collect ch into string
+        finally (progn
+                  (skip-whitespace stream)
+                  (return (coerce string 'string)))))
+
+
+(defun proto-intern (name intern-fn)
+  (let ((package (and *protobuf*
+                      (proto-package *protobuf*)
+                      (find-package (proto-package *protobuf*)))))
+    (funcall intern-fn name package)))
+
+
 (defun parse-protobuf-from-file (filename)
   "Parses the named file as a .proto file, and returns the protobufs schema."
   (with-open-file (stream filename
                    :direction :input
                    :external-format :utf-8
                    :element-type 'character)
-    (parse-protobuf-from-stream stream)))
+    (parse-protobuf-from-stream stream :name (pathname-name (pathname stream)))))
 
-(defun parse-protobuf-from-stream (stream)
-  "Parses the contents of the stream as a .proto file, and returns the protobufs schema."
-  STREAM                                        ;---*** DO THIS
-  )
+;; The syntax for Protocol Buffers is so simple that it doesn't seem worth
+;; writing a complicated parser
+;; Note that we don't put the result into *all-protobufs*; do that at a higher level
+(defun parse-protobuf-from-stream (stream &key name)
+  "Parses a top-level .proto file from the stream 'stream'.
+   Returns the protobuf schema that describes the .proto file."
+  (let* ((protobuf   (make-instance 'protobuf
+                       :name name))
+         (*protobuf* protobuf))
+    (loop
+      (skip-whitespace stream)
+      (maybe-skip-comments stream)
+      (let ((char (peek-char nil stream nil)))
+        (cond ((null char)
+               (return-from parse-protobuf-from-stream protobuf))
+              ((proto-token-char-p char)
+               (let ((token (parse-token stream)))
+                 (cond ((string= token "package")
+                        (parse-proto-package stream protobuf))
+                       ((string= token "import")
+                        (parse-proto-import stream protobuf))
+                       ((string= token "option")
+                        (parse-proto-option stream protobuf))
+                       ((string= token "enum")
+                        (parse-proto-enum stream protobuf))
+                       ((string= token "message")
+                        (parse-proto-message stream protobuf))
+                       ((string= token "service")
+                        (parse-proto-service stream protobuf)))))
+              (t
+               (error "Syntax error at position ~D" (file-position stream))))))))
+
+(defun parse-proto-package (stream protobuf &optional (terminator #\;))
+  "Parse a Protobufs package line from 'stream'.
+   Updates the 'protobuf' object to use the package."
+  (let ((package (prog1 (parse-token stream)
+                   (expect-char stream terminator "package")
+                   (maybe-skip-comments stream))))
+    (setf (proto-package protobuf) package)))
+
+(defun parse-proto-import (stream protobuf &optional (terminator #\;))
+  "Parse a Protobufs import line from 'stream'.
+   Updates the 'protobuf' object to use the package."
+  (let ((import (prog1 (parse-string stream)
+                  (expect-char stream terminator "package")
+                  (maybe-skip-comments stream))))
+    (setf (proto-imports protobuf) (nconc (proto-imports protobuf) (list import)))))
+
+(defun parse-proto-option (stream protobuf &optional (terminator #\;))
+  "Parse a Protobufs option from 'stream'.
+   Updates the 'protobuf' (or message, service, RPC) to have the option."
+  (let* ((key (prog1 (parse-token stream)
+                (expect-char stream #\= "option")))
+         (val (prog1 (if (eql (peek-char nil stream nil) #\")
+                       (parse-string stream)
+                       (parse-token stream))
+                (expect-char stream terminator "option")
+                (maybe-skip-comments stream)))
+         (option (make-instance 'protobuf-option
+                   :name  key
+                   :value val)))
+    (if protobuf
+      (setf (proto-options protobuf) (nconc (proto-options protobuf) (list option)))
+      ;; If nothing to graft the option into, just return it as the value
+      option)))
+
+
+(defun parse-proto-enum (stream protobuf)
+  "Parse a Protobufs enum from 'stream'.
+   Updates the 'protobuf' or 'protobuf-message' object to have the enum."
+  (let* ((name (prog1 (parse-token stream)
+                 (expect-char stream #\{ "enum")
+                 (maybe-skip-comments stream)))
+         (enum (make-instance 'protobuf-enum
+                 :name name
+                 :class (proto-intern name #'proto->class-name))))
+    (loop
+      (let ((name (parse-token stream)))
+        (when (null name)
+          (expect-char stream #\} "enum")
+          (maybe-skip-comments stream)
+          (setf (proto-enums protobuf) (nconc (proto-messages protobuf) (list enum)))
+          (return-from parse-proto-enum))
+        (parse-proto-enum-value stream enum name)))))
+
+(defun parse-proto-enum-value (stream enum name)
+  "Parse a Protobufs enum vvalue from 'stream'.
+   Updates the 'protobuf-enum' object to have the enum value."
+  (expect-char stream #\= "enum")
+  (let* ((idx  (prog1 (parse-int stream)
+                 (expect-char stream #\; "enum")
+                 (maybe-skip-comments stream)))
+         (value (make-instance 'protobuf-enum-value
+                  :name  name
+                  :index idx
+                  :value (proto-intern name #'proto->enum-name))))
+    (setf (proto-values enum) (nconc (proto-values enum) (list value)))))
+
+
+(defun parse-proto-message (stream protobuf)
+  "Parse a Protobufs message from 'stream'.
+   Updates the 'protobuf' or 'protobuf-message' object to have the message."
+  (let* ((name (prog1 (parse-token stream)
+                 (expect-char stream #\{ "message")
+                 (maybe-skip-comments stream)))
+         (message (make-instance 'protobuf-message
+                    :name name
+                    :class (proto-intern name #'proto->class-name))))
+    (loop
+      (let ((token (parse-token stream)))
+        (when (null token)
+          (expect-char stream #\} "message")
+          (maybe-skip-comments stream)
+          (setf (proto-messages protobuf) (nconc (proto-messages protobuf) (list message)))
+          (return-from parse-proto-message))
+        (cond ((string= token "enum")
+               (parse-proto-enum stream message))
+              ((string= token "message")
+               (parse-proto-message stream message))
+              ((member token '("required" "optional" "repeated") :test #'string=)
+               (parse-proto-field stream message token))
+              (t
+               (error "Unrecognized token ~A at position ~D"
+                      token (file-position stream))))))))
+
+(defun parse-proto-field (stream message required)
+  "Parse a Protobufs field from 'stream'.
+   Updates the 'protobuf-message' object to have the field."
+  (let* ((type (parse-token stream))
+         (name (prog1 (parse-token stream)
+                 (expect-char stream #\= "message")))
+         (idx  (parse-int stream))
+         (opts (prog1 (parse-proto-field-options stream)
+                 (expect-char stream #\; "message")
+                 (maybe-skip-comments stream)))
+         (dflt   (let ((opt (find "default" opts :key #'proto-name :test #'string=)))
+                   (and opt (proto-value opt))))
+         (packed (let ((opt (find "packed" opts :key #'proto-name :test #'string=)))
+                   (and opt (string= (proto-value opt) "true"))))
+         (ptype  (if (member type '("int32" "int64" "uint32" "uint64" "sint32" "sint64"
+                                    "fixed32" "fixed64" "sfixed32" "sfixed64"
+                                    "string" "bytes" "bool" "float" "double") :test #'string=)
+                   (kintern type)
+                   type))
+         (class  (if (keywordp ptype) ptype (proto-intern type #'proto->class-name)))
+         (field  (make-instance 'protobuf-field
+                   :name  name
+                   :value (proto-intern name #'proto->slot-name)
+                   :type  type
+                   :class class
+                   ;; One of :required, :optional or :repeated
+                   :required (kintern required)
+                   :index idx
+                   :default dflt
+                   :packed packed)))
+    (setf (proto-fields message) (nconc (proto-fields message) (list field)))))
+
+(defun parse-proto-field-options (stream)
+  "Parse any options in a Protobufs field from 'stream'.
+   Returns a list of 'protobuf-option' objects."
+  (with-collectors ((options collect-option))
+    (loop
+      (unless (eql (peek-char nil stream) #\[)
+        (return-from parse-proto-field-options options))
+      (expect-char stream #\[ "message")
+      (collect-option (parse-proto-option stream nil #\])))
+    options))
+
+
+(defun parse-proto-service (stream protobuf)
+  "Parse a Protobufs service from 'stream'.
+   Updates the 'protobuf-message' object to have the service."
+  (let* ((name (prog1 (parse-token stream)
+                 (expect-char stream #\{ "service")
+                 (maybe-skip-comments stream)))
+         (service (make-instance 'protobuf-service
+                    :name name)))
+    (loop
+      (let ((token (parse-token stream)))
+        (when (null token)
+          (expect-char stream #\} "service")
+          (maybe-skip-comments stream)
+          (setf (proto-services protobuf) (nconc (proto-services protobuf) (list service)))
+          (return-from parse-proto-service))
+        (cond ((string= token "rpc")
+               (parse-proto-rpc stream service token))
+              (t
+               (error "Unrecognized token ~A at position ~D"
+                      token (file-position stream))))))))
+
+(defun parse-proto-rpc (stream service rpc)
+  "Parse a Protobufs enum vvalue from 'stream'.
+   Updates the 'protobuf-enum' object to have the enum value."
+  (declare (ignore rpc))
+  (let* ((name (parse-token stream))
+         (in   (prog2 (expect-char stream #\( "service")
+                   (parse-token stream)
+                 (expect-char stream #\) "service")))
+         (ret  (parse-token stream))  
+         (out  (prog2 (expect-char stream #\( "service")
+                   (parse-token stream)
+                 (expect-char stream #\) "service")))
+         (opts (let ((opts (parse-proto-rpc-options stream)))
+                 (when (or (null opts) (eql (peek-char nil stream) #\;))
+                   (expect-char stream #\; "service"))
+                 (maybe-skip-comments stream)
+                 opts))
+         (rpc (make-instance 'protobuf-rpc
+                :name  name
+                :class (proto-intern name #'proto->class-name)
+                :input-type  in
+                :input-class (proto-intern in #'proto->class-name)
+                :output-type  out
+                :output-class (proto-intern out #'proto->class-name)
+                :options opts)))
+    (assert (string= ret "returns") ()
+            "Syntax error in 'message' at position ~D" (file-position stream))
+    (setf (proto-rpcs service) (nconc (proto-rpcs service) (list rpc)))))
+
+(defun parse-proto-rpc-options (stream)
+  "Parse any options in a Protobufs RPC from 'stream'.
+   Returns a list of 'protobuf-option' objects."
+  (when (eql (peek-char nil stream) #\{)
+    (expect-char stream #\{ "service")
+    (maybe-skip-comments stream)
+    (with-collectors ((options collect-option))
+      (loop
+        (when (eql (peek-char nil stream) #\})
+          (return))
+        (assert (string= (parse-token stream) "option") ()
+                "Syntax error in 'message' at position ~D" (file-position stream))
+        (collect-option (parse-proto-option stream nil #\;)))
+      (expect-char stream #\} "service")
+      (maybe-skip-comments stream)
+      options)))

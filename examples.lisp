@@ -297,6 +297,39 @@
 ||#
 
 #||
+(let ((ps "package ita.color;
+
+import \"descriptor.proto\";
+
+enum ColorName {
+  RED = 1;
+  GREEN = 2;
+  BLUE = 3;
+}
+
+message Color {
+  enum ContrastName {
+    LOW = 1;
+    HIGH = 100;
+  }
+  required ColorName color = 1;
+  optional ContrastName contrast = 2 [default = LOW];
+}
+
+service ColorWheel {
+  rpc GetColor () returns (Color);
+  rpc SetColor (Color) returns (Color) {
+    option deadline = \"1.0\";
+  }
+}"))
+  (with-input-from-string (s ps)
+    (setq ppp (parse-protobuf-from-stream s))))
+
+(proto:write-protobuf ppp)
+(proto:write-protobuf ppp :type :lisp)
+||#
+
+#||
 (proto:define-proto read-air-reservation (:package qres-core)
   (proto:define-message air-reservation-spec ()
     (locator :type (list-of pnr-locator))

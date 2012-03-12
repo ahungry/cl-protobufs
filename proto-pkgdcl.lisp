@@ -34,7 +34,7 @@
    "WRITE-PROTOBUF"
 
    ;; Parsing
-   "PARSE-PROTOBUF"
+   "PARSE-PROTOBUF-FROM-FILE"
    "PARSE-PROTOBUF-FROM-STREAM"
 
    ;; Protobuf defining macros
@@ -133,6 +133,9 @@
    "LENGTH64"
 
    ;; Utilities
-   "PROTO-CLASS-NAME"
-   "PROTO-ENUM-NAME"
-   "PROTO-FIELD-NAME"))
+   "CLASS-NAME->PROTO"
+   "ENUM-NAME->PROTO"
+   "SLOT-NAME->PROTO"
+   "PROTO->CLASS-NAME"
+   "PROTO->ENUM-NAME"
+   "PROTO->SLOT-NAME"))

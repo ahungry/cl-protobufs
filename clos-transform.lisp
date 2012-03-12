@@ -61,7 +61,7 @@
             (incf index 1)
             (collect-field field))))
       (make-instance 'protobuf-message
-        :name  (proto-class-name (class-name class))
+        :name  (class-name->proto (class-name class))
         :class (class-name class)
         :enums (delete-duplicates enums :key #'proto-name :test #'string-equal)
         :messages (delete-duplicates msgs :key #'proto-name :test #'string-equal)
@@ -76,7 +76,7 @@
       (let* ((ename (and enums
                          (format nil "~A-~A" 'enum (slot-definition-name slot))))
              (enum  (and enums
-                         (let* ((names (mapcar #'proto-enum-name enums))
+                         (let* ((names (mapcar #'enum-name->proto enums))
                                 (prefix (and (> (length names) 1)
                                              (subseq (first names)
                                                      0 (mismatch (first names) (second names))))))
@@ -84,7 +84,7 @@
                                       (every #'(lambda (name) (starts-with name prefix)) names))
                              (setq names (mapcar #'(lambda (name) (subseq name (length prefix))) names)))
                            (make-instance 'protobuf-enum
-                             :name   (proto-class-name ename)
+                             :name   (class-name->proto ename)
                              :class  (intern ename (symbol-package (slot-definition-name slot)))
                              :values (loop for name in names
                                            for val in enums
@@ -94,8 +94,8 @@
                                                      :index index
                                                      :value val))))))
              (field (make-instance 'protobuf-field
-                      :name  (proto-field-name (slot-definition-name slot))
-                      :type  (if enum (proto-class-name ename) type)
+                      :name  (slot-name->proto (slot-definition-name slot))
+                      :type  (if enum (class-name->proto ename) type)
                       :class (if enum (intern ename (symbol-package (slot-definition-name slot))) class)
                       :required (clos-type-to-protobuf-required (slot-definition-type slot) type-filter)
                       :index index
@@ -124,7 +124,7 @@
                 (if (ignore-errors 
                       (subtypep type '(or string character)))
                   (values "string" :string)
-                  (values (proto-class-name type) type))))))
+                  (values (class-name->proto type) type))))))
       (if (listp type)
         (destructuring-bind (head &rest tail) type
           (case head
@@ -166,7 +166,7 @@
                        (t
                         (warn "Use DEFTYPE to define a MEMBER type instead of directly using ~S" type)
                         (let ((values (remove-if #'null values)))
-                          (values (proto-class-name type)
+                          (values (class-name->proto type)
                                   type
                                   nil           ;don't pack enums
                                   (if enum-filter (funcall enum-filter values) values))))))))

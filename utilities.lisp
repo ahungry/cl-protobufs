@@ -13,22 +13,38 @@
 
 ;;; Utilities
 
-(defun proto-class-name (x)
-  "Given a Lisp class name, returns a protobufs message or enum name."
+(defun class-name->proto (x)
+  "Given a Lisp class name, returns a Protobufs message or enum name."
   (remove-if-not #'alphanumericp
                  (camel-case (format nil "~A" x) :separators '(#\- #\_ #\/))))
 
-(defun proto-field-name (x)
-  "Given a Lisp slot name, returns a protobufs field name."
-  (remove-if-not #'alphanumericp
-                 (camel-case-but-one (format nil "~A" x) :separators '(#\- #\_ #\/ #\.))))
-
-(defun proto-enum-name (x &optional prefix)
-  "Given a Lisp enum value name, returns a protobufs enum value name."
+(defun enum-name->proto (x &optional prefix)
+  "Given a Lisp enum value name, returns a Protobufs enum value name."
   (let* ((x (string-upcase (string x)))
          (x (if (and prefix (starts-with x prefix)) (subseq x (length prefix)) x)))
     (remove-if-not #'(lambda (x) (or (alphanumericp x) (eql x #\_)))
                    (format nil "~{~A~^_~}" (split-string x :separators '(#\- #\_ #\/ #\.))))))
+
+(defun slot-name->proto (x)
+  "Given a Lisp slot name, returns a Protobufs field name."
+  (remove-if-not #'alphanumericp
+                 (camel-case-but-one (format nil "~A" x) :separators '(#\- #\_ #\/ #\.))))
+
+
+(defun proto->class-name (x &optional package)
+  "Given a Protobufs message or enum type name, returns a Lisp class or type name."
+  (let ((name (string-upcase (uncamel-case x))))
+    (if package (intern name package) (make-symbol name))))
+
+(defun proto->enum-name (x &optional package)
+  "Given a Protobufs enum value name, returns a Lisp enum value name."
+  (let ((name (format nil "~{~A~^-~}" (split-string (string-upcase x) :separators '(#\_)))))
+    (if package (intern name package) (make-symbol name))))
+
+(defun proto->slot-name (x &optional package)
+  "Given a Protobufs field value name, returns a Lisp slot name."
+  (let ((name (string-upcase (uncamel-case x))))
+    (if package (intern name package) (make-symbol name))))
 
 
 #-quux

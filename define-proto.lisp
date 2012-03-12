@@ -50,7 +50,7 @@
            (collect-svc model)))))
     ;;--- This should warn if the old one isn't upgradable to the new one
     (let ((vname (fintern "*~A*" name))
-          (pname (or proto-name (proto-class-name name)))
+          (pname (or proto-name (class-name->proto name)))
           (cname name)
           (options (loop for (key val) on options by #'cddr
                          collect `(make-instance 'protobuf-option
@@ -90,14 +90,14 @@
                (enum-name (if conc-name (format nil "~A~A" conc-name name) (symbol-name name))))
           (collect-val val-name)
           (collect-eval `(make-instance 'protobuf-enum-value
-                           :name  ,(proto-enum-name enum-name)
+                           :name  ,(enum-name->proto enum-name)
                            :index ,idx
                            :value ,val-name)))))
     (collect-form `(deftype ,name () '(member ,@vals)))
     `(progn
        define-enum
        (make-instance 'protobuf-enum
-         :name   ,(or proto-name (proto-class-name name))
+         :name   ,(or proto-name (class-name->proto name))
          :class  ',name
          :values (list ,@evals))
        ,forms)))
@@ -133,6 +133,7 @@
            (destructuring-bind (slot &key type default) fld
              (let* ((idx  (if (listp slot) (second slot) (incf index)))
                     (slot (if (listp slot) (first slot) slot))
+                    (reqd (clos-type-to-protobuf-required type))
                     (accessor (intern (if conc-name (format nil "~A~A" conc-name slot) (symbol-name slot))
                                       (symbol-package slot))))
                (multiple-value-bind (ptype pclass)
@@ -142,19 +143,20 @@
                                        :initarg ,(kintern (symbol-name slot))
                                        ,@(and default (list :initform default))))
                  (collect-field `(make-instance 'protobuf-field
-                                   :name  ,(proto-field-name slot)
+                                   :name  ,(slot-name->proto slot)
                                    :type  ,ptype
                                    :class ',pclass
-                                   :required ,(clos-type-to-protobuf-required type)
+                                   :required ,reqd
                                    :index ,idx
                                    :value ',slot
                                    :default ,(and default (format nil "~A" default))
-                                   :packed  ,(packed-type-p pclass))))))))))
+                                   :packed  ,(and (eq reqd :repeated)
+                                                  (packed-type-p pclass)))))))))))
     (collect-form `(defclass ,name () (,@slots)))
     `(progn
        define-message
        (make-instance 'protobuf-message
-         :name  ,(or proto-name (proto-class-name name))
+         :name  ,(or proto-name (class-name->proto name))
          :class ',name
          :conc-name ,(and conc-name (string conc-name))
          :enums    (list ,@enums)
@@ -185,15 +187,15 @@
                                         :name ,key
                                         :value ,val))))
           (collect-rpc `(make-instance 'protobuf-rpc
-                          :name ,(proto-class-name name)
+                          :name ,(class-name->proto name)
                           :class ',name
-                          :input-type  ,(and input-type  (proto-class-name input-type))
-                          :output-type ,(and output-type (proto-class-name output-type))
+                          :input-type  ,(and input-type  (class-name->proto input-type))
+                          :output-type ,(and output-type (class-name->proto output-type))
                           :options (list ,@options))))))
     `(progn
        define-service
        (make-instance 'protobuf-service
-         :name ,(or proto-name (proto-class-name name))
+         :name ,(or proto-name (class-name->proto name))
          :class ',name
          :rpcs (list ,@rpcs))
        ())))                                            ;---*** DEFINE LISP STUB HERE

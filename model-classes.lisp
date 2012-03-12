@@ -32,20 +32,20 @@
           :initarg :class
           :initform nil)
    (syntax :type (or null string)               ;syntax, passed on but otherwise ignored
-           :reader proto-syntax
+           :accessor proto-syntax
            :initarg :syntax
            :initform nil)
    (package :type (or null string)              ;the package
-            :reader proto-package
+            :accessor proto-package
             :initarg :package
             :initform nil)
    ;;--- Support imports properly
    (imports :type (list-of string)              ;any imports
-            :reader proto-imports
+            :accessor proto-imports
             :initarg :imports
             :initform ())
    (options :type (list-of protobuf-option)     ;options, passed on but otherwise ignored
-           :reader proto-options
+           :accessor proto-options
            :initarg :options
            :initform ())
    (enums :type (list-of protobuf-enum)         ;the set of enum types
@@ -322,14 +322,20 @@
           :accessor proto-class
           :initarg :class
           :initform nil)
-   (input :type (or null string)                ;the name of the input message type
+   (itype :type (or null string)                ;the name of the input message type
           :accessor proto-input-type
           :initarg :input-type)
-   (output :type (or null string)               ;the name of the output message type
-           :accessor proto-output-type
-           :initarg :output-type)
+   (iclass :type (or null symbol)               ;the name of the input message type
+           :accessor proto-input-class
+           :initarg :input-class)
+   (otype :type (or null string)                ;the name of the output message type
+          :accessor proto-output-type
+          :initarg :output-type)
+   (oclass :type (or null symvol)               ;the name of the output message type
+           :accessor proto-output-class
+           :initarg :output-class)
    (options :type (list-of protobuf-option)     ;options, passed on but otherwise ignored
-            :reader proto-options
+            :accessor proto-options
             :initarg :options
             :initform ())
    (comment :type (or null string)
