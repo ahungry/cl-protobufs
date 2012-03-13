@@ -198,21 +198,26 @@
 ||#
 
 #||
-(proto:define-proto color-wheel (:package ita.color
-                                 :import "descriptor.proto"
-                                 :documentation "Color wheel example")
-  (proto:define-enum color-name (:documentation "A color name")
+(proto:define-proto color-wheel
+    (:package ita.color
+     :import "descriptor.proto"
+     :documentation "Color wheel example")
+  (proto:define-enum color-name
+      (:documentation "A color name")
     red
     green
     blue)
-  (proto:define-message color (:conc-name color-
-                               :documentation "Color and constrast")
-    (proto:define-enum contrast-name (:documentation "A contrast name")
+  (proto:define-message color
+      (:conc-name color-
+       :documentation "Color and contrast")
+    (proto:define-enum contrast-name
+        (:documentation "A contrast name")
       (low    1)
       (high 100))
     (color    :type color-name)
     (contrast :type (or null contrast-name) :default :low))
-  (proto:define-service color-wheel (:documentation "Get and set colors")
+  (proto:define-service color-wheel
+      (:documentation "Get and set colors")
     (get-color nil color)
     (set-color color color :options ("deadline" "1.0"))))
 

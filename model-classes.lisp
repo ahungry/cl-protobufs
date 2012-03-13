@@ -132,10 +132,12 @@
     (format stream "~A~@[ = ~S~]" (proto-name o) (proto-value o))))
 
 (defun cl-user::protobuf-option (stream option colon-p atsign-p)
-  (declare (ignore atsign-p))
-  (if colon-p
-    (format stream "~A~@[ = ~S~]" (proto-name option) (proto-value option))
-    (format stream "~(:~A~) ~S" (proto-name option) (proto-value option))))
+  (cond (colon-p                                ;~:/protobuf-option/ -- .proto format
+         (format stream "~A~@[ = ~S~]" (proto-name option) (proto-value option)))
+        (atsign-p                               ;~@/protobuf-option/ -- .lisp format
+         (format stream "~S ~S" (proto-name option) (proto-value option)))
+        (t                                      ;~/protobuf-option/  -- keyword/value format
+         (format stream "~(:~A~) ~S" (proto-name option) (proto-value option)))))
 
 
 ;; A protobuf enumeration

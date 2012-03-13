@@ -180,29 +180,25 @@
         (cond ((= (length imports) 1)
                (format stream "~A:import \"~A\"" spaces (car imports)))
               (t
-               (format stream "~A:import (" spaces)
-               (format stream "~{\"~A\"~^ ~}" imports)
-               (format stream ")")))
+               (format stream "~A:import (~{\"~A\"~^ ~})" spaces imports)))
         (when (or options documentation)
           (terpri stream))
         (setq spaces "     "))
       (when options
-        (format stream "~A:options (" spaces)
-        (format stream "~{~/protobuf-option/~^ ~}" options)
+        (format stream "~A:options (~{~@/protobuf-option/~^ ~})" spaces options)
         (when documentation
           (terpri stream))
         (setq spaces "     "))
       (when documentation
-        (format stream "~A:documentation ~S" spaces documentation))
-      (format stream ")")))
-  (format stream ")")
-  (dolist (enum (proto-enums protobuf))
-    (write-protobuf-as type enum stream :indentation 2))
-  (dolist (msg (proto-messages protobuf))
-    (write-protobuf-as type msg stream :indentation 2))
-  (dolist (svc (proto-services protobuf))
-    (write-protobuf-as type svc stream :indentation 2))
-  (format stream ")~%"))
+        (format stream "~A:documentation ~S" spaces documentation)))
+    (format stream ")")
+    (dolist (enum (proto-enums protobuf))
+      (write-protobuf-as type enum stream :indentation 2))
+    (dolist (msg (proto-messages protobuf))
+      (write-protobuf-as type msg stream :indentation 2))
+    (dolist (svc (proto-services protobuf))
+      (write-protobuf-as type svc stream :indentation 2))
+    (format stream ")~%")))
 
 (defmethod write-protobuf-documentation ((type (eql :lisp)) docstring stream
                                          &key (indentation 0))
@@ -350,6 +346,6 @@
               (if in  (proto-class in)  input-type)
               (if out (proto-class out) output-type))
       (when options
-        (format stream "~%~VT:options (~{~/protobuf-option/~^ ~})"
+        (format stream "~%~VT:options (~{~@/protobuf-option/~^ ~})"
                 (+ indentation 2) options))
       (format stream ")"))))
