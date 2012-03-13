@@ -34,22 +34,41 @@
         until (or (null ch) (not (proto-whitespace-char-p ch)))
         do (read-char stream nil)))
 
-(defun skip-comment (stream)
-  "Skip to the end of a comment, that is, to the end of the line.
+;;--- Collect the comment so we can attach it to its associated object
+(defun maybe-skip-comments (stream)
+  "If what appears next in the stream is a comment, skip it and any following comments,
+   then skip any following whitespace."
+  (loop
+    (unless (eql (peek-char nil stream nil) #\/)
+      (return)
+      (read-char stream)
+      (case (peek-char nil stream nil)
+        ((#\/)
+         (skip-line-comment stream))
+        ((#\*)
+         (skip-block-comment stream))
+        (otherwise
+         (error "Found a '~C' at position ~D to start a comment, but no following '~C' or '~C'"
+                #\/ (file-position stream) #\/ #\*)))))
+  (skip-whitespace stream))
+
+(defun skip-line-comment (stream)
+  "Skip to the end of a line comment, that is, to the end of the line.
    Then skip any following whitespace."
   (loop for ch = (read-char stream nil)
         until (or (null ch) (proto-eol-char-p ch)))
   (skip-whitespace stream))
 
-(defun maybe-skip-comments (stream)
-  "If what appears next in the stream is a comment, skip it and any following comments,
-   then skip any following whitespace."
-  (when (eql (peek-char nil stream nil) #\/)
-    (read-char stream)
-    (if (eql (peek-char nil stream nil) #\/)
-      (skip-comment stream)
-      (error "Found a '~C' at position ~D to start a comment, but no following '~C'"
-             #\/ (file-position stream) #\/)))
+(defun skip-block-comment (stream)
+  "Skip to the end of a block comment, that is, until a '*/' is seen.
+   Then skip any following whitespace."
+  (loop for ch = (read-char stream nil)
+        do (cond ((null ch)
+                  (error "Premature end of file while skipping block comment"))
+                 ((and (eql ch #\*)
+                       (eql (peek-char nil stream nil) #\/))
+                  (read-char stream nil)
+                  (return))))
   (skip-whitespace stream))
 
 (defun expect-char (stream ch &optional within)
@@ -108,7 +127,7 @@
 
 
 (defun parse-protobuf-from-file (filename)
-  "Parses the named file as a .proto file, and returns the protobufs schema."
+  "Parses the named file as a .proto file, and returns the Protobufs schema."
   (with-open-file (stream filename
                    :direction :input
                    :external-format :utf-8

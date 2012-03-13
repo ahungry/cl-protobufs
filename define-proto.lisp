@@ -14,7 +14,7 @@
 ;;; Protocol buffer defining macros
 
 ;; Define a schema named 'name', corresponding to a .proto file of that name
-(defmacro define-proto (name (&key proto-name syntax package import options)
+(defmacro define-proto (name (&key proto-name syntax package import options documentation)
                         &body messages &environment env)
   "Define a schema named 'name', corresponding to a .proto file of that name.
    'proto-name' can be used to override the defaultly generated name.
@@ -68,14 +68,15 @@
                            :options  (list ,@options)
                            :enums    (list ,@enums)
                            :messages (list ,@msgs)
-                           :services (list ,@svcs))))
+                           :services (list ,@svcs)
+                           :documentation ,documentation)))
            (setq ,vname protobuf)
            (setf (gethash ',pname *all-protobufs*) protobuf)
            (setf (gethash ',cname *all-protobufs*) protobuf)
            protobuf)))))
 
 ;; Define an enum type named 'name' and a Lisp 'deftype'
-(defmacro define-enum (name (&key proto-name conc-name) &body values)
+(defmacro define-enum (name (&key proto-name conc-name options documentation) &body values)
   "Define an enum type named 'name' and a Lisp 'deftype'.
   'proto-name' can be used to override the defaultly generated name.
    The body consists of the enum values in the form (name &key index)."
@@ -94,16 +95,23 @@
                            :index ,idx
                            :value ,val-name)))))
     (collect-form `(deftype ,name () '(member ,@vals)))
-    `(progn
-       define-enum
-       (make-instance 'protobuf-enum
-         :name   ,(or proto-name (class-name->proto name))
-         :class  ',name
-         :values (list ,@evals))
-       ,forms)))
+    (let ((options (loop for (key val) on options by #'cddr
+                         collect `(make-instance 'protobuf-option
+                                    :name ,key
+                                    :value ,val))))
+      `(progn
+         define-enum
+         (make-instance 'protobuf-enum
+           :name   ,(or proto-name (class-name->proto name))
+           :class  ',name
+           :options (list ,@options)
+           :values  (list ,@evals)
+           :documentation ,documentation)
+         ,forms))))
 
 ;; Define a message named 'name' and a Lisp 'defclass'
-(defmacro define-message (name (&key proto-name conc-name) &body fields &environment env)
+(defmacro define-message (name (&key proto-name conc-name options documentation)
+                          &body fields &environment env)
   "Define a message named 'name' and a Lisp 'defclass'.
    'proto-name' can be used to override the defaultly generated name.
    The body consists of fields, or 'define-enum' or 'define-message' forms.
@@ -153,16 +161,22 @@
                                    :packed  ,(and (eq reqd :repeated)
                                                   (packed-type-p pclass)))))))))))
     (collect-form `(defclass ,name () (,@slots)))
-    `(progn
-       define-message
-       (make-instance 'protobuf-message
-         :name  ,(or proto-name (class-name->proto name))
-         :class ',name
-         :conc-name ,(and conc-name (string conc-name))
-         :enums    (list ,@enums)
-         :messages (list ,@msgs)
-         :fields   (list ,@flds))
-       ,forms)))
+    (let ((options (loop for (key val) on options by #'cddr
+                         collect `(make-instance 'protobuf-option
+                                    :name ,key
+                                    :value ,val))))
+      `(progn
+         define-message
+         (make-instance 'protobuf-message
+           :name  ,(or proto-name (class-name->proto name))
+           :class ',name
+           :conc-name ,(and conc-name (string conc-name))
+           :options  (list ,@options)
+           :enums    (list ,@enums)
+           :messages (list ,@msgs)
+           :fields   (list ,@flds)
+           :documentation ,documentation)
+         ,forms))))
 
 (defmacro define-extension (from to)
   "Define an extension range within a message.
@@ -175,7 +189,7 @@
      ()))
 
 ;; Define a service named 'name' and a Lisp 'defun'
-(defmacro define-service (name (&key proto-name) &body rpc-specs)
+(defmacro define-service (name (&key proto-name options documentation) &body rpc-specs)
   "Define a service named 'name' and a Lisp 'defun'.
    'proto-name' can be used to override the defaultly generated name.
    The body consists of a set of RPC specs of the form (name input-type output-type)."
@@ -192,10 +206,16 @@
                           :input-type  ,(and input-type  (class-name->proto input-type))
                           :output-type ,(and output-type (class-name->proto output-type))
                           :options (list ,@options))))))
-    `(progn
-       define-service
-       (make-instance 'protobuf-service
-         :name ,(or proto-name (class-name->proto name))
-         :class ',name
-         :rpcs (list ,@rpcs))
-       ())))                                            ;---*** DEFINE LISP STUB HERE
+    (let ((options (loop for (key val) on options by #'cddr
+                         collect `(make-instance 'protobuf-option
+                                    :name ,key
+                                    :value ,val))))
+      `(progn
+         define-service
+         (make-instance 'protobuf-service
+           :name ,(or proto-name (class-name->proto name))
+           :class ',name
+           :options  (list ,@options)
+           :rpcs (list ,@rpcs)
+           :documentation ,documentation)
+         ()))))                                         ;---*** define Lisp stub here

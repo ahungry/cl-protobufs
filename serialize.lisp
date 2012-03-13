@@ -169,7 +169,7 @@
                             ;; that has the field, but our current message does not
                             ;; We still have to deserialize everything, though
                             (slot  (proto-value field)))
-                       ;;---*** Check for mismatched types, running past end of buffer, etc
+                       ;;--- Check for mismatched types, running past end of buffer, etc
                        (declare (ignore type))
                        (cond ((eq (proto-required field) :repeated)
                               (cond ((and (proto-packed field) (packed-type-p cl))
@@ -183,20 +183,23 @@
                                          (deserialize-prim cl field buffer index)
                                        (setq index idx)
                                        (when slot
-                                         (setf (slot-value object slot) (nconc (slot-value object slot) (list val))))))
+                                         (setf (slot-value object slot)
+                                               (nconc (slot-value object slot) (list val))))))
                                     ((typep msg 'protobuf-enum)
                                      (multiple-value-bind (val idx)
                                          (deserialize-enum msg field buffer index)
                                        (setq index idx)
                                        (when slot
-                                         (setf (slot-value object slot) (nconc (slot-value object slot) (list val))))))
+                                         (setf (slot-value object slot)
+                                               (nconc (slot-value object slot) (list val))))))
                                     ((typep msg 'protobuf-message)
                                      (multiple-value-bind (len idx)
                                          (decode-uint32 buffer index)
                                        (setq index idx)
                                        (let ((obj (deserialize cl (cons msg trace) (+ index len))))
                                          (when slot
-                                           (setf (slot-value object slot) (nconc (slot-value object slot) (list obj)))))))))
+                                           (setf (slot-value object slot)
+                                                 (nconc (slot-value object slot) (list obj)))))))))
                              (t
                               (cond ((keywordp cl)
                                      (multiple-value-bind (val idx)

@@ -13,25 +13,45 @@
 
 ;;; Protol buffers model classes
 
-(defvar *all-protobufs* (make-hash-table :test #'equal))
+(defvar *all-protobufs* (make-hash-table :test #'equal)
+  "A table mapping names to 'protobuf' schemas.")
+
 (defun find-protobuf (name)
+  "Given a name (a string or a symbol), return the 'protobuf' schema having that name."
   (gethash name *all-protobufs*))
 
 ;; A few things (the pretty printer) want to keep track of the current schema
 (defvar *protobuf* nil)
 
 
-;; The protobuf, corresponds to one .proto file
-(defclass protobuf ()
-  ((name :type (or null string)                 ;the name of this .proto file
+;;; The model classes
+
+(defclass abstract-protobuf () ())
+
+(defclass base-protobuf (abstract-protobuf)
+  ((name :type (or null string)                 ;the name of this .proto file/enum/message, etc
          :reader proto-name
          :initarg :name
          :initform nil)
-   (class :type (or null symbol)                ;a "class name" for this protobuf, for Lisp
+   (class :type (or null symbol)                ;a Lisp "class name" for this object
           :accessor proto-class
           :initarg :class
           :initform nil)
-   (syntax :type (or null string)               ;syntax, passed on but otherwise ignored
+   (options :type (list-of protobuf-option)     ;options, mostly just passed along
+            :accessor proto-options
+            :initarg :options
+            :initform ())
+   (doc :type (or null string)                  ;documentation for this object
+        :accessor proto-documentation
+        :initarg :documentation
+        :initform nil))
+  (:documentation
+   "The base class for all Protobufs model classes."))
+
+
+;; The protobuf, corresponds to one .proto file
+(defclass protobuf (base-protobuf)
+  ((syntax :type (or null string)               ;syntax, passed on but otherwise ignored
            :accessor proto-syntax
            :initarg :syntax
            :initform nil)
@@ -44,10 +64,6 @@
             :accessor proto-imports
             :initarg :imports
             :initform ())
-   (options :type (list-of protobuf-option)     ;options, passed on but otherwise ignored
-           :accessor proto-options
-           :initarg :options
-           :initform ())
    (enums :type (list-of protobuf-enum)         ;the set of enum types
           :accessor proto-enums
           :initarg :enums
@@ -61,7 +77,7 @@
              :initarg :services
              :initform ()))
   (:documentation
-   "The model class that represents a protobufs schema, i.e., one .proto file."))
+   "The model class that represents a Protobufs schema, i.e., one .proto file."))
 
 (defmethod print-object ((p protobuf) stream)
   (print-unprintable-object (p stream :type t :identity t)
@@ -98,9 +114,9 @@
       (some #'(lambda (msg) (find-enum-for-type msg type)) (proto-messages protobuf))))
 
 
-;;--- For now, we support only the built-in options in the .proto file
-;;--- and in RPCs. We will want to extend this to custom options.
-(defclass protobuf-option ()
+;;--- For now, we support only the built-in options.
+;;--- We will want to extend this to customizable options as well.
+(defclass protobuf-option (abstract-protobuf)
   ((name :type string                           ;the key
          :reader proto-name
          :initarg :name)
@@ -109,36 +125,27 @@
           :initarg :value
           :initform nil))
   (:documentation
-   "The model class that represents a protobufs options, i.e., a keyword/value pair."))
+   "The model class that represents a Protobufs options, i.e., a keyword/value pair."))
 
 (defmethod print-object ((o protobuf-option) stream)
   (print-unprintable-object (o stream :type t :identity t)
     (format stream "~A~@[ = ~S~]" (proto-name o) (proto-value o))))
 
 (defun cl-user::protobuf-option (stream option colon-p atsign-p)
-  (declare (ignore colon-p atsign-p))
-  (format stream "~A~@[ = ~S~]" (proto-name option) (proto-value option)))
+  (declare (ignore atsign-p))
+  (if colon-p
+    (format stream "~A~@[ = ~S~]" (proto-name option) (proto-value option))
+    (format stream "~(:~A~) ~S" (proto-name option) (proto-value option))))
 
 
 ;; A protobuf enumeration
-(defclass protobuf-enum ()
-  ((name :type string                           ;the Protobuf name for the enum type
-         :reader proto-name
-         :initarg :name)
-   (class :type (or null symbol)                ;the Lisp type it represents
-          :accessor proto-class
-          :initarg :class
-          :initform nil)
-   (values :type (list-of protobuf-enum-value)  ;all the values for this enum type
+(defclass protobuf-enum (base-protobuf)
+  ((values :type (list-of protobuf-enum-value)  ;all the values for this enum type
            :accessor proto-values
            :initarg :values
-           :initform ())
-   (comment :type (or null string)
-            :accessor proto-comment
-            :initarg :comment
-            :initform nil))
+           :initform ()))
   (:documentation
-   "The model class that represents a protobufs enumeration type."))
+   "The model class that represents a Protobufs enumeration type."))
 
 (defmethod print-object ((e protobuf-enum) stream)
   (print-unprintable-object (e stream :type t :identity t)
@@ -147,11 +154,8 @@
 
 
 ;; A protobuf value within an enumeration
-(defclass protobuf-enum-value ()
-  ((name :type string                           ;the name of the enum value
-         :reader proto-name
-         :initarg :name)
-   (index :type (integer #.(- (ash 1 31)) #.(1- (ash 1 31)))
+(defclass protobuf-enum-value (base-protobuf)
+  ((index :type (integer #.(- (ash 1 31)) #.(1- (ash 1 31)))
           :accessor proto-index                 ;the index of the enum value
           :initarg :index)
    (value :type (or null symbol)
@@ -159,7 +163,7 @@
           :initarg :value
           :initform nil))
   (:documentation
-   "The model class that represents a protobufs enumeration value."))
+   "The model class that represents a Protobufs enumeration value."))
 
 (defmethod print-object ((v protobuf-enum-value) stream)
   (print-unprintable-object (v stream :type t :identity t)
@@ -168,15 +172,8 @@
 
 
 ;; A protobuf message
-(defclass protobuf-message ()
-  ((name :type string                           ;the Protobuf name for the message
-         :reader proto-name
-         :initarg :name)
-   (class :type (or null symbol)                ;the Lisp class it represents
-          :accessor proto-class
-          :initarg :class
-          :initform nil)
-   (conc :type (or null string)                 ;the conc-name used for Lisp accessors
+(defclass protobuf-message (base-protobuf)
+  ((conc :type (or null string)                 ;the conc-name used for Lisp accessors
          :accessor proto-conc-name
          :initarg :conc-name
          :initform nil)
@@ -195,13 +192,9 @@
    (extensions :type (list-of protobuf-extension) ;any extensions
                :accessor proto-extensions
                :initarg :extensions
-               :initform ())
-   (comment :type (or null string)
-            :accessor proto-comment
-            :initarg :comment
-            :initform nil))
+               :initform ()))
     (:documentation
-   "The model class that represents a protobufs message."))
+   "The model class that represents a Protobufs message."))
 
 (defmethod print-object ((m protobuf-message) stream)
   (print-unprintable-object (m stream :type t :identity t)
@@ -225,17 +218,10 @@
 
 
 ;; A protobuf field within a message
-(defclass protobuf-field ()
-  ((name :type string                           ;the Protobuf name for the field
-         :accessor proto-name
-         :initarg :name)
-   (type :type string                           ;the name of the Protobuf type for the field
+(defclass protobuf-field (base-protobuf)
+  ((type :type string                           ;the name of the Protobuf type for the field
          :accessor proto-type
          :initarg :type)
-   (class :type (or null symbol)                ;the Lisp class (or a keyword such as :fixed64)
-          :accessor proto-class
-          :initarg :class
-          :initform nil)
    (required :type (member :required :optional :repeated)
              :accessor proto-required
              :initarg :required)
@@ -246,20 +232,16 @@
           :accessor proto-value
           :initarg :value
           :initform nil)
-   (default :type (or null string)
+   (default :type (or null string)              ;default value, pulled out of the options
             :accessor proto-default
             :initarg :default
             :initform nil)
-   (packed :type (member t nil)
+   (packed :type (member t nil)                 ;packed, pulled out of the options
            :accessor proto-packed
            :initarg :packed
-           :initform nil)
-   (comment :type (or null string)
-            :accessor proto-comment
-            :initarg :comment
-            :initform nil))
+           :initform nil))
   (:documentation
-   "The model class that represents one field within a protobufs message."))
+   "The model class that represents one field within a Protobufs message."))
 
 (defmethod print-object ((f protobuf-field) stream)
   (print-unprintable-object (f stream :type t :identity t)
@@ -271,7 +253,7 @@
 
 ;; An extension within a message
 ;;--- We still need to support 'extend', which depends on supporting 'import'
-(defclass protobuf-extension ()
+(defclass protobuf-extension (abstract-protobuf)
   ((from :type (integer 1 #.(1- (ash 1 29)))    ;the index number for this field
          :accessor proto-extension-from
          :initarg :from)
@@ -279,7 +261,7 @@
        :accessor proto-extension-to
        :initarg :to))
   (:documentation
-   "The model class that represents an extension with a protobufs message."))
+   "The model class that represents an extension with a Protobufs message."))
 
 (defmethod print-object ((e protobuf-extension) stream)
   (print-unprintable-object (e stream :type t :identity t)
@@ -288,24 +270,13 @@
 
 
 ;; A protobuf service
-(defclass protobuf-service ()
-  ((name :type string                           ;the Protobuf name for the service
-         :reader proto-name
-         :initarg :name)
-   (class :type (or null symbol)                ;a "class name" for this service, for Lisp
-          :accessor proto-class
-          :initarg :class
-          :initform nil)
-   (rpcs :type (list-of protobuf-rpc)           ;the RPCs in the service
+(defclass protobuf-service (base-protobuf)
+  ((rpcs :type (list-of protobuf-rpc)           ;the RPCs in the service
          :accessor proto-rpcs
          :initarg :rpcs
-         :initform ())
-   (comment :type (or null string)
-            :accessor proto-comment
-            :initarg :comment
-            :initform nil))
+         :initform ()))
   (:documentation
-   "The model class that represents a protobufs service."))
+   "The model class that represents a Protobufs service."))
 
 (defmethod print-object ((s protobuf-service) stream)
   (print-unprintable-object (s stream :type t :identity t)
@@ -314,15 +285,8 @@
 
 
 ;; A protobuf RPC within a service
-(defclass protobuf-rpc ()
-  ((name :type string                           ;the Protobuf name for the RPC
-         :reader proto-name
-         :initarg :name)
-   (class :type (or null symbol)                ;a "class name" for this RPC, for Lisp
-          :accessor proto-class
-          :initarg :class
-          :initform nil)
-   (itype :type (or null string)                ;the name of the input message type
+(defclass protobuf-rpc (base-protobuf)
+  ((itype :type (or null string)                ;the name of the input message type
           :accessor proto-input-type
           :initarg :input-type)
    (iclass :type (or null symbol)               ;the name of the input message type
@@ -333,17 +297,9 @@
           :initarg :output-type)
    (oclass :type (or null symvol)               ;the name of the output message type
            :accessor proto-output-class
-           :initarg :output-class)
-   (options :type (list-of protobuf-option)     ;options, passed on but otherwise ignored
-            :accessor proto-options
-            :initarg :options
-            :initform ())
-   (comment :type (or null string)
-            :accessor proto-comment
-            :initarg :comment
-            :initform nil))
+           :initarg :output-class))
   (:documentation
-   "The model class that represents one RPC with a protobufs service."))
+   "The model class that represents one RPC with a Protobufs service."))
 
 (defmethod print-object ((r protobuf-rpc) stream)
   (print-unprintable-object (r stream :type t :identity t)

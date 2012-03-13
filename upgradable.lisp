@@ -83,11 +83,11 @@
 
 (defmethod protobuf-upgradable ((old protobuf-field) (new protobuf-field))
   (flet ((arity-upgradable (old new)
-           ;;--- We need to handle conversions between non-required fields and extensions
+           ;;--- Handle conversions between non-required fields and extensions
            (or (eq old new)
                (not (eq new :required))))
          (type-upgradable (old new)
-           ;;--- We need to handle conversions between embedded messages and bytes
+           ;;--- Handle conversions between embedded messages and bytes
            (or 
             (string= old new)
             ;; These varint types are all compatible

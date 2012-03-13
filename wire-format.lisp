@@ -17,7 +17,7 @@
 
 ;; Serialize 'val' of primitive type 'type' into the buffer
 (defun serialize-prim (val type field buffer index)
-  "Serializes a protobufs primitive (scalar) value into the buffer at the given index.
+  "Serializes a Protobufs primitive (scalar) value into the buffer at the given index.
    The value is given by 'val', the primitive type by 'type'.
    'field' is the protobuf-field describing the value.
    Modifies the buffer in place, and returns the new index into the buffer."
@@ -145,7 +145,7 @@
 
 ;; Serialize 'val' of enum type 'type' into the buffer
 (defun serialize-enum (val enum field buffer index)
-  "Serializes a protobufs enum value into the buffer at the given index.
+  "Serializes a Protobufs enum value into the buffer at the given index.
    The value is given by 'val', the enum type by 'enum'.
    'field' is the protobuf-field describing the value.
    Modifies the buffer in place, and returns the new index into the buffer."
@@ -388,7 +388,7 @@
   (declare (type fixnum index)
            (type (simple-array (unsigned-byte 8)) buffer))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
-    ;;---*** DO ENCODING OF SINGLE FLOATS
+    ;;---*** Do encoding of single floats
     val buffer index))
 
 (defun encode-double (val buffer index)
@@ -397,7 +397,7 @@
   (declare (type fixnum index)
            (type (simple-array (unsigned-byte 8)) buffer))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
-    ;;---*** DO ENCODING OF DOUBLE FLOATS
+    ;;---*** Do encoding of double floats
     val buffer index))
 
 (defun encode-octets (octets buffer index)
@@ -464,7 +464,7 @@
   (declare (type fixnum index)
            (type (simple-array (unsigned-byte 8)) buffer))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
-    ;;---*** DO DECODING OF SINGLE FLOATS
+    ;;---*** Do decoding of single floats
     buffer index))
 
 (defun decode-double (buffer index)
@@ -473,7 +473,7 @@
   (declare (type fixnum index)
            (type (simple-array (unsigned-byte 8)) buffer))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
-    ;;---*** DO DECODING OF DOUBLE FLOATS
+    ;;---*** Do decoding of double floats
     buffer index))
 
 (defun decode-octets (buffer index)
