@@ -122,6 +122,7 @@
                     (slots collect-slot)
                     (forms collect-form))
     (let ((index 0))
+      (declare (type fixnum index))
       (dolist (fld fields)
         (case (car fld)
           ((define-enum define-message define-extension)
@@ -138,8 +139,10 @@
                ((define-extension)
                 (collect-msg model)))))
           (otherwise
+           (when (i= index 18999)                       ;skip over the restricted range
+             (setq index 19999))
            (destructuring-bind (slot &key type default) fld
-             (let* ((idx  (if (listp slot) (second slot) (incf index)))
+             (let* ((idx  (if (listp slot) (second slot) (iincf index)))
                     (slot (if (listp slot) (first slot) slot))
                     (reqd (clos-type-to-protobuf-required type))
                     (accessor (intern (if conc-name (format nil "~A~A" conc-name slot) (symbol-name slot))

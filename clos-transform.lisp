@@ -58,7 +58,7 @@
           (when msg
             (collect-msg msg))
           (when field
-            (incf index 1)
+            (incf index 1)                              ;don't worry about the 19000-19999 restriction
             (collect-field field))))
       (make-instance 'protobuf-message
         :name  (class-name->proto (class-name class))

@@ -13,6 +13,8 @@
 
 ;;; .proto file parsing
 
+;;; Parsing utilities
+
 (defun-inline proto-whitespace-char-p (ch)
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
     (and ch (member ch '(#\space #\tab #\return #\newline)))))
@@ -71,6 +73,7 @@
                   (return))))
   (skip-whitespace stream))
 
+
 (defun expect-char (stream ch &optional within)
   "Expect to see 'ch' as the next character in the stream; signal an error if it's not there.
    Then skip all of the following whitespace."
@@ -95,6 +98,17 @@
                     (skip-whitespace stream)
                     (return (coerce token 'string))))))
 
+(defun parse-string (stream)
+  "Parse the next quoted string in the stream, then skip the following whitespace.
+   The returned value is the string, without the quotation marks."
+  (loop with ch0 = (read-char stream nil)
+        for ch = (read-char stream nil)
+        until (or (null ch) (char= ch ch0))
+        collect ch into string
+        finally (progn
+                  (skip-whitespace stream)
+                  (return (coerce string 'string)))))
+
 (defun parse-int (stream)
   "Parse the next token in the stream as an integer, then skip the following whitespace.
    The returned value is the integer."
@@ -107,24 +121,8 @@
                     (skip-whitespace stream)
                     (return (parse-integer (coerce token 'string)))))))
 
-(defun parse-string (stream)
-  "Parse the next quoted string in the stream, then skip the following whitespace.
-   The returned value is the string, without the quotation marks."
-  (loop with ch0 = (read-char stream nil)
-        for ch = (read-char stream nil)
-        until (or (null ch) (char= ch ch0))
-        collect ch into string
-        finally (progn
-                  (skip-whitespace stream)
-                  (return (coerce string 'string)))))
 
-
-(defun proto-intern (name intern-fn)
-  (let ((package (and *protobuf*
-                      (proto-package *protobuf*)
-                      (find-package (proto-package *protobuf*)))))
-    (funcall intern-fn name package)))
-
+;;; The parser itself
 
 (defun parse-protobuf-from-file (filename)
   "Parses the named file as a .proto file, and returns the Protobufs schema."
@@ -135,14 +133,15 @@
     (parse-protobuf-from-stream stream :name (pathname-name (pathname stream)))))
 
 ;; The syntax for Protocol Buffers is so simple that it doesn't seem worth
-;; writing a complicated parser
+;; writing a sophisticated parser
 ;; Note that we don't put the result into *all-protobufs*; do that at a higher level
 (defun parse-protobuf-from-stream (stream &key name)
   "Parses a top-level .proto file from the stream 'stream'.
    Returns the protobuf schema that describes the .proto file."
   (let* ((protobuf   (make-instance 'protobuf
                        :name name))
-         (*protobuf* protobuf))
+         (*protobuf* protobuf)
+         (*protobuf-package* nil))
     (loop
       (skip-whitespace stream)
       (maybe-skip-comments stream)
@@ -169,9 +168,12 @@
 (defun parse-proto-package (stream protobuf &optional (terminator #\;))
   "Parse a Protobufs package line from 'stream'.
    Updates the 'protobuf' object to use the package."
-  (let ((package (prog1 (parse-token stream)
-                   (expect-char stream terminator "package")
-                   (maybe-skip-comments stream))))
+  (let* ((package  (prog1 (parse-token stream)
+                     (expect-char stream terminator "package")
+                     (maybe-skip-comments stream)))
+         (lisp-pkg (or (find-package package)
+                       (find-package (string-upcase package)))))
+    (setq *protobuf-package* lisp-pkg)
     (setf (proto-package protobuf) package)))
 
 (defun parse-proto-import (stream protobuf &optional (terminator #\;))
@@ -209,7 +211,7 @@
                  (maybe-skip-comments stream)))
          (enum (make-instance 'protobuf-enum
                  :name name
-                 :class (proto-intern name #'proto->class-name))))
+                 :class (proto->class-name name *protobuf-package*))))
     (loop
       (let ((name (parse-token stream)))
         (when (null name)
@@ -229,7 +231,7 @@
          (value (make-instance 'protobuf-enum-value
                   :name  name
                   :index idx
-                  :value (proto-intern name #'proto->enum-name))))
+                  :value (proto->enum-name name *protobuf-package*))))
     (setf (proto-values enum) (nconc (proto-values enum) (list value)))))
 
 
@@ -241,7 +243,7 @@
                  (maybe-skip-comments stream)))
          (message (make-instance 'protobuf-message
                     :name name
-                    :class (proto-intern name #'proto->class-name))))
+                    :class (proto->class-name name *protobuf-package*))))
     (loop
       (let ((token (parse-token stream)))
         (when (null token)
@@ -278,10 +280,10 @@
                                     "string" "bytes" "bool" "float" "double") :test #'string=)
                    (kintern type)
                    type))
-         (class  (if (keywordp ptype) ptype (proto-intern type #'proto->class-name)))
+         (class  (if (keywordp ptype) ptype (proto->class-name type *protobuf-package*)))
          (field  (make-instance 'protobuf-field
                    :name  name
-                   :value (proto-intern name #'proto->slot-name)
+                   :value (proto->slot-name name *protobuf-package*)
                    :type  type
                    :class class
                    ;; One of :required, :optional or :repeated
@@ -343,11 +345,11 @@
                  opts))
          (rpc (make-instance 'protobuf-rpc
                 :name  name
-                :class (proto-intern name #'proto->class-name)
+                :class (proto->class-name name *protobuf-package*)
                 :input-type  in
-                :input-class (proto-intern in #'proto->class-name)
+                :input-class (proto->class-name in *protobuf-package*)
                 :output-type  out
-                :output-class (proto-intern out #'proto->class-name)
+                :output-class (proto->class-name out *protobuf-package*)
                 :options opts)))
     (assert (string= ret "returns") ()
             "Syntax error in 'message' at position ~D" (file-position stream))

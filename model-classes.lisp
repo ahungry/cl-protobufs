@@ -22,6 +22,7 @@
 
 ;; A few things (the pretty printer) want to keep track of the current schema
 (defvar *protobuf* nil)
+(defvar *protobuf-package* nil)
 
 
 ;;; The model classes
@@ -59,7 +60,7 @@
             :accessor proto-package
             :initarg :package
             :initform nil)
-   ;;--- Support imports properly
+   ;;---*** Support imports properly
    (imports :type (list-of string)              ;any imports
             :accessor proto-imports
             :initarg :imports
@@ -244,6 +245,11 @@
            :initform nil))
   (:documentation
    "The model class that represents one field within a Protobufs message."))
+
+(defmethod initialize-instance :after ((field protobuf-field) &rest initargs)
+  (declare (ignore initargs))
+  (assert (not (<= 19000 (proto-index field) 19999)) ()
+          "Protobuf field indexes between 19000 and 19999 are not allowed"))
 
 (defmethod print-object ((f protobuf-field) stream)
   (print-unprintable-object (f stream :type t :identity t)

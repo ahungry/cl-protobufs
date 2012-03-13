@@ -13,6 +13,7 @@
 
 ;;; Can a version of a protobuf be upgraded to a new version
 
+;;--- This should return (a set of) reason(s) if the upgrade will fail
 (defgeneric protobuf-upgradable (new old)
   (:documentation
    "Returns true if and only if the old protobuf schema (enum, message, etc)
