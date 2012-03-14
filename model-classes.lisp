@@ -248,8 +248,9 @@
 
 (defmethod initialize-instance :after ((field protobuf-field) &rest initargs)
   (declare (ignore initargs))
-  (assert (not (<= 19000 (proto-index field) 19999)) ()
-          "Protobuf field indexes between 19000 and 19999 are not allowed"))
+  (when (slot-boundp field 'index)
+    (assert (not (<= 19000 (proto-index field) 19999)) ()
+            "Protobuf field indexes between 19000 and 19999 are not allowed")))
 
 (defmethod print-object ((f protobuf-field) stream)
   (print-unprintable-object (f stream :type t :identity t)
@@ -296,16 +297,20 @@
 (defclass protobuf-rpc (base-protobuf)
   ((itype :type (or null string)                ;the name of the input message type
           :accessor proto-input-type
-          :initarg :input-type)
-   (iclass :type (or null symbol)               ;the name of the input message type
+          :initarg :input-type
+          :initform nil)
+   (iclass :type (or null symbol)               ;the name of the input message Lisp class
            :accessor proto-input-class
-           :initarg :input-class)
+           :initarg :input-class
+           :initform nil)
    (otype :type (or null string)                ;the name of the output message type
           :accessor proto-output-type
-          :initarg :output-type)
-   (oclass :type (or null symvol)               ;the name of the output message type
+          :initarg :output-type
+          :initform nil)
+   (oclass :type (or null symbol)               ;the name of the output message Lisp class
            :accessor proto-output-class
-           :initarg :output-class))
+           :initarg :output-class
+           :initform nil))
   (:documentation
    "The model class that represents one RPC with a Protobufs service."))
 

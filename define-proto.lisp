@@ -199,7 +199,7 @@
   (with-collectors ((rpcs collect-rpc)
                     (forms collect-form))
     (dolist (rpc rpc-specs)
-      (destructuring-bind (name input-type output-type &key options) rpc
+      (destructuring-bind (name input-class output-class &key options) rpc
         (let ((options (loop for (key val) on options by #'cddr
                              collect `(make-instance 'protobuf-option
                                         :name ,key
@@ -207,12 +207,14 @@
           (collect-rpc `(make-instance 'protobuf-rpc
                           :name ,(class-name->proto name)
                           :class ',name
-                          :input-type  ,(and input-type  (class-name->proto input-type))
-                          :output-type ,(and output-type (class-name->proto output-type))
+                          :input-type  ,(and input-class  (class-name->proto input-class))
+                          :input-class ',input-class
+                          :output-type  ,(and output-class (class-name->proto output-class))
+                          :output-class ',output-class
                           :options (list ,@options)))
           ;;--- Is this really all we need as the stub for the RPC?
-          (collect-form `(defgeneric ,name (,@(and input-type (list input-type)))
-                           (declare (values ,output-type)))))))
+          (collect-form `(defgeneric ,name (,@(and input-class (list input-class)))
+                           (declare (values ,output-class)))))))
     (let ((options (loop for (key val) on options by #'cddr
                          collect `(make-instance 'protobuf-option
                                     :name ,key

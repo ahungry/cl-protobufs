@@ -11,7 +11,7 @@
 (in-package "PROTO-IMPL")
 
 
-;;; Protobufs pretty printing
+;;; Protobufs schema pretty printing
 
 (defun write-protobuf (protobuf &key (stream *standard-output*) (type :proto))
   "Writes the protobuf object 'protobuf' (schema, message, enum, etc) onto
@@ -30,7 +30,7 @@
     in the format given by 'type' (:proto, :text, etc)."))
 
 
-;;; Pretty print as a .proto file
+;;; Pretty print a schema as a .proto file
 
 (defmethod write-protobuf-as ((type (eql :proto)) (protobuf protobuf) stream
                               &key (indentation 0))
@@ -157,7 +157,7 @@
            (format stream ";~%")))))
 
 
-;;; Pretty print as a .lisp file
+;;; Pretty print a schema as a .lisp file
 
 (defmethod write-protobuf-as ((type (eql :lisp)) (protobuf protobuf) stream
                               &key (indentation 0))
@@ -336,15 +336,19 @@
 
 (defmethod write-protobuf-as ((type (eql :lisp)) (rpc protobuf-rpc) stream
                               &key (indentation 0))
-  (with-prefixed-accessors (class documentation input-type output-type options) (proto- rpc)
+  (with-prefixed-accessors
+      (class documentation input-type input-class output-type output-class options) (proto- rpc)
     (when documentation
       (write-protobuf-documentation type documentation stream :indentation indentation))
-    (let ((in  (find-message-for-class *protobuf* input-type))
-          (out (find-message-for-class *protobuf* output-type)))
+    (let ((input  (or input-class
+                      (let ((m (find-message-for-class *protobuf* input-type)))
+                        (and m (proto-class m)))))
+          (output (or output-class
+                      (let ((m (find-message-for-class *protobuf* output-type)))
+                        (and m (proto-class m))))))
       (format stream "~&~@[~VT~](~(~S~) ~(~S~) ~(~S~)"
               (and (not (zerop indentation)) indentation) class
-              (if in  (proto-class in)  input-type)
-              (if out (proto-class out) output-type))
+              input output)
       (when options
         (format stream "~%~VT:options (~{~@/protobuf-option/~^ ~})"
                 (+ indentation 2) options))

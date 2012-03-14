@@ -11,7 +11,7 @@
 (in-package "PROTO-IMPL")
 
 
-;;; Can a version of a protobuf be upgraded to a new version
+;;; Can a version of a Protobufs schema be upgraded to a new version
 
 ;;--- This should return (a set of) reason(s) if the upgrade will fail
 (defgeneric protobuf-upgradable (new old)
