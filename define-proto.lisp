@@ -196,7 +196,8 @@
   "Define a service named 'name' and a Lisp 'defun'.
    'proto-name' can be used to override the defaultly generated name.
    The body consists of a set of RPC specs of the form (name input-type output-type)."
-  (with-collectors ((rpcs collect-rpc))
+  (with-collectors ((rpcs collect-rpc)
+                    (forms collect-form))
     (dolist (rpc rpc-specs)
       (destructuring-bind (name input-type output-type &key options) rpc
         (let ((options (loop for (key val) on options by #'cddr
@@ -208,7 +209,10 @@
                           :class ',name
                           :input-type  ,(and input-type  (class-name->proto input-type))
                           :output-type ,(and output-type (class-name->proto output-type))
-                          :options (list ,@options))))))
+                          :options (list ,@options)))
+          ;;--- Is this really all we need as the stub for the RPC?
+          (collect-form `(defgeneric ,name (,@(and input-type (list input-type)))
+                           (declare (values ,output-type)))))))
     (let ((options (loop for (key val) on options by #'cddr
                          collect `(make-instance 'protobuf-option
                                     :name ,key
@@ -221,4 +225,4 @@
            :options  (list ,@options)
            :rpcs (list ,@rpcs)
            :documentation ,documentation)
-         ()))))                                         ;---*** define Lisp stub here
+         ,forms))))
