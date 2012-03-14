@@ -49,11 +49,13 @@
        (let* ((tag (ilogior $wire-type-32bit (iash (proto-index field) 3)))
               (idx (encode-uint32 tag buffer index)))
          (declare (type fixnum tag idx))
+         ;;--- Shouldn't this always be writing 4 bytes?
          (encode-uint32 val buffer idx)))
       ((:fixed64 :sfixed64)
        (let* ((tag (ilogior $wire-type-64bit (iash (proto-index field) 3)))
               (idx (encode-uint32 tag buffer index)))
          (declare (type fixnum tag idx))
+         ;;--- Shouldn't this always be writing 8 bytes?
          (encode-uint64 val buffer idx)))
       ((:string)
        (let* ((tag (ilogior $wire-type-string (iash (proto-index field) 3)))
@@ -185,8 +187,10 @@
            (decode-uint64 buffer index)
          (values (zig-zag-decode64 val) idx)))
       ((:fixed32 :sfixed32)
+       ;;--- Shouldn't this always be reading 4 bytes?
        (decode-uint32 buffer index))
       ((:fixed64 :sfixed64)
+       ;;--- Shouldn't this always be reading 8 bytes?
        (decode-uint64 buffer index))
       ((:string)
        (multiple-value-bind (val idx)
@@ -388,8 +392,14 @@
   (declare (type fixnum index)
            (type (simple-array (unsigned-byte 8)) buffer))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
-    ;;---*** Do encoding of single floats
-    val buffer index))
+    (let ((bits (single-float-bits val)))
+      (loop repeat 4 doing
+        (let ((byte (ldb #.(byte 8 0) bits)))
+          (declare (type fixnum byte))
+          (setq bits (ash bits -8))
+          (setf (aref buffer index) byte)
+          (iincf index)))))
+  (values index buffer))
 
 (defun encode-double (val buffer index)
   "Encodes the double float 'val' into the buffer at the given index.
@@ -397,8 +407,21 @@
   (declare (type fixnum index)
            (type (simple-array (unsigned-byte 8)) buffer))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
-    ;;---*** Do encoding of double floats
-    val buffer index))
+    (multiple-value-bind (low high)
+        (double-float-bits val)
+      (loop repeat 4 doing
+        (let ((byte (ldb #.(byte 8 0) low)))
+          (declare (type fixnum byte))
+          (setq low (ash low -8))
+          (setf (aref buffer index) byte)
+          (iincf index)))
+      (loop repeat 4 doing
+        (let ((byte (ldb #.(byte 8 0) high)))
+          (declare (type fixnum byte))
+          (setq high (ash high -8))
+          (setf (aref buffer index) byte)
+          (iincf index)))))
+  (values index buffer))
 
 (defun encode-octets (octets buffer index)
   "Encodes the octets into the buffer at the given index.
@@ -434,10 +457,10 @@
            (type (simple-array (unsigned-byte 8)) buffer))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
     ;; Seven bits at a time, least significant bits first
-    (loop with val fixnum = 0
+    (loop with val = 0
           for places fixnum upfrom 0 by 7
           for byte fixnum = (prog1 (aref buffer index) (iincf index))
-          do (setq val (ilogior val (ash (ldb #.(byte 7 0) byte) places)))
+          do (setq val (logior val (ash (ldb #.(byte 7 0) byte) places)))
           until (i< byte 128)
           finally (progn
                     (assert (< val #.(ash 1 32)) ()
@@ -451,10 +474,10 @@
            (type (simple-array (unsigned-byte 8)) buffer))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
     ;; Seven bits at a time, least significant bits first
-    (loop with val fixnum = 0
+    (loop with val = 0
           for places fixnum upfrom 0 by 7
           for byte fixnum = (prog1 (aref buffer index) (iincf index))
-          do (setq val (ilogior val (ash (ldb #.(byte 7 0) byte) places)))
+          do (setq val (logior val (ash (ldb #.(byte 7 0) byte) places)))
           until (i< byte 128)
           finally (return (values val index)))))
 
@@ -464,8 +487,15 @@
   (declare (type fixnum index)
            (type (simple-array (unsigned-byte 8)) buffer))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
-    ;;---*** Do decoding of single floats
-    buffer index))
+    ;; Eight bits at a time, least significant bits first
+    (let ((bits 0))
+      (loop repeat 4
+            for places fixnum upfrom 0 by 8
+            for byte fixnum = (prog1 (aref buffer index) (iincf index))
+            do (setq bits (logior bits (ash byte places))))
+      (when (i= (ldb #.(byte 1 31) bits) 1)             ;sign bit set, so negative value
+        (decf bits #.(ash 1 32)))
+      (values (make-single-float bits) index))))
 
 (defun decode-double (buffer index)
   "Decodes the next double float in the buffer at the given index.
@@ -473,8 +503,21 @@
   (declare (type fixnum index)
            (type (simple-array (unsigned-byte 8)) buffer))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
-    ;;---*** Do decoding of double floats
-    buffer index))
+    ;; Eight bits at a time, least significant bits first
+    (let ((low  0)
+          (high 0))
+      (loop repeat 4
+            for places fixnum upfrom 0 by 8
+            for byte fixnum = (prog1 (aref buffer index) (iincf index))
+            do (setq low (logior low (ash byte places))))
+      (loop repeat 4
+            for places fixnum upfrom 0 by 8
+            for byte fixnum = (prog1 (aref buffer index) (iincf index))
+            do (setq high (logior high (ash byte places))))
+      ;; High bits are signed, but low bits are unsigned
+      (when (i= (ldb #.(byte 1 31) high) 1)             ;sign bit set, so negative value
+        (decf high #.(ash 1 32)))
+      (values (make-double-float low high) index))))
 
 (defun decode-octets (buffer index)
   "Decodes the next octets in the buffer at the given index.
