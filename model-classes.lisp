@@ -60,7 +60,7 @@
             :accessor proto-package
             :initarg :package
             :initform nil)
-   ;;---*** Support imports properly
+   ;;---*** We need to support 'import' properly
    (imports :type (list-of string)              ;any imports
             :accessor proto-imports
             :initarg :imports
@@ -115,8 +115,8 @@
       (some #'(lambda (msg) (find-enum-for-type msg type)) (proto-messages protobuf))))
 
 
-;;--- For now, we support only the built-in options.
-;;--- We will want to extend this to customizable options as well.
+;;--- For now, we support only the built-in options
+;;--- We will want to extend this to customizable options as well
 (defclass protobuf-option (abstract-protobuf)
   ((name :type string                           ;the key
          :reader proto-name
@@ -261,7 +261,7 @@
 
 
 ;; An extension within a message
-;;--- We still need to support 'extend', which depends on supporting 'import'
+;;---*** We need to support 'extends', which depends on supporting 'import'
 (defclass protobuf-extension (abstract-protobuf)
   ((from :type (integer 1 #.(1- (ash 1 29)))    ;the index number for this field
          :accessor proto-extension-from

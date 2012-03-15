@@ -48,7 +48,6 @@
            (collect-msg model))
           ((define-service)
            (collect-svc model)))))
-    ;;--- This should warn if the old one isn't upgradable to the new one
     (let ((vname (fintern "*~A*" name))
           (pname (or proto-name (class-name->proto name)))
           (cname name)
@@ -59,7 +58,8 @@
       `(progn
          ,@forms
          (defvar ,vname nil)
-         (let ((protobuf (make-instance 'protobuf
+         (let ((old      ,vname)
+               (protobuf (make-instance 'protobuf
                            :name     ',pname
                            :class    ',cname
                            :package  ,(if (stringp package) package (string-downcase (string package)))
@@ -70,6 +70,13 @@
                            :messages (list ,@msgs)
                            :services (list ,@svcs)
                            :documentation ,documentation)))
+           (when old
+             (multiple-value-bind (upgradable warnings)
+                 (protobuf-upgradable old protobuf)
+               (unless upgradable
+                 (protobufs-warn "The old schema for ~S (~A) can't be safely upgraded; proceeding anyway"
+                                 ',cname ',pname)
+                 (map () #'protobufs-warn warnings))))
            (setq ,vname protobuf)
            (setf (gethash ',pname *all-protobufs*) protobuf)
            (setf (gethash ',cname *all-protobufs*) protobuf)

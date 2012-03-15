@@ -47,6 +47,14 @@
     (if package (intern name package) (make-symbol name))))
 
 
+(define-condition protobufs-warning (warning simple-condition) ())
+
+(defun protobufs-warn (format-control &rest format-arguments)
+  (warn 'protobufs-warning
+        :format-control format-control
+        :format-arguments format-arguments))
+
+
 #-quux
 (progn
 
@@ -230,7 +238,7 @@
   (cond
     ;; IEEE float special cases
     ((zerop bits) 0.0)
-    ((= bits #x-80000000) -0.0)                         ;--- change if unsigned-byte argument
+    ((= bits #x-80000000) -0.0)
     (t
      (let* ((sign (ecase (ldb (byte 1 31) bits)
                     (0 1.0)
@@ -265,7 +273,7 @@
   (cond
     ;; IEEE float special cases
     ((and (zerop high-bits) (zerop low-bits)) 0.0d0)
-    ((and (= high-bits #x-80000000)                     ;--- change if unsigned-byte arguments
+    ((and (= high-bits #x-80000000)
           (zerop low-bits)) -0.0d0)
     (t
      (let* ((bits (logior (ash high-bits 32) low-bits))

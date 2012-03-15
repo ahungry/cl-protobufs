@@ -131,7 +131,7 @@
             ((or)
              (when (or (> (length tail) 2)
                        (not (member 'null tail)))
-               (warn "Can't handle the complicated OR type ~S" type))
+               (protobufs-warn "Can't handle the complicated OR type ~S" type))
              (if (eq (first tail) 'null)
                (clos-type-to-protobuf-type (second tail))
                (clos-type-to-protobuf-type (first tail))))
@@ -164,7 +164,7 @@
                                    (or (null x) (integerp x))) values)
                         (values "int32" :int32))
                        (t
-                        (warn "Use DEFTYPE to define a MEMBER type instead of directly using ~S" type)
+                        (protobufs-warn "Use DEFTYPE to define a MEMBER type instead of directly using ~S" type)
                         (let ((values (remove-if #'null values)))
                           (values (class-name->proto type)
                                   type

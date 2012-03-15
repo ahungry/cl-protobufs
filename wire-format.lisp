@@ -49,13 +49,13 @@
        (let* ((tag (ilogior $wire-type-32bit (iash (proto-index field) 3)))
               (idx (encode-uint32 tag buffer index)))
          (declare (type fixnum tag idx))
-         ;;--- Shouldn't this always be writing 4 bytes?
+         ;;---*** Shouldn't this always be writing 4 bytes?
          (encode-uint32 val buffer idx)))
       ((:fixed64 :sfixed64)
        (let* ((tag (ilogior $wire-type-64bit (iash (proto-index field) 3)))
               (idx (encode-uint32 tag buffer index)))
          (declare (type fixnum tag idx))
-         ;;--- Shouldn't this always be writing 8 bytes?
+         ;;---*** Shouldn't this always be writing 8 bytes?
          (encode-uint64 val buffer idx)))
       ((:string)
        (let* ((tag (ilogior $wire-type-string (iash (proto-index field) 3)))
@@ -187,10 +187,10 @@
            (decode-uint64 buffer index)
          (values (zig-zag-decode64 val) idx)))
       ((:fixed32 :sfixed32)
-       ;;--- Shouldn't this always be reading 4 bytes?
+       ;;---*** Shouldn't this always be reading 4 bytes?
        (decode-uint32 buffer index))
       ((:fixed64 :sfixed64)
-       ;;--- Shouldn't this always be reading 8 bytes?
+       ;;---*** Shouldn't this always be reading 8 bytes?
        (decode-uint64 buffer index))
       ((:string)
        (multiple-value-bind (val idx)
