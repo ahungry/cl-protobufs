@@ -317,4 +317,14 @@
 (defmethod print-object ((r protobuf-rpc) stream)
   (print-unprintable-object (r stream :type t :identity t)
     (format stream "~A (~@[~A~]) => (~@[~A~])"
-            (proto-name r) (proto-input-type r) (proto-output-type r))))
+            (or (proto-function r) (proto-name r))
+            (or (proto-input-class r)  (proto-input-type r))
+            (or (proto-output-class r) (proto-output-type r)))))
+
+;; The 'class' slot really holds the name of the function,
+;; so let's give it a better name
+(defmethod proto-function ((rpc protobuf-rpc))
+  (proto-class rpc))
+
+(defmethod (setf proto-function) (function (rpc protobuf-rpc))
+  (setf (proto-function rpc) function))

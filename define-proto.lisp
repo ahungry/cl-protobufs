@@ -198,15 +198,16 @@
        :to   ,to)
      ()))
 
-;; Define a service named 'name' and a Lisp 'defun'
+;; Define a service named 'name' with generic functions declared for
+;; each of the RPCs within the service
 (defmacro define-service (name (&key proto-name options documentation) &body rpc-specs)
   "Define a service named 'name' and a Lisp 'defun'.
    'proto-name' can be used to override the defaultly generated name.
-   The body consists of a set of RPC specs of the form (name input-type output-type)."
+   The body consists of a set of RPC specs of the form (name (input-type output-type))."
   (with-collectors ((rpcs collect-rpc)
                     (forms collect-form))
     (dolist (rpc rpc-specs)
-      (destructuring-bind (name input-class output-class &key options) rpc
+      (destructuring-bind (name (input-class output-class) &key options) rpc
         (let ((options (loop for (key val) on options by #'cddr
                              collect `(make-instance 'protobuf-option
                                         :name ,key

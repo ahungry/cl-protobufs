@@ -76,6 +76,7 @@
                                      (map () (curry #'do-field v (cons msg trace) indent)
                                              (proto-fields msg))
                                      (format stream "~&~VT}~%" indent)))))))))))
+      (declare (dynamic-extent #'safe-slot-value #'do-field))
       (format stream "~&~A {~%" (proto-name message))
       (map () (curry #'do-field object (list message protobuf) 0) (proto-fields message))
       (format stream "~&}~%")

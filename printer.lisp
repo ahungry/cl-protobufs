@@ -337,7 +337,7 @@
 (defmethod write-protobuf-as ((type (eql :lisp)) (rpc protobuf-rpc) stream
                               &key (indentation 0))
   (with-prefixed-accessors
-      (class documentation input-type input-class output-type output-class options) (proto- rpc)
+      (function documentation input-type input-class output-type output-class options) (proto- rpc)
     (when documentation
       (write-protobuf-documentation type documentation stream :indentation indentation))
     (let ((input  (or input-class
@@ -346,9 +346,9 @@
           (output (or output-class
                       (let ((m (find-message-for-class *protobuf* output-type)))
                         (and m (proto-class m))))))
-      (format stream "~&~@[~VT~](~(~S~) ~(~S~) ~(~S~)"
-              (and (not (zerop indentation)) indentation) class
-              input output)
+      (format stream "~&~@[~VT~](~(~S~) (~(~S~) ~(~S~))"
+              (and (not (zerop indentation)) indentation)
+              function input output)
       (when options
         (format stream "~%~VT:options (~{~@/protobuf-option/~^ ~})"
                 (+ indentation 2) options))

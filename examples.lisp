@@ -218,8 +218,9 @@
     (contrast :type (or null contrast-name) :default :low))
   (proto:define-service color-wheel
       (:documentation "Get and set colors")
-    (get-color nil color)
-    (set-color color color :options ("deadline" "1.0"))))
+    (get-color (nil color))
+    (set-color (color color)
+               :options ("deadline" "1.0"))))
 
 => (PROGN
      (DEFTYPE COLOR-NAME () '(MEMBER :RED :GREEN :BLUE))
@@ -338,8 +339,9 @@ service ColorWheel {
 
 #||
 (proto:define-proto read-air-reservation (:package qres-core)
-  (proto:define-message read-air-reservation-request ()
-    (proto:define-message air-reservation-spec ()
+  (proto:define-message read-request ()
+    ;; This is based on 'define-xto-parser (:qres-dev x-read-air-reservations-fn)'
+    (proto:define-message reservation-spec ()
       (locator :type (list-of pnr-locator))
       (customer :type (or null string))
       (contract-group-id :type (or null integer))
@@ -351,12 +353,15 @@ service ColorWheel {
       (ticket-number :type (or null string))
       (ff-account :type (or null ff-account))
       (flights :type (list-of flight-spec)))
+    ;; This is based on 'define-xto-parser (:qres-dev q-generic-pnr-locator)'
     (proto:define-message pnr-locator ()
       (system :type string)
       (locator :type string))
+    ;; This is based on 'define-xto-parser (:qres-dev ff-account)'
     (proto:define-message ff-account ()
       (carrier :type string)
       (number :type string))
+    ;; This is based on 'define-xto-parser (:qres-dev x-flight)'
     (proto:define-message flight-spec ()
       (carrier :type string)
       (flight-number :type integer)
@@ -364,11 +369,12 @@ service ColorWheel {
       (date :type string)
       (origin :type (or null string))
       (destination :type (or null string)))
-    (spec :type air-reservation-spec))
-  (proto:define-message read-air-reservation-response ()
+    (spec :type reservation-spec))
+  ;; This is based on 'define-xmlgen-component (:qres-dev :res "AirReservation")'
+  (proto:define-message read-response ()
     )
   (proto:define-service read-air-reservation ()
-    (read-air-reservation read-air-reservation-request read-air-reservation-response)))
+    (read-air-reservation (read-request read-response))))
 
 (proto:write-protobuf *read-air-reservation*)
 (proto:write-protobuf *read-air-reservation* :type :lisp)

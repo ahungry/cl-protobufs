@@ -116,6 +116,7 @@
                                  (when (not (null v))
                                    (map () (curry #'do-field v (cons msg trace))
                                            (proto-fields msg)))))))))))
+      (declare (dynamic-extent #'safe-slot-value #'do-field))
       (map () (curry #'do-field object (list message protobuf)) (proto-fields message)))))
 
 
@@ -220,6 +221,7 @@
                                        (let ((obj (deserialize cl (cons msg trace) (+ index len))))
                                          (when slot
                                            (setf (slot-value object slot) obj))))))))))))))
+      (declare (dynamic-extent #'deserialize))
       (deserialize class (list protobuf)))))
 
 
@@ -279,7 +281,7 @@
                                    (iincf size (length32 tag))
                                    (iincf size (length32 len)))
                                  (map () (curry #'do-field v (cons msg trace))
-                                      (proto-fields msg))))))
+                                         (proto-fields msg))))))
                        (t
                         (cond ((and slot (keywordp cl))
                                (let ((v (safe-slot-value object slot)))
@@ -298,6 +300,7 @@
                                      (iincf size (length32 len)))
                                    (map () (curry #'do-field v (cons msg trace))
                                            (proto-fields msg)))))))))))
+      (declare (dynamic-extent #'safe-slot-value #'do-field))
       (map () (curry #'do-field object (list message protobuf)) (proto-fields message))
       (when visited
         (setf (gethash object visited) size))   ;cache the size
