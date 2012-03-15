@@ -235,6 +235,10 @@
           :accessor proto-value
           :initarg :value
           :initform nil)
+   (reader :type (or null symbol)               ;a reader that is used to access the value
+           :accessor proto-reader               ;if it's supplied, it's used instead of 'value'
+           :initarg :reader
+           :initform nil)
    (default :type (or null string)              ;default value, pulled out of the options
             :accessor proto-default
             :initarg :default

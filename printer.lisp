@@ -128,7 +128,7 @@
 
 (defmethod write-protobuf-as ((type (eql :proto)) (service protobuf-service) stream
                               &key (indentation 0))
-  (with-prefixed-accessors (name doc documentation) (proto- service)
+  (with-prefixed-accessors (name documentation) (proto- service)
     (when documentation
       (write-protobuf-documentation type documentation stream :indentation indentation))
     (format stream "~&~@[~VT~]service ~A {~%"
@@ -274,7 +274,7 @@
 (defparameter *protobuf-slot-comment-column* 56)
 (defmethod write-protobuf-as ((type (eql :lisp)) (field protobuf-field) stream
                               &key (indentation 0))
-  (with-prefixed-accessors (value type class documentation required default) (proto- field)
+  (with-prefixed-accessors (value reader type class documentation required default) (proto- field)
     (let ((dflt (cond ((or (null default)
                            (and (stringp default) (string-empty-p default)))
                        nil)
@@ -301,11 +301,11 @@
                         (t cl)))))
       (format stream (if (keywordp class)
                        ;; Keyword means a primitive type, print default with ~S
-                       "~&~@[~VT~](~(~S~) :type ~(~S~)~@[ :default ~S~])~:[~*~*~;~VT; ~A~]"
-                       ;; Non-keyword means an enum type, print default with ~A
-                       "~&~@[~VT~](~(~S~) :type ~(~S~)~@[ :default ~(:~A~)~])~:[~*~*~;~VT; ~A~]")
+                       "~&~@[~VT~](~(~S~) :type ~(~S~)~@[ :default ~S~]~@[ :reader ~(~S~)~])~:[~*~*~;~VT; ~A~]"
+                       ;; Non-keyword must mean an enum type, print default with ~A
+                       "~&~@[~VT~](~(~S~) :type ~(~S~)~@[ :default ~(:~A~)~]~@[ :reader ~(~S~)~])~:[~*~*~;~VT; ~A~]")
               (and (not (zerop indentation)) indentation)
-              value clss dflt
+              value clss dflt reader
               documentation *protobuf-slot-comment-column* documentation))))
 
 (defmethod write-protobuf-as ((type (eql :lisp)) (extension protobuf-extension) stream

@@ -18,7 +18,7 @@
                         &body messages &environment env)
   "Define a schema named 'name', corresponding to a .proto file of that name.
    'proto-name' can be used to override the defaultly generated name.
-   'syntax' and 'package' are as in .proto files.
+   'syntax' and 'package' are as they would be in a .proto file.
    'imports' is a list of pathname strings to be imported.
    'options' is a property list, i.e., (\"key1\" \"val1\" \"key2\" \"val2\" ...).
    The body consists of 'define-enum', 'define-message' or 'define-service' forms."
@@ -83,9 +83,12 @@
            protobuf)))))
 
 ;; Define an enum type named 'name' and a Lisp 'deftype'
-(defmacro define-enum (name (&key proto-name conc-name options documentation) &body values)
+(defmacro define-enum (name (&key proto-name conc-name options documentation)
+                       &body values)
   "Define an enum type named 'name' and a Lisp 'deftype'.
-  'proto-name' can be used to override the defaultly generated name.
+   'proto-name' can be used to override the defaultly generated Protobufs name.
+   'conc-name' will be used as the prefix to the Lisp enum names, if it's supplied.
+   'options' is a set of keyword/value pairs, both of which are strings.
    The body consists of the enum values in the form (name &key index)."
   (with-collectors ((vals  collect-val)
                     (evals collect-eval)
@@ -117,12 +120,19 @@
          ,forms))))
 
 ;; Define a message named 'name' and a Lisp 'defclass'
-(defmacro define-message (name (&key proto-name conc-name options documentation)
+(defmacro define-message (name (&key proto-name conc-name class options documentation)
                           &body fields &environment env)
   "Define a message named 'name' and a Lisp 'defclass'.
-   'proto-name' can be used to override the defaultly generated name.
+   'proto-name' can be used to override the defaultly generated Protobufs name.
    The body consists of fields, or 'define-enum' or 'define-message' forms.
-   Fields take the form (name &key type default index)."
+   'conc-name' will be used as the prefix to the Lisp slot accessors, if it's supplied.
+   If 'class' is given, no Lisp class is defined. This feature is intended to be used
+   to model messsages that will be serialized from existing Lisp classes; it's likely
+   thet trying to deserialize into Lisp object won't work.
+   'options' is a set of keyword/value pairs, both of which are strings.
+   Fields take the form (name &key type default reader)
+   'name' can be either a symbol giving the field name, or a list whose
+   first element is the field name and whose second element is the index."
   (with-collectors ((enums collect-enum)
                     (msgs  collect-msg)
                     (flds  collect-field)
@@ -148,7 +158,7 @@
           (otherwise
            (when (i= index 18999)                       ;skip over the restricted range
              (setq index 19999))
-           (destructuring-bind (slot &key type default) fld
+           (destructuring-bind (slot &key type default reader) fld
              (let* ((idx  (if (listp slot) (second slot) (iincf index)))
                     (slot (if (listp slot) (first slot) slot))
                     (reqd (clos-type-to-protobuf-required type))
@@ -165,12 +175,14 @@
                                    :type  ,ptype
                                    :class ',pclass
                                    :required ,reqd
-                                   :index ,idx
-                                   :value ',slot
+                                   :index  ,idx
+                                   :value  ',slot
+                                   :reader ',reader
                                    :default ,(and default (format nil "~A" default))
                                    :packed  ,(and (eq reqd :repeated)
                                                   (packed-type-p pclass)))))))))))
-    (collect-form `(defclass ,name () (,@slots)))
+    (unless class
+      (collect-form `(defclass ,name () (,@slots))))
     (let ((options (loop for (key val) on options by #'cddr
                          collect `(make-instance 'protobuf-option
                                     :name ,key
@@ -179,7 +191,7 @@
          define-message
          (make-instance 'protobuf-message
            :name  ,(or proto-name (class-name->proto name))
-           :class ',name
+           :class ',(or class name)
            :conc-name ,(and conc-name (string conc-name))
            :options  (list ,@options)
            :enums    (list ,@enums)
@@ -200,10 +212,12 @@
 
 ;; Define a service named 'name' with generic functions declared for
 ;; each of the RPCs within the service
-(defmacro define-service (name (&key proto-name options documentation) &body rpc-specs)
-  "Define a service named 'name' and a Lisp 'defun'.
-   'proto-name' can be used to override the defaultly generated name.
-   The body consists of a set of RPC specs of the form (name (input-type output-type))."
+(defmacro define-service (name (&key proto-name options documentation)
+                          &body rpc-specs)
+  "Define a service named 'name' and a Lisp 'defgeneric'.
+   'proto-name' can be used to override the defaultly generated Protobufs name.
+   'options' is a set of keyword/value pairs, both of which are strings.
+   The body is a set of RPC specs of the form (name (input-type output-type) &key options)."
   (with-collectors ((rpcs collect-rpc)
                     (forms collect-form))
     (dolist (rpc rpc-specs)
