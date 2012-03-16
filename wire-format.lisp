@@ -21,64 +21,87 @@
    The value is given by 'val', the primitive type by 'type'.
    'field' is the protobuf-field describing the value.
    Modifies the buffer in place, and returns the new index into the buffer."
-  (declare (type fixnum index)
-           (type (simple-array (unsigned-byte 8)) buffer))
+  (declare (type (simple-array (unsigned-byte 8)) buffer)
+           (type fixnum index))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
     (ecase type
       ((:int32 :uint32)
        (let* ((tag (ilogior $wire-type-varint (iash (proto-index field) 3)))
               (idx (encode-uint32 tag buffer index)))
-         (declare (type fixnum tag idx))
+         (declare (type (unsigned-byte 32) tag)
+                  (type fixnum idx))
          (encode-uint32 val buffer idx)))
       ((:int64 :uint64)
        (let* ((tag (ilogior $wire-type-varint (iash (proto-index field) 3)))
               (idx (encode-uint32 tag buffer index)))
-         (declare (type fixnum tag idx))
+         (declare (type (unsigned-byte 32) tag)
+                  (type fixnum idx))
          (encode-uint64 val buffer idx)))
       ((:sint32)
        (let* ((tag (ilogior $wire-type-varint (iash (proto-index field) 3)))
               (idx (encode-uint32 tag buffer index)))
-         (declare (type fixnum tag idx))
+         (declare (type (unsigned-byte 32) tag)
+                  (type fixnum idx))
          (encode-uint32 (zig-zag-encode32 val) buffer idx)))
       ((:sint64)
        (let* ((tag (ilogior $wire-type-varint (iash (proto-index field) 3)))
               (idx (encode-uint32 tag buffer index)))
-         (declare (type fixnum tag idx))
+         (declare (type (unsigned-byte 32) tag)
+                  (type fixnum idx))
          (encode-uint64 (zig-zag-encode64 val) buffer idx)))
-      ((:fixed32 :sfixed32)
+      ((:fixed32)
        (let* ((tag (ilogior $wire-type-32bit (iash (proto-index field) 3)))
               (idx (encode-uint32 tag buffer index)))
-         (declare (type fixnum tag idx))
+         (declare (type (unsigned-byte 32) tag)
+                  (type fixnum idx))
          (encode-fixed32 val buffer idx)))
-      ((:fixed64 :sfixed64)
+      ((:sfixed32)
+       (let* ((tag (ilogior $wire-type-32bit (iash (proto-index field) 3)))
+              (idx (encode-uint32 tag buffer index)))
+         (declare (type (unsigned-byte 32) tag)
+                  (type fixnum idx))
+         (encode-sfixed32 val buffer idx)))
+      ((:fixed64)
        (let* ((tag (ilogior $wire-type-64bit (iash (proto-index field) 3)))
               (idx (encode-uint32 tag buffer index)))
-         (declare (type fixnum tag idx))
+         (declare (type (unsigned-byte 32) tag)
+                  (type fixnum idx))
          (encode-fixed64 val buffer idx)))
+      ((:sfixed64)
+       (let* ((tag (ilogior $wire-type-64bit (iash (proto-index field) 3)))
+              (idx (encode-uint32 tag buffer index)))
+         (declare (type (unsigned-byte 32) tag)
+                  (type fixnum idx))
+         (encode-sfixed64 val buffer idx)))
       ((:string)
        (let* ((tag (ilogior $wire-type-string (iash (proto-index field) 3)))
               (idx (encode-uint32 tag buffer index)))
-               (declare (type fixnum tag idx))
+         (declare (type (unsigned-byte 32) tag)
+                  (type fixnum idx))
          (encode-octets (babel:string-to-octets val :encoding :utf-8) buffer idx)))
       ((:bytes)
        (let* ((tag (ilogior $wire-type-string (iash (proto-index field) 3)))
               (idx (encode-uint32 tag buffer index)))
-         (declare (type fixnum tag idx))
+         (declare (type (unsigned-byte 32) tag)
+                  (type fixnum idx))
          (encode-octets val buffer idx)))
       ((:bool)
        (let* ((tag (ilogior $wire-type-varint (iash (proto-index field) 3)))
               (idx (encode-uint32 tag buffer index)))
-         (declare (type fixnum tag idx))
+         (declare (type (unsigned-byte 32) tag)
+                  (type fixnum idx))
          (encode-uint32 (if val 1 0) buffer idx)))
       ((:float)
        (let* ((tag (ilogior $wire-type-32bit (iash (proto-index field) 3)))
               (idx (encode-uint32 tag buffer index)))
-         (declare (type fixnum tag idx))
+         (declare (type (unsigned-byte 32) tag)
+                  (type fixnum idx))
          (encode-single val buffer idx)))
       ((:double)
        (let* ((tag (ilogior $wire-type-64bit (iash (proto-index field) 3)))
               (idx (encode-uint32 tag buffer index)))
-         (declare (type fixnum tag idx))
+         (declare (type (unsigned-byte 32) tag)
+                  (type fixnum idx))
          (encode-double val buffer idx)))
       ;; A few of our homegrown types
       ((:symbol)
@@ -86,12 +109,14 @@
               (idx (encode-uint32 tag buffer index))
               (val (format nil "~A:~A" (package-name (symbol-package val)) (symbol-name val))))
          ;; Call 'string' in case we are trying to serialize a symbol name
-         (declare (type fixnum tag idx))
+         (declare (type (unsigned-byte 32) tag)
+                  (type fixnum idx))
          (encode-octets (babel:string-to-octets val :encoding :utf-8) buffer idx)))
       ((:date :time :datetime :timestamp)
        (let* ((tag (ilogior $wire-type-64bit (iash (proto-index field) 3)))
               (idx (encode-uint32 tag buffer index)))
-         (declare (type fixnum tag idx))
+         (declare (type (unsigned-byte 32) tag)
+                  (type fixnum idx))
          (encode-uint64 val buffer idx))))))
 
 (defun serialize-packed (values type field buffer index)
@@ -99,8 +124,8 @@
    The values are given by 'values', the primitive type by 'type'.
    'field' is the protobuf-field describing the value.
    Modifies the buffer in place, and returns the new index into the buffer."
-  (declare (type fixnum index)
-           (type (simple-array (unsigned-byte 8)) buffer))
+  (declare (type (simple-array (unsigned-byte 8)) buffer)
+           (type fixnum index))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
     (let* ((wtype (ecase type
                     ((:int32 :int64)   $wire-type-varint)
@@ -112,7 +137,8 @@
                     ((:double) $wire-type-64bit)))
            (tag (ilogior wtype (iash (proto-index field) 3)))
            (idx (encode-uint32 tag buffer index)))
-      (declare (type fixnum wtype tag idx))
+      (declare (type (unsigned-byte 32) wtype tag)
+               (type fixnum idx))
       (multiple-value-bind (full-len len)
           (packed-size values type field)
         (declare (type fixnum len) (ignore full-len))
@@ -130,12 +156,18 @@
         ((:sint64)
          (dolist (val values idx)
            (setq idx (encode-uint64 (zig-zag-encode64 val) buffer idx))))
-        ((:fixed32 :sfixed32)
+        ((:fixed32)
          (dolist (val values idx)
            (setq idx (encode-fixed32 val buffer idx))))
-        ((:fixed64 :sfixed64)
+        ((:sfixed32)
+         (dolist (val values idx)
+           (setq idx (encode-sfixed32 val buffer idx))))
+        ((:fixed64)
          (dolist (val values idx)
            (setq idx (encode-fixed64 val buffer idx))))
+        ((:sfixed64)
+         (dolist (val values idx)
+           (setq idx (encode-sfixed64 val buffer idx))))
         ((:float)
          (dolist (val values idx)
            (setq idx (encode-single val buffer idx))))
@@ -149,14 +181,15 @@
    The value is given by 'val', the enum type by 'enum'.
    'field' is the protobuf-field describing the value.
    Modifies the buffer in place, and returns the new index into the buffer."
-  (declare (type fixnum index)
-           (type (simple-array (unsigned-byte 8)) buffer))
+  (declare (type (simple-array (unsigned-byte 8)) buffer)
+           (type fixnum index))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
     (let* ((val (let ((e (find val (proto-values enum) :key #'proto-value)))
                   (and e (proto-index e))))
            (tag (ilogior $wire-type-varint (iash (proto-index field) 3)))
            (idx (encode-uint32 tag buffer index)))
-      (declare (type fixnum val tag idx))
+      (declare (type (unsigned-byte 32) val tag)
+               (type fixnum idx))
       (encode-uint32 val buffer idx))))
 
 
@@ -167,8 +200,8 @@
   "Deserializes the next object of primitive type 'type', described by the protobuf-field 'field'.
    Deserializes from the byte vector 'buffer' starting at 'index'.
    Returns the value and and the new index into the buffer."
-  (declare (type fixnum index)
-           (type (simple-array (unsigned-byte 8)) buffer))
+  (declare (type (simple-array (unsigned-byte 8)) buffer)
+           (type fixnum index))
   (declare (ignore field))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
     (ecase type
@@ -184,10 +217,14 @@
        (multiple-value-bind (val idx)
            (decode-uint64 buffer index)
          (values (zig-zag-decode64 val) idx)))
-      ((:fixed32 :sfixed32)
+      ((:fixed32)
        (decode-fixed32 buffer index))
-      ((:fixed64 :sfixed64)
+      ((:sfixed32)
+       (decode-sfixed32 buffer index))
+      ((:fixed64)
        (decode-fixed64 buffer index))
+      ((:sfixed64)
+       (decode-sfixed64 buffer index))
       ((:string)
        (multiple-value-bind (val idx)
            (decode-octets buffer index)
@@ -218,15 +255,16 @@
   "Deserializes the next packed values of type 'type', described by the protobuf-field 'field'.
    Deserializes from the byte vector 'buffer' starting at 'index'.
    Returns the value and and the new index into the buffer."
-  (declare (type fixnum index)
-           (type (simple-array (unsigned-byte 8)) buffer))
+  (declare (type (simple-array (unsigned-byte 8)) buffer)
+           (type fixnum index))
   (declare (ignore field))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
     (multiple-value-bind (len idx)
         (decode-uint32 buffer index)
-      (declare (type fixnum len idx))
+      (declare (type (unsigned-byte 32) len)
+               (type fixnum idx))
       (let ((end (i+ idx len)))
-        (declare (type fixnum end))
+        (declare (type (unsigned-byte 32) end))
         (with-collectors ((values collect-value))
           (loop
             (when (>= idx end)
@@ -245,10 +283,14 @@
                    (multiple-value-bind (val idx)
                        (decode-uint64 buffer idx)
                      (values (zig-zag-decode64 val) idx)))
-                  ((:fixed32 :sfixed32)
+                  ((:fixed32)
                    (decode-fixed32 buffer idx))
-                  ((:fixed64 :sfixed64)
+                  ((:sfixed32)
+                   (decode-sfixed32 buffer idx))
+                  ((:fixed64)
                    (decode-fixed64 buffer idx))
+                  ((:sfixed64)
+                   (decode-sfixed64 buffer idx))
                   ((:float)
                    (decode-single buffer idx))
                   ((:double)
@@ -260,8 +302,8 @@
   "Deserializes the next enum of type 'type', described by the protobuf-field 'field'.
    Deserializes from the byte vector 'buffer' starting at 'index'.
    Returns the value and and the new index into the buffer."
-  (declare (type fixnum index)
-           (type (simple-array (unsigned-byte 8)) buffer))
+  (declare (type (simple-array (unsigned-byte 8)) buffer)
+           (type fixnum index))
   (declare (ignore field))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
     (multiple-value-bind (val idx)
@@ -336,7 +378,7 @@
                                ((:fixed64 :sfixed64) 8)
                                ((:float) 4)
                                ((:double) 8)))))
-      (declare (type fixnum tag len))
+      (declare (type (unsigned-byte 32) tag len))
       ;; Two value: the full size of the packed object, and the size
       ;; of just the payload
       (values (i+ (length32 tag) (length32 len) len) len))))
@@ -346,22 +388,23 @@
   (let ((val (let ((e (find val (proto-values enum) :key #'proto-value)))
                (and e (proto-index e))))
         (tag (ilogior $wire-type-varint (iash (proto-index field) 3))))
+    (declare (type (unsigned-byte 32) tag val))
     (i+ (length32 tag) (length32 val))))
 
 
 ;;; Raw encoders
 
 (defun encode-uint32 (val buffer index)
-  "Encodes the 32-bit integer 'val' as a varint into the buffer at the given index.
+  "Encodes the unsigned 32-bit integer 'val' as a varint into the buffer
+   at the given index.
    Modifies the buffer, and returns the new index into the buffer."
-  (declare (type fixnum index)
-           (type (simple-array (unsigned-byte 8)) buffer))
-  (assert (< val #.(ash 1 32)) ()
-          "The value ~D is longer than 32 bits" val)
+  (declare (type (unsigned-byte 32) val)
+           (type (simple-array (unsigned-byte 8)) buffer)
+           (type fixnum index))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
     ;; Seven bits at a time, least significant bits first
     (loop do (let ((bits (ldb #.(byte 7 0) val)))
-               (declare (type fixnum bits))
+               (declare (type (unsigned-byte 8) bits))
                (setq val (ash val -7))
                (setf (aref buffer index) (ilogior bits (if (zerop val) 0 128)))
                (iincf index))
@@ -369,13 +412,15 @@
   (values index buffer))                        ;return the buffer to improve 'trace'
 
 (defun encode-uint64 (val buffer index)
-  "Encodes the 64-bit integer 'val' as a varint into the buffer at the given index.
+  "Encodes the unsigned 64-bit integer 'val' as a varint into the buffer
+   at the given index.
    Modifies the buffer, and returns the new index into the buffer."
-  (declare (type fixnum index)
-           (type (simple-array (unsigned-byte 8)) buffer))
+  (declare (type (unsigned-byte 64) val)
+           (type (simple-array (unsigned-byte 8)) buffer)
+           (type fixnum index))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
     (loop do (let ((bits (ldb #.(byte 7 0) val)))
-               (declare (type fixnum bits))
+               (declare (type (unsigned-byte 8) bits))
                (setq val (ash val -7))
                (setf (aref buffer index) (ilogior bits (if (zerop val) 0 128)))
                (iincf index))
@@ -383,28 +428,64 @@
   (values index buffer))
 
 (defun encode-fixed32 (val buffer index)
-  "Encodes the 32-bit integer 'val' as a fixed int into the buffer at the given index.
+  "Encodes the unsigned 32-bit integer 'val' as a fixed int into the buffer
+   at the given index.
    Modifies the buffer, and returns the new index into the buffer."
-  (declare (type fixnum index)
-           (type (simple-array (unsigned-byte 8)) buffer))
+  (declare (type (unsigned-byte 32) val)
+           (type (simple-array (unsigned-byte 8)) buffer)
+           (type fixnum index))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
     (loop repeat 4 doing
       (let ((byte (ldb #.(byte 8 0) val)))
-        (declare (type fixnum byte))
+        (declare (type (unsigned-byte 8) byte))
         (setq val (ash val -8))
         (setf (aref buffer index) byte)
         (iincf index))))
   (values index buffer))
 
 (defun encode-fixed64 (val buffer index)
-  "Encodes the 64-bit integer 'val' as a fixed int into the buffer at the given index.
+  "Encodes the unsigned 64-bit integer 'val' as a fixed int into the buffer
+   at the given index.
    Modifies the buffer, and returns the new index into the buffer."
-  (declare (type fixnum index)
-           (type (simple-array (unsigned-byte 8)) buffer))
+  (declare (type (unsigned-byte 64) val)
+           (type (simple-array (unsigned-byte 8)) buffer)
+           (type fixnum index))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
     (loop repeat 8 doing
       (let ((byte (ldb #.(byte 8 0) val)))
-        (declare (type fixnum byte))
+        (declare (type (unsigned-byte 8) byte))
+        (setq val (ash val -8))
+        (setf (aref buffer index) byte)
+        (iincf index))))
+  (values index buffer))
+
+(defun encode-sfixed32 (val buffer index)
+  "Encodes the signed 32-bit integer 'val' as a fixed int into the buffer
+   at the given index.
+   Modifies the buffer, and returns the new index into the buffer."
+  (declare (type (signed-byte 32) val)
+           (type (simple-array (unsigned-byte 8)) buffer)
+           (type fixnum index))
+  (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
+    (loop repeat 4 doing
+      (let ((byte (ldb #.(byte 8 0) val)))
+        (declare (type (unsigned-byte 8) byte))
+        (setq val (ash val -8))
+        (setf (aref buffer index) byte)
+        (iincf index))))
+  (values index buffer))
+
+(defun encode-sfixed64 (val buffer index)
+  "Encodes the signed 32-bit integer 'val' as a fixed int into the buffer
+   at the given index.
+   Modifies the buffer, and returns the new index into the buffer."
+  (declare (type (signed-byte 64) val)
+           (type (simple-array (unsigned-byte 8)) buffer)
+           (type fixnum index))
+  (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
+    (loop repeat 8 doing
+      (let ((byte (ldb #.(byte 8 0) val)))
+        (declare (type (unsigned-byte 8) byte))
         (setq val (ash val -8))
         (setf (aref buffer index) byte)
         (iincf index))))
@@ -413,13 +494,14 @@
 (defun encode-single (val buffer index)
   "Encodes the single float 'val' into the buffer at the given index.
    Modifies the buffer, and returns the new index into the buffer."
-  (declare (type fixnum index)
-           (type (simple-array (unsigned-byte 8)) buffer))
+  (declare (type single-float val)
+           (type (simple-array (unsigned-byte 8)) buffer)
+           (type fixnum index))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
     (let ((bits (single-float-bits val)))
       (loop repeat 4 doing
         (let ((byte (ldb #.(byte 8 0) bits)))
-          (declare (type fixnum byte))
+          (declare (type (unsigned-byte 8) byte))
           (setq bits (ash bits -8))
           (setf (aref buffer index) byte)
           (iincf index)))))
@@ -428,20 +510,21 @@
 (defun encode-double (val buffer index)
   "Encodes the double float 'val' into the buffer at the given index.
    Modifies the buffer, and returns the new index into the buffer."
-  (declare (type fixnum index)
-           (type (simple-array (unsigned-byte 8)) buffer))
+  (declare (type double-float val)
+           (type (simple-array (unsigned-byte 8)) buffer)
+           (type fixnum index))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
     (multiple-value-bind (low high)
         (double-float-bits val)
       (loop repeat 4 doing
         (let ((byte (ldb #.(byte 8 0) low)))
-          (declare (type fixnum byte))
+          (declare (type (unsigned-byte 8) byte))
           (setq low (ash low -8))
           (setf (aref buffer index) byte)
           (iincf index)))
       (loop repeat 4 doing
         (let ((byte (ldb #.(byte 8 0) high)))
-          (declare (type fixnum byte))
+          (declare (type (unsigned-byte 8) byte))
           (setq high (ash high -8))
           (setf (aref buffer index) byte)
           (iincf index)))))
@@ -450,22 +533,23 @@
 (defun encode-octets (octets buffer index)
   "Encodes the octets into the buffer at the given index.
    Modifies the buffer, and returns the new index into the buffer."
-  (declare (type fixnum index)
-           (type (simple-array (unsigned-byte 8)) buffer))
+  (declare (type (simple-array (unsigned-byte 8)) buffer)
+           (type fixnum index))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
     (let* ((len (length octets))
            (idx (encode-uint32 len buffer index)))
-      (declare (type fixnum len idx))
+      (declare (type fixnum len)
+               (type (unsigned-byte 32) idx))
       (replace buffer octets :start1 idx)
       (values (i+ idx len) buffer))))
 
 (defun zig-zag-encode32 (val)
-  (assert (< (integer-length val) 32))
+  (check-type val (signed-byte 32))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
     (logxor (ash val 1) (ash val -31))))
 
 (defun zig-zag-encode64 (val)
-  (assert (< (integer-length val) 64))
+  (check-type val (signed-byte 64))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
     (logxor (ash val 1) (ash val -63))))
 
@@ -477,8 +561,8 @@
 (defun decode-uint32 (buffer index)
   "Decodes the next 32-bit varint integer in the buffer at the given index.
    Returns both the decoded value and the new index into the buffer."
-  (declare (type fixnum index)
-           (type (simple-array (unsigned-byte 8)) buffer))
+  (declare (type (simple-array (unsigned-byte 8)) buffer)
+           (type fixnum index))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
     ;; Seven bits at a time, least significant bits first
     (loop with val = 0
@@ -494,8 +578,8 @@
 (defun decode-uint64 (buffer index)
   "Decodes the next 64-bit varint integer in the buffer at the given index.
    Returns both the decoded value and the new index into the buffer."
-  (declare (type fixnum index)
-           (type (simple-array (unsigned-byte 8)) buffer))
+  (declare (type (simple-array (unsigned-byte 8)) buffer)
+           (type fixnum index))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
     ;; Seven bits at a time, least significant bits first
     (loop with val = 0
@@ -506,42 +590,70 @@
           finally (return (values val index)))))
 
 (defun decode-fixed32 (buffer index)
-  "Decodes the next 32-bit fixed integer in the buffer at the given index.
+  "Decodes the next 32-bit unsigned fixed integer in the buffer at the given index.
    Returns both the decoded value and the new index into the buffer."
-  (declare (type fixnum index)
-           (type (simple-array (unsigned-byte 8)) buffer))
+  (declare (type (simple-array (unsigned-byte 8)) buffer)
+           (type fixnum index))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
     ;; Eight bits at a time, least significant bits first
-    (let ((bits 0))
+    (let ((val 0))
       (loop repeat 4
             for places fixnum upfrom 0 by 8
             for byte fixnum = (prog1 (aref buffer index) (iincf index))
-            do (setq bits (logior bits (ash byte places))))
-      (when (i= (ldb #.(byte 1 31) bits) 1)             ;sign bit set, so negative value
-        (decf bits #.(ash 1 32)))
-      (values bits index))))
+            do (setq val (logior val (ash byte places))))
+      (values val index))))
 
-(defun decode-fixed64 (buffer index)
-  "Decodes the next 64-bit fixed integer in the buffer at the given index.
+(defun decode-sfixed32 (buffer index)
+  "Decodes the next 32-bit signed fixed integer in the buffer at the given index.
    Returns both the decoded value and the new index into the buffer."
-  (declare (type fixnum index)
-           (type (simple-array (unsigned-byte 8)) buffer))
+  (declare (type (simple-array (unsigned-byte 8)) buffer)
+           (type fixnum index))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
     ;; Eight bits at a time, least significant bits first
-    (let ((bits 0))
+    (let ((val 0))
+      (loop repeat 4
+            for places fixnum upfrom 0 by 8
+            for byte fixnum = (prog1 (aref buffer index) (iincf index))
+            do (setq val (logior val (ash byte places))))
+      (when (i= (ldb #.(byte 1 31) val) 1)              ;sign bit set, so negative value
+        (decf val #.(ash 1 32)))
+      (values val index))))
+
+(defun decode-fixed64 (buffer index)
+  "Decodes the next unsigned 64-bit fixed integer in the buffer at the given index.
+   Returns both the decoded value and the new index into the buffer."
+  (declare (type (simple-array (unsigned-byte 8)) buffer)
+           (type fixnum index))
+  (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
+    ;; Eight bits at a time, least significant bits first
+    (let ((val 0))
       (loop repeat 8
             for places fixnum upfrom 0 by 8
             for byte fixnum = (prog1 (aref buffer index) (iincf index))
-            do (setq bits (logior bits (ash byte places))))
-      (when (i= (ldb #.(byte 1 63) bits) 1)             ;sign bit set, so negative value
-        (decf bits #.(ash 1 64)))
-      (values bits index))))
+            do (setq val (logior val (ash byte places))))
+      (values val index))))
+
+(defun decode-sfixed64 (buffer index)
+  "Decodes the next signed 64-bit fixed integer in the buffer at the given index.
+   Returns both the decoded value and the new index into the buffer."
+  (declare (type (simple-array (unsigned-byte 8)) buffer)
+           (type fixnum index))
+  (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
+    ;; Eight bits at a time, least significant bits first
+    (let ((val 0))
+      (loop repeat 8
+            for places fixnum upfrom 0 by 8
+            for byte fixnum = (prog1 (aref buffer index) (iincf index))
+            do (setq val (logior val (ash byte places))))
+      (when (i= (ldb #.(byte 1 63) val) 1)             ;sign bit set, so negative value
+        (decf val #.(ash 1 64)))
+      (values val index))))
 
 (defun decode-single (buffer index)
   "Decodes the next single float in the buffer at the given index.
    Returns both the decoded value and the new index into the buffer."
-  (declare (type fixnum index)
-           (type (simple-array (unsigned-byte 8)) buffer))
+  (declare (type (simple-array (unsigned-byte 8)) buffer)
+           (type fixnum index))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
     ;; Eight bits at a time, least significant bits first
     (let ((bits 0))
@@ -556,8 +668,8 @@
 (defun decode-double (buffer index)
   "Decodes the next double float in the buffer at the given index.
    Returns both the decoded value and the new index into the buffer."
-  (declare (type fixnum index)
-           (type (simple-array (unsigned-byte 8)) buffer))
+  (declare (type (simple-array (unsigned-byte 8)) buffer)
+           (type fixnum index))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
     ;; Eight bits at a time, least significant bits first
     (let ((low  0)
@@ -578,12 +690,13 @@
 (defun decode-octets (buffer index)
   "Decodes the next octets in the buffer at the given index.
    Returns both the decoded value and the new index into the buffer."
-  (declare (type fixnum index)
-           (type (simple-array (unsigned-byte 8)) buffer))
+  (declare (type (simple-array (unsigned-byte 8)) buffer)
+           (type fixnum index))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
     (multiple-value-bind (len idx)
         (decode-uint32 buffer index)
-      (declare (type fixnum len idx))
+      (declare (type (unsigned-byte 32) len)
+               (type fixnum idx))
       (values (subseq buffer idx (i+ idx len)) (i+ idx len)))))
 
 (defun zig-zag-decode32 (val)
