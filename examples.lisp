@@ -36,6 +36,9 @@
                  proto:protobuf-message proto:protobuf-field proto:protobuf-extension
                  proto:protobuf-service proto:protobuf-rpc)))
 
+(proto:write-protobuf pschema)
+(proto:write-protobuf pschema :type :lisp)
+
 (setq pser (proto:serialize-object-to-stream pschema pschema :stream nil))
 (describe (proto:deserialize-object 'proto:protobuf pschema pser 0))
 

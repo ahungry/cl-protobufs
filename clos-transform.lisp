@@ -39,7 +39,8 @@
     protobuf))
 
 
-(defun class-to-protobuf-message (class &key slot-filter type-filter enum-filter value-filter)
+(defun class-to-protobuf-message (class
+                                  &key slot-filter type-filter enum-filter value-filter)
   (let* ((class (find-class class))
          (slots (class-slots class)))
     (with-collectors ((enums  collect-enum)
@@ -48,7 +49,7 @@
       (loop with index = 1
             for s in slots doing
         (multiple-value-bind (field msg enum)
-            (slot-to-protobuf-field s index slots
+            (slot-to-protobuf-field class s index slots
                                     :slot-filter slot-filter
                                     :type-filter type-filter
                                     :enum-filter enum-filter
@@ -68,11 +69,12 @@
         :fields fields))))
 
 ;; Returns a field, (optionally) an inner message, and (optionally) an inner enum
-(defun slot-to-protobuf-field (slot index slots &key slot-filter type-filter enum-filter value-filter)
+(defun slot-to-protobuf-field (class slot index slots
+                               &key slot-filter type-filter enum-filter value-filter)
   (when (or (null slot-filter)
             (funcall slot-filter slot slots))
-    (multiple-value-bind (type class packed enums)
-        (clos-type-to-protobuf-type (slot-definition-type slot) type-filter enum-filter)
+    (multiple-value-bind (type pclass packed enums)
+        (clos-type-to-protobuf-type (find-slot-definition-type class slot) type-filter enum-filter)
       (let* ((ename (and enums
                          (format nil "~A-~A" 'enum (slot-definition-name slot))))
              (enum  (and enums
@@ -93,17 +95,36 @@
                                                      :name name
                                                      :index index
                                                      :value val))))))
+             (reqd  (clos-type-to-protobuf-required (find-slot-definition-type class slot) type-filter))
              (field (make-instance 'protobuf-field
                       :name  (slot-name->proto (slot-definition-name slot))
                       :type  (if enum (class-name->proto ename) type)
-                      :class (if enum (intern ename (symbol-package (slot-definition-name slot))) class)
-                      :required (clos-type-to-protobuf-required (slot-definition-type slot) type-filter)
+                      :class (if enum (intern ename (symbol-package (slot-definition-name slot))) pclass)
+                      :required reqd
                       :index index
-                      :value (slot-definition-name slot)
+                      :value   (slot-definition-name slot)
+                      :reader  (find-slot-definition-reader class slot)
                       :default (clos-init-to-protobuf-default (slot-definition-initform slot) value-filter)
-                      :packed packed)))
+                      :packed  packed)))
         (values field nil enum)))))
 
+;; Given a class and a slot descriptor, find the unexpanded type definition for the slot
+(defun find-slot-definition-type (class slotd)
+  (let* ((slot-name    (slot-definition-name slotd))
+         (direct-slotd (some #'(lambda (c)
+                                 (find slot-name (class-direct-slots c) :key #'slot-definition-name))
+                             (class-precedence-list class))))
+    (or (and direct-slotd (slot-definition-type slotd))
+        (slot-definition-type slotd))))
+
+;; Given a class and a slot descriptor, find the name of a reader method for the slot
+(defun find-slot-definition-reader (class slotd)
+  (let* ((slot-name    (slot-definition-name slotd))
+         (direct-slotd (some #'(lambda (c)
+                                 (find slot-name (class-direct-slots c) :key #'slot-definition-name))
+                             (class-precedence-list class))))
+    (and direct-slotd (first (slot-definition-readers direct-slotd)))))
+                       
 ;; Returns Protobuf type, a class or primitive type, whether or not to pack the field,
 ;; and (optionally) a set of enum values
 (defun clos-type-to-protobuf-type (type &optional type-filter enum-filter)
