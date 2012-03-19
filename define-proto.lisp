@@ -83,11 +83,13 @@
            protobuf)))))
 
 ;; Define an enum type named 'name' and a Lisp 'deftype'
-(defmacro define-enum (name (&key proto-name conc-name options documentation)
+(defmacro define-enum (name (&key proto-name conc-name type options documentation)
                        &body values)
   "Define an enum type named 'name' and a Lisp 'deftype'.
    'proto-name' can be used to override the defaultly generated Protobufs name.
    'conc-name' will be used as the prefix to the Lisp enum names, if it's supplied.
+   If 'type' is given, no Lisp deftype is defined. This feature is intended to be used
+   to model enum types that already exist in Lisp.
    'options' is a set of keyword/value pairs, both of which are strings.
    The body consists of the enum values in the form (name &key index)."
   (with-collectors ((vals  collect-val)
@@ -104,7 +106,8 @@
                            :name  ,(enum-name->proto enum-name)
                            :index ,idx
                            :value ,val-name)))))
-    (collect-form `(deftype ,name () '(member ,@vals)))
+    (unless type
+      (collect-form `(deftype ,name () '(member ,@vals))))
     (let ((options (loop for (key val) on options by #'cddr
                          collect `(make-instance 'protobuf-option
                                     :name ,key
@@ -113,7 +116,7 @@
          define-enum
          (make-instance 'protobuf-enum
            :name   ,(or proto-name (class-name->proto name))
-           :class  ',name
+           :class  ',(or type name)
            :options (list ,@options)
            :values  (list ,@evals)
            :documentation ,documentation)
@@ -127,8 +130,9 @@
    The body consists of fields, or 'define-enum' or 'define-message' forms.
    'conc-name' will be used as the prefix to the Lisp slot accessors, if it's supplied.
    If 'class' is given, no Lisp class is defined. This feature is intended to be used
-   to model messsages that will be serialized from existing Lisp classes; it's likely
-   thet trying to deserialize into Lisp object won't work.
+   to model messages that will be serialized from existing Lisp classes; unless you
+   get the slot names correct in each field, it will be the case that trying to
+   deserialize into a Lisp object won't work.
    'options' is a set of keyword/value pairs, both of which are strings.
    Fields take the form (name &key type default reader)
    'name' can be either a symbol giving the field name, or a list whose
@@ -158,7 +162,7 @@
           (otherwise
            (when (i= index 18999)                       ;skip over the restricted range
              (setq index 19999))
-           (destructuring-bind (slot &key type default reader) fld
+           (destructuring-bind (slot &key type default reader proto-name) fld
              (let* ((idx  (if (listp slot) (second slot) (iincf index)))
                     (slot (if (listp slot) (first slot) slot))
                     (reqd (clos-type-to-protobuf-required type))
@@ -166,12 +170,13 @@
                                       (symbol-package slot))))
                (multiple-value-bind (ptype pclass)
                    (clos-type-to-protobuf-type type)
-                 (collect-slot `(,slot :type ,type
-                                       :accessor ,accessor
-                                       :initarg ,(kintern (symbol-name slot))
-                                       ,@(and default (list :initform default))))
+                 (unless class
+                   (collect-slot `(,slot :type ,type
+                                         :accessor ,accessor
+                                         :initarg ,(kintern (symbol-name slot))
+                                         ,@(and default (list :initform default)))))
                  (collect-field `(make-instance 'protobuf-field
-                                   :name  ,(slot-name->proto slot)
+                                   :name  ,(or proto-name (slot-name->proto slot))
                                    :type  ,ptype
                                    :class ',pclass
                                    :required ,reqd
