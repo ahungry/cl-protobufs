@@ -30,7 +30,7 @@
                            classes))
          (protobuf (make-instance 'protobuf
                      :name proto-name
-                     :package package
+                     :package (if (stringp package) package (string-downcase (string package)))
                      :messages messages)))
     (when stream
       (fresh-line stream)

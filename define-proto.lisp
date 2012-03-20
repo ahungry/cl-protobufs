@@ -64,7 +64,7 @@
                            :class    ',cname
                            :package  ,(if (stringp package) package (string-downcase (string package)))
                            :imports  ',(if (listp import) import (list import))
-                           :syntax   ,syntax
+                           :syntax   ,(or syntax "proto2")
                            :options  (list ,@options)
                            :enums    (list ,@enums)
                            :messages (list ,@msgs)
@@ -187,6 +187,8 @@
                                    :packed  ,(and (eq reqd :repeated)
                                                   (packed-type-p pclass)))))))))))
     (unless class
+      ;;--- Do a 'deftype' to make a subtype of 'class' when 'class' is supplied?
+      ;;--- If we do this, then type checking on the Protobuf type will work
       (collect-form `(defclass ,name () (,@slots))))
     (let ((options (loop for (key val) on options by #'cddr
                          collect `(make-instance 'protobuf-option

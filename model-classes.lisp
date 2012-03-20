@@ -55,7 +55,7 @@
   ((syntax :type (or null string)               ;syntax, passed on but otherwise ignored
            :accessor proto-syntax
            :initarg :syntax
-           :initform nil)
+           :initform "proto2")
    (package :type (or null string)              ;the package
             :accessor proto-package
             :initarg :package

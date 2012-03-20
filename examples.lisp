@@ -237,7 +237,7 @@
          :CLASS 'COLOR-WHEEL
          :PACKAGE "ita.color"
          :IMPORTS '("descriptor.proto")
-         :SYNTAX NIL
+         :SYNTAX "proto2"
          :OPTIONS ()
          :ENUMS (LIST (MAKE-INSTANCE 'PROTOBUF-ENUM
                         :NAME "ColorName"

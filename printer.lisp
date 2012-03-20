@@ -40,7 +40,7 @@
     (when syntax
       (format stream "~&syntax = \"~A\";~%~%" syntax))
     (when package
-      (format stream "~&package ~A;~%~%" package))
+      (format stream "~&package ~A;~%~%" (substitute #\_ #\- package)))
     (when imports
       (dolist (import imports)
         (format stream "~&import \"~A\";~%" import))

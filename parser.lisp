@@ -150,7 +150,9 @@
                (return-from parse-protobuf-from-stream protobuf))
               ((proto-token-char-p char)
                (let ((token (parse-token stream)))
-                 (cond ((string= token "package")
+                 (cond ((string= token "syntax")
+                        (parse-proto-syntax stream protobuf))
+                       ((string= token "package")
                         (parse-proto-package stream protobuf))
                        ((string= token "import")
                         (parse-proto-import stream protobuf))
@@ -165,10 +167,18 @@
               (t
                (error "Syntax error at position ~D" (file-position stream))))))))
 
+(defun parse-proto-syntax (stream protobuf &optional (terminator #\;))
+  "Parse a Protobufs syntax line from 'stream'.
+   Updates the 'protobuf' object to use the syntax."
+  (let ((syntax (prog1 (parse-token stream)
+                  (expect-char stream terminator "syntax")
+                  (maybe-skip-comments stream))))
+    (setf (proto-syntax protobuf) syntax)))
+
 (defun parse-proto-package (stream protobuf &optional (terminator #\;))
   "Parse a Protobufs package line from 'stream'.
    Updates the 'protobuf' object to use the package."
-  (let* ((package  (prog1 (parse-token stream)
+  (let* ((package  (prog1 (substitute #\- #\_ (parse-token stream))
                      (expect-char stream terminator "package")
                      (maybe-skip-comments stream)))
          (lisp-pkg (or (find-package package)
