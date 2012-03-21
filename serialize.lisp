@@ -141,22 +141,27 @@
 ;; This is you might preserve object identity, e.g.
 (defgeneric deserialize-object (class protobuf buffer index)
   (:documentation
-   "Deserializes an object of the give class 'class' as a protobuf object defined
+   "Deserializes an object of the given class 'class' as a protobuf object defined
     in the schema 'protobuf' from the byte array given by 'buffer' starting at
     the fixnum index 'index' using the wire format.
     The return value is the object."))
 
 ;; The default method uses meta-data from the protobuf "schema"
+;; Note that 'class' is the Lisp name of the Protobufs message (class)
+;; It is not the name of any overriding class ('proto-class-override')
 (defmethod deserialize-object ((class symbol) protobuf buffer index)
   (check-type protobuf (or protobuf protobuf-message))
   (check-type index fixnum)
   (check-type buffer (simple-array (unsigned-byte 8)))
   (let ((length (length buffer)))
     (labels ((deserialize (class trace &optional (end length))
-               (let ((object  (make-instance class))
-                     (message (loop for p in trace
-                                    thereis (or (find-message-for-class p class)
-                                                (find-enum-for-type p class)))))
+               (let* ((message (loop for p in trace
+                                     thereis (or (find-message-for-class p class)
+                                                 (find-enum-for-type p class))))
+                      (object  (make-instance (or (proto-class-override message) class))))
+                 (assert (eql (proto-class message) class) ()
+                         "The class in message ~S does not match the Lisp class ~S"
+                         (proto-class message) class)
                  (assert message ()
                          "There is no Protobuf message for the class ~S" class)
                  (loop

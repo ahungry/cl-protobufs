@@ -106,7 +106,12 @@
                            :name  ,(enum-name->proto enum-name)
                            :index ,idx
                            :value ,val-name)))))
-    (unless type
+
+    (if type
+      ;; If we've got a type override, define a type matching the Lisp name
+      ;; of this message so that typep and subtypep work
+      (collect-form `(deftype ,name () ',type))
+      ;; If no type override, define the type now
       (collect-form `(deftype ,name () '(member ,@vals))))
     (let ((options (loop for (key val) on options by #'cddr
                          collect `(make-instance 'protobuf-option
@@ -116,7 +121,8 @@
          define-enum
          (make-instance 'protobuf-enum
            :name   ,(or proto-name (class-name->proto name))
-           :class  ',(or type name)
+           :class  ',name
+           :class-override ',type
            :options (list ,@options)
            :values  (list ,@evals)
            :documentation ,documentation)
@@ -186,9 +192,11 @@
                                    :default ,(and default (format nil "~A" default))
                                    :packed  ,(and (eq reqd :repeated)
                                                   (packed-type-p pclass)))))))))))
-    (unless class
-      ;;--- Do a 'deftype' to make a subtype of 'class' when 'class' is supplied?
-      ;;--- If we do this, then type checking on the Protobuf type will work
+    (if class
+      ;; If we've got a class override, define a type matching the Lisp name
+      ;; of this message so that typep and subtypep work
+      (collect-form `(deftype ,name () ',class))
+      ;; If no class override, define the class now
       (collect-form `(defclass ,name () (,@slots))))
     (let ((options (loop for (key val) on options by #'cddr
                          collect `(make-instance 'protobuf-option
@@ -198,7 +206,8 @@
          define-message
          (make-instance 'protobuf-message
            :name  ,(or proto-name (class-name->proto name))
-           :class ',(or class name)
+           :class ',name
+           :class-override ',class
            :conc-name ,(and conc-name (string conc-name))
            :options  (list ,@options)
            :enums    (list ,@enums)

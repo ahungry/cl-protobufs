@@ -86,6 +86,9 @@
 (setq tschema (proto:write-protobuf-schema-for-classes
                '(proto-test1 proto-test2 proto-test3 proto-test4 proto-test5)))
 
+(proto:write-protobuf tschema)
+(proto:write-protobuf tschema :type :lisp)
+
 (setq test1 (make-instance 'proto-test1 :intval 150))
 (setq test2 (make-instance 'proto-test2 :strval "testing"))
 (setq test3 (make-instance 'proto-test3 :recval test1))

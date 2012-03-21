@@ -143,7 +143,11 @@
 
 ;; A protobuf enumeration
 (defclass protobuf-enum (base-protobuf)
-  ((values :type (list-of protobuf-enum-value)  ;all the values for this enum type
+  ((class-override :type (or null symbol)       ;use this if you want to "overlay" an existing class
+                   :accessor proto-class-override
+                   :initarg :class-override
+                   :initform nil)
+   (values :type (list-of protobuf-enum-value)  ;all the values for this enum type
            :accessor proto-values
            :initarg :values
            :initform ()))
@@ -180,6 +184,10 @@
          :accessor proto-conc-name
          :initarg :conc-name
          :initform nil)
+   (class-override :type (or null symbol)       ;use this if you want to "overlay" an existing class
+                   :accessor proto-class-override
+                   :initarg :class-override
+                   :initform nil)
    (enums :type (list-of protobuf-enum)         ;the embedded enum types
           :accessor proto-enums
           :initarg :enums

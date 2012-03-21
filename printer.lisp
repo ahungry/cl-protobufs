@@ -34,7 +34,7 @@
 
 (defmethod write-protobuf-as ((type (eql :proto)) (protobuf protobuf) stream
                               &key (indentation 0))
-  (with-prefixed-accessors (name class documentation syntax package imports options) (proto- protobuf)
+  (with-prefixed-accessors (name documentation syntax package imports options) (proto- protobuf)
     (when documentation
       (write-protobuf-documentation type documentation stream :indentation indentation))
     (when syntax
@@ -211,14 +211,16 @@
 (defmethod write-protobuf-as ((type (eql :lisp)) (enum protobuf-enum) stream
                               &key (indentation 0))
   (terpri stream)
-  (with-prefixed-accessors (class documentation) (proto- enum)
+  (with-prefixed-accessors (class class-override documentation) (proto- enum)
     (when documentation
       (write-protobuf-documentation type documentation stream :indentation indentation))
     (format stream "~@[~VT~](proto:define-enum ~(~S~)"
             (and (not (zerop indentation)) indentation) class)
-    (cond (documentation
-           (format stream "~%~@[~VT~](:documentation ~S)"
-                   (+ indentation 4) documentation))
+    (cond ((or class-override documentation)
+           (format stream "~%~@[~VT~](~:[~*~*~;:class ~(~S~)~@[~%~VT~]~]~:[~*~;:documentation ~S~])"
+                   (+ indentation 4)
+                   class-override class-override (and documentation (+ indentation 5))
+                   documentation documentation))
           (t
            (format stream " ()")))
     (loop for (value . more) on (proto-values enum) doing
@@ -236,23 +238,20 @@
 
 (defmethod write-protobuf-as ((type (eql :lisp)) (message protobuf-message) stream
                               &key (indentation 0))
-  (with-prefixed-accessors (class conc-name documentation) (proto- message)
+  (with-prefixed-accessors (class class-override conc-name documentation) (proto- message)
     (when documentation
       (write-protobuf-documentation type documentation stream :indentation indentation))
     (format stream "~&~@[~VT~](proto:define-message ~(~S~)"
             (and (not (zerop indentation)) indentation) class)
-    (if (or conc-name documentation)
-      (format stream "~%~VT(" (+ indentation 4))
-      (format stream " ("))
-    (when (or conc-name documentation)
-      (when conc-name
-        (format stream ":conc-name ~(~A~)" conc-name))
-      (when documentation
-        (if conc-name 
-          (format stream "~%~VT:documentation ~S"
-                  (+ indentation 5) documentation)
-          (format stream ":documentation ~S" documentation))))
-    (format stream ")")
+
+    (cond ((or class-override conc-name documentation)
+           (format stream "~%~@[~VT~](~:[~*~*~;:class ~(~S~)~@[~%~VT~]~]~:[~*~*~;:conc-name ~(~S~)~@[~%~VT~]~]~:[~*~;:documentation ~S~])"
+                   (+ indentation 4)
+                   class-override class-override (and (or documentation conc-name) (+ indentation 5))
+                   conc-name conc-name (and documentation (+ indentation 5))
+                   documentation documentation))
+          (t
+           (format stream " ()")))
     (loop for (enum . more) on (proto-enums message) doing
       (write-protobuf-as type enum stream :indentation (+ indentation 2))
       (when more
