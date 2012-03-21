@@ -101,6 +101,10 @@
    ;; Printing
    "WRITE-PROTOBUF-AS"
 
+   ;; Protobuf defining macros
+   "ENSURE-ALL-PROTOBUFS"
+   "ENSURE-PROTOBUF"
+   
    ;; CLOS to Protobufs transformer
    "CLASS-TO-PROTOBUF-MESSAGE"
    "SLOT-TO-PROTOBUF-FIELD"

@@ -110,7 +110,8 @@
     (if type
       ;; If we've got a type override, define a type matching the Lisp name
       ;; of this message so that typep and subtypep work
-      (collect-form `(deftype ,name () ',type))
+      (unless (eq name type)
+        (collect-form `(deftype ,name () ',type)))
       ;; If no type override, define the type now
       (collect-form `(deftype ,name () '(member ,@vals))))
     (let ((options (loop for (key val) on options by #'cddr
@@ -195,7 +196,8 @@
     (if class
       ;; If we've got a class override, define a type matching the Lisp name
       ;; of this message so that typep and subtypep work
-      (collect-form `(deftype ,name () ',class))
+      (unless (eq name class)
+        (collect-form `(deftype ,name () ',class)))
       ;; If no class override, define the class now
       (collect-form `(defclass ,name () (,@slots))))
     (let ((options (loop for (key val) on options by #'cddr
@@ -266,3 +268,58 @@
            :rpcs (list ,@rpcs)
            :documentation ,documentation)
          ,forms))))
+
+
+;;; Ensure everything in a Protobufs schema is defined
+
+(defvar *undefined-messages*)
+
+;; A very useful tool during development...
+(defun ensure-all-protobufs ()
+  (let ((protos (sort
+                 (delete-duplicates
+                  (loop for p being the hash-values of *all-protobufs*
+                        collect p))
+                 #'string< :key #'proto-name)))
+    (mapcan #'ensure-protobuf protos)))
+
+(defmethod ensure-protobuf ((proto protobuf))
+  "Ensure that all of the types are defined in the Protobufs schema 'proto'.
+   This returns two values:
+    - A list whose elements are (<undefined-type> \"message:field\" ...)
+    - The accumulated warnings table that has the same information as objects."
+  (let ((*undefined-messages* (make-hash-table))
+        (trace (list proto)))
+    (map () (curry #'ensure-message trace) (proto-messages proto))
+    (map () (curry #'ensure-service trace) (proto-services proto))
+    (loop for type being the hash-keys of *undefined-messages*
+            using (hash-value things)
+          collect (list* type
+                         (mapcar #'(lambda (thing)
+                                     (format nil "~A:~A" (proto-name (car thing)) (proto-name (cdr thing))))
+                                 things)) into warnings
+          finally (return (values warnings *undefined-messages*)))))
+
+(defmethod ensure-message (trace (message protobuf-message))
+  (let ((trace (cons message trace)))
+    (map () (curry #'ensure-message trace) (proto-messages message))
+    (map () (curry #'ensure-field trace message) (proto-fields message))))
+
+(defmethod ensure-field (trace message (field protobuf-field))
+  (ensure-type trace message field (proto-class field)))
+
+(defmethod ensure-service (trace (service protobuf-service))
+  (map () (curry #'ensure-rpc trace service) (proto-rpcs service)))
+
+(defmethod ensure-rpc (trace service (rpc protobuf-rpc))
+  (ensure-type trace service rpc (proto-input-type rpc))
+  (ensure-type trace service rpc (proto-output-type rpc)))
+
+;; 'message' and 'field' can be a message and a field or a service and an RPC
+(defun ensure-type (trace message field type)
+  (unless (keywordp type)
+    (let ((msg (loop for p in trace
+                     thereis (or (find-message-for-class p type)
+                                 (find-enum-for-type p type)))))
+      (unless msg
+        (push (cons message field) (gethash type *undefined-messages*))))))
