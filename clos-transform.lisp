@@ -262,3 +262,15 @@
   (let ((value (if value-filter (funcall value-filter value) value)))
     (and value (constantp value)
          (format nil "~A" value))))
+
+(defun protobuf-default-to-clos-init (default type)
+  (cond ((or (null default)
+             (and (stringp default) (string-empty-p default)))
+         nil)
+        ((member type '(:int32 :uint32 :int64 :uint64 :sint32 :sint64
+                        :fixed32 :sfixed32 :fixed64 :sfixed64
+                        :single :double))
+         (read-from-string default))
+        ((eq type :bool)
+         (if (string= default "true") t nil))
+        (t default)))

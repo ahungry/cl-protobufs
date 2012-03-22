@@ -274,16 +274,7 @@
 (defmethod write-protobuf-as ((type (eql :lisp)) (field protobuf-field) stream
                               &key (indentation 0))
   (with-prefixed-accessors (value reader type class documentation required default) (proto- field)
-    (let ((dflt (cond ((or (null default)
-                           (and (stringp default) (string-empty-p default)))
-                       nil)
-                      ((member class '(:int32 :uint32 :int64 :uint64 :sint32 :sint64
-                                       :fixed32 :sfixed32 :fixed64 :sfixed64
-                                       :single :double))
-                       (read-from-string default))
-                      ((eq class :bool)
-                       (if (string= default "true") t nil))
-                      (t default)))
+    (let ((dflt (protobuf-default-to-clos-init default class))
           (clss (let ((cl (case class
                             ((:int32 :uint32 :int64 :uint64 :sint32 :sint64
                               :fixed32 :sfixed32 :fixed64 :sfixed64) 'integer)
