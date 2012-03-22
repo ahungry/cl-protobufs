@@ -93,9 +93,7 @@
                                              (setq index (serialize-enum v msg field buffer index))))
                                        (safe-slot-value object slot reader)))
                               ((typep msg 'protobuf-message)
-                               (dolist (v (if slot
-                                            (safe-slot-value object slot reader)
-                                            (list object)))
+                               (dolist (v (if slot (safe-slot-value object slot reader) (list object)))
                                  ;; To serialize an embedded message, first say that it's
                                  ;; a string, then encode its size, then serialize its fields
                                  (let ((tag (ilogior $wire-type-string (iash (proto-index field) 3)))
