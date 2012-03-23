@@ -62,66 +62,70 @@
          (visited (or visited (make-hash-table))))
     (assert message ()
             "There is no Protobuf message for the class ~S" class)
-    (labels ((safe-slot-value (object slot reader)
-               (if reader                               ;use a reader if it's supplied
-                 (funcall reader object)
-                 (if (slot-boundp object slot)
-                   (slot-value object slot)
-                   nil)))
-             (do-field (object trace field)
-               ;; We don't do cycle detection here
-               ;; If the client needs it, he can define his own 'serialize-object'
-               ;; method to clean things up first
-               (let* ((cl  (if (eq (proto-class field) 'boolean) :bool (proto-class field)))
-                      (msg (and cl (loop for p in trace
-                                         thereis (or (find-message-for-class p cl)
-                                                     (find-enum-for-type p cl)))))
-                      (slot   (proto-value field))
-                      (reader (proto-reader field)))
-                 (cond ((eq (proto-required field) :repeated)
-                        (cond ((and slot (proto-packed field) (packed-type-p cl))
-                               (setq index (serialize-packed (safe-slot-value object slot reader)
-                                                             cl field buffer index)))
-                              ((and slot (keywordp cl))
-                               (map () #'(lambda (v)
-                                           (when (or (eq cl :bool) (not (null v)))
-                                             (setq index (serialize-prim v cl field buffer index))))
-                                       (safe-slot-value object slot reader)))
-                              ((and slot (typep msg 'protobuf-enum))
-                               (map () #'(lambda (v)
-                                           (when (not (null v))
-                                             (setq index (serialize-enum v msg field buffer index))))
-                                       (safe-slot-value object slot reader)))
-                              ((typep msg 'protobuf-message)
-                               (dolist (v (if slot (safe-slot-value object slot reader) (list object)))
-                                 ;; To serialize an embedded message, first say that it's
-                                 ;; a string, then encode its size, then serialize its fields
-                                 (let ((tag (ilogior $wire-type-string (iash (proto-index field) 3)))
-                                       (len (object-size v protobuf :visited visited)))
-                                   (setq index (encode-uint32 tag buffer index))
-                                   (setq index (encode-uint32 len buffer index)))
-                                 (map () (curry #'do-field v (cons msg trace))
-                                         (proto-fields msg))))))
-                       (t
-                        (cond ((and slot (keywordp cl))
-                               (let ((v (safe-slot-value object slot reader)))
-                                 (when (or (eq cl :bool) (not (null v)))
-                                   (setq index (serialize-prim v cl field buffer index)))))
-                              ((and slot (typep msg 'protobuf-enum))
-                               (let ((v (safe-slot-value object slot reader)))
-                                 (when (not (null v))
-                                   (setq index (serialize-enum v msg field buffer index)))))
-                              ((typep msg 'protobuf-message)
-                               (let ((v (if slot (safe-slot-value object slot reader) object)))
-                                 (let ((tag (ilogior $wire-type-string (iash (proto-index field) 3)))
-                                       (len (object-size v protobuf :visited visited)))
-                                   (setq index (encode-uint32 tag buffer index))
-                                   (setq index (encode-uint32 len buffer index)))
-                                 (when (not (null v))
+    (macrolet ((read-slot (object slot reader)
+                 ;; Don't do a boundp check, we assume the object is fully populated
+                 ;; Unpopulated slots should be "nullable" and should contain nil
+                 `(if ,reader
+                    (funcall ,reader ,object)
+                    (slot-value ,object ,slot))))
+      (labels ((do-field (object trace field)
+                 ;; We don't do cycle detection here
+                 ;; If the client needs it, he can define his own 'serialize-object'
+                 ;; method to clean things up first
+                 (let* ((cl     (if (eq (proto-class field) 'boolean) :bool (proto-class field)))
+                        (slot   (proto-value field))
+                        (reader (proto-reader field))
+                        msg)
+                   (cond ((eq (proto-required field) :repeated)
+                          (cond ((and slot (proto-packed field) (packed-type-p cl))
+                                 (setq index (serialize-packed (read-slot object slot reader)
+                                                               cl field buffer index)))
+                                ((and slot (keywordp cl))
+                                 (map () #'(lambda (v)
+                                             (when (or v (eq cl :bool))
+                                               (setq index (serialize-prim v cl field buffer index))))
+                                         (read-slot object slot reader)))
+                                ((typep (setq msg (and cl (loop for p in trace
+                                                                thereis (or (find-message-for-class p cl)
+                                                                            (find-enum-for-type p cl)))))
+                                        'protobuf-message)
+                                 (dolist (v (if slot (read-slot object slot reader) (list object)))
+                                   ;; To serialize an embedded message, first say that it's
+                                   ;; a string, then encode its size, then serialize its fields
+                                   (let ((tag (ilogior $wire-type-string (iash (proto-index field) 3)))
+                                         (len (object-size v protobuf :visited visited)))
+                                     (setq index (encode-uint32 tag buffer index))
+                                     (setq index (encode-uint32 len buffer index)))
                                    (map () (curry #'do-field v (cons msg trace))
-                                           (proto-fields msg)))))))))))
-      (declare (dynamic-extent #'safe-slot-value #'do-field))
-      (map () (curry #'do-field object (list message protobuf)) (proto-fields message)))))
+                                           (proto-fields msg))))
+                                ((and slot (typep msg 'protobuf-enum))
+                                 (map () #'(lambda (v)
+                                             (when v
+                                               (setq index (serialize-enum v msg field buffer index))))
+                                         (read-slot object slot reader)))))
+                         (t
+                          (cond ((and slot (keywordp cl))
+                                 (let ((v (read-slot object slot reader)))
+                                   (when (or v (eq cl :bool))
+                                     (setq index (serialize-prim v cl field buffer index)))))
+                                ((typep (setq msg (and cl (loop for p in trace
+                                                                thereis (or (find-message-for-class p cl)
+                                                                            (find-enum-for-type p cl)))))
+                                        'protobuf-message)
+                                 (let ((v (if slot (read-slot object slot reader) object)))
+                                   (let ((tag (ilogior $wire-type-string (iash (proto-index field) 3)))
+                                         (len (object-size v protobuf :visited visited)))
+                                     (setq index (encode-uint32 tag buffer index))
+                                     (setq index (encode-uint32 len buffer index)))
+                                   (when v
+                                     (map () (curry #'do-field v (cons msg trace))
+                                             (proto-fields msg)))))
+                                ((and slot (typep msg 'protobuf-enum))
+                                 (let ((v (read-slot object slot reader)))
+                                   (when v
+                                     (setq index (serialize-enum v msg field buffer index)))))))))))
+        (declare (dynamic-extent #'do-field))
+        (map () (curry #'do-field object (list message protobuf)) (proto-fields message))))))
 
 
 ;;; Deserialization
@@ -172,13 +176,12 @@
                             (fld   (logand (ash val -3) #x1FFFFFFF))
                             (field (find fld (proto-fields message) :key #'proto-index))
                             (cl    (if (eq (proto-class field) 'boolean) :bool (proto-class field)))
-                            (msg   (and cl (or (find-message-for-class protobuf cl)
-                                               (find-enum-for-type protobuf cl))))
                             ;; It's OK for this to be null
                             ;; That means we're parsing some version of a message
                             ;; that has the field, but our current message does not
                             ;; We still have to deserialize everything, though
-                            (slot  (proto-value field)))
+                            (slot  (proto-value field))
+                            msg)
                        ;;--- Check for mismatched types, running past end of buffer, etc
                        (declare (ignore type))
                        (cond ((eq (proto-required field) :repeated)
@@ -195,21 +198,23 @@
                                        (when slot
                                          (setf (slot-value object slot)
                                                (nconc (slot-value object slot) (list val))))))
-                                    ((typep msg 'protobuf-enum)
-                                     (multiple-value-bind (val idx)
-                                         (deserialize-enum msg field buffer index)
-                                       (setq index idx)
-                                       (when slot
-                                         (setf (slot-value object slot)
-                                               (nconc (slot-value object slot) (list val))))))
-                                    ((typep msg 'protobuf-message)
+                                    ((typep (setq msg (and cl (or (find-message-for-class protobuf cl)
+                                                                  (find-enum-for-type protobuf cl))))
+                                            'protobuf-message)
                                      (multiple-value-bind (len idx)
                                          (decode-uint32 buffer index)
                                        (setq index idx)
                                        (let ((obj (deserialize cl (cons msg trace) (+ index len))))
                                          (when slot
                                            (setf (slot-value object slot)
-                                                 (nconc (slot-value object slot) (list obj)))))))))
+                                                 (nconc (slot-value object slot) (list obj)))))))
+                                    ((typep msg 'protobuf-enum)
+                                     (multiple-value-bind (val idx)
+                                         (deserialize-enum msg field buffer index)
+                                       (setq index idx)
+                                       (when slot
+                                         (setf (slot-value object slot)
+                                               (nconc (slot-value object slot) (list val))))))))
                              (t
                               (cond ((keywordp cl)
                                      (multiple-value-bind (val idx)
@@ -217,19 +222,21 @@
                                        (setq index idx)
                                        (when slot
                                          (setf (slot-value object slot) val))))
-                                    ((typep msg 'protobuf-enum)
-                                     (multiple-value-bind (val idx)
-                                         (deserialize-enum msg field buffer index)
-                                       (setq index idx)
-                                       (when slot
-                                         (setf (slot-value object slot) val))))
-                                    ((typep msg 'protobuf-message)
+                                    ((typep (setq msg (and cl (or (find-message-for-class protobuf cl)
+                                                                  (find-enum-for-type protobuf cl))))
+                                            'protobuf-message)
                                      (multiple-value-bind (len idx)
                                          (decode-uint32 buffer index)
                                        (setq index idx)
                                        (let ((obj (deserialize cl (cons msg trace) (+ index len))))
                                          (when slot
-                                           (setf (slot-value object slot) obj))))))))))))))
+                                           (setf (slot-value object slot) obj)))))
+                                    ((typep msg 'protobuf-enum)
+                                     (multiple-value-bind (val idx)
+                                         (deserialize-enum msg field buffer index)
+                                       (setq index idx)
+                                       (when slot
+                                         (setf (slot-value object slot) val)))))))))))))
       (declare (dynamic-extent #'deserialize))
       (deserialize class (list protobuf)))))
 
@@ -257,63 +264,67 @@
          (size    0))
     (assert message ()
             "There is no Protobuf message for the class ~S" class)
-    (labels ((safe-slot-value (object slot reader)
-               (if reader                               ;use a reader if it's supplied
-                 (funcall reader object)
-                 (if (slot-boundp object slot)
-                   (slot-value object slot)
-                   nil)))
-             (do-field (object trace field)
-               ;; We don't do cycle detection here
-               ;; If the client needs it, he can define his own 'object-size'
-               ;; method to clean things up first
-               (let* ((cl  (if (eq (proto-class field) 'boolean) :bool (proto-class field)))
-                      (msg (and cl (loop for p in trace
-                                         thereis (or (find-message-for-class p cl)
-                                                     (find-enum-for-type p cl)))))
-                      (slot   (proto-value field))
-                      (reader (proto-reader field)))
-                 (cond ((eq (proto-required field) :repeated)
-                        (cond ((and slot (proto-packed field) (packed-type-p cl))
-                               (iincf size (packed-size (safe-slot-value object slot reader) cl field)))
-                              ((and slot (keywordp cl))
-                               (map () #'(lambda (v)
-                                           (when (or (eq cl :bool) (not (null v)))
-                                             (iincf size (prim-size v cl field))))
-                                       (safe-slot-value object slot reader)))
-                              ((and slot (typep msg 'protobuf-enum))
-                               (map () #'(lambda (v)
-                                           (when (not (null v))
-                                             (iincf size (enum-size v msg field))))
-                                       (safe-slot-value object slot reader)))
-                              ((typep msg 'protobuf-message)
-                               (dolist (v (if slot (safe-slot-value object slot reader) (list object)))
-                                 (let ((tag (ilogior $wire-type-string (iash (proto-index field) 3)))
-                                       (len (object-size v protobuf :visited visited)))
-                                   (iincf size (length32 tag))
-                                   (iincf size (length32 len)))
-                                 (map () (curry #'do-field v (cons msg trace))
-                                         (proto-fields msg))))))
-                       (t
-                        (cond ((and slot (keywordp cl))
-                               (let ((v (safe-slot-value object slot reader)))
-                                 (when (or (eq cl :bool) (not (null v)))
-                                   (iincf size (prim-size v cl field)))))
-                              ((and slot (typep msg 'protobuf-enum))
-                               (let ((v (safe-slot-value object slot reader)))
-                                 (when (not (null v))
-                                   (iincf size (enum-size (safe-slot-value object slot reader) msg field)))))
-                              ((typep msg 'protobuf-message)
-                               (let ((v (if slot (safe-slot-value object slot reader) object)))
-                                 (when (not (null v))
+    (macrolet ((read-slot (object slot reader)
+                 ;; Don't do a boundp check, we assume the object is fully populated
+                 ;; Unpopulated slots should be "nullable" and should contain nil
+                 `(if ,reader
+                    (funcall ,reader ,object)
+                    (slot-value ,object ,slot))))
+      (labels ((do-field (object trace field)
+                 ;; We don't do cycle detection here
+                 ;; If the client needs it, he can define his own 'object-size'
+                 ;; method to clean things up first
+                 (let* ((cl     (if (eq (proto-class field) 'boolean) :bool (proto-class field)))
+                        (slot   (proto-value field))
+                        (reader (proto-reader field))
+                        msg)
+                   (cond ((eq (proto-required field) :repeated)
+                          (cond ((and slot (proto-packed field) (packed-type-p cl))
+                                 (iincf size (packed-size (read-slot object slot reader) cl field)))
+                                ((and slot (keywordp cl))
+                                 (map () #'(lambda (v)
+                                             (when (or v (eq cl :bool))
+                                               (iincf size (prim-size v cl field))))
+                                         (read-slot object slot reader)))
+                                ((typep (setq msg (and cl (loop for p in trace
+                                                                thereis (or (find-message-for-class p cl)
+                                                                            (find-enum-for-type p cl)))))
+                                        'protobuf-message)
+                                 (dolist (v (if slot (read-slot object slot reader) (list object)))
                                    (let ((tag (ilogior $wire-type-string (iash (proto-index field) 3)))
                                          (len (object-size v protobuf :visited visited)))
                                      (iincf size (length32 tag))
                                      (iincf size (length32 len)))
                                    (map () (curry #'do-field v (cons msg trace))
-                                           (proto-fields msg)))))))))))
-      (declare (dynamic-extent #'safe-slot-value #'do-field))
-      (map () (curry #'do-field object (list message protobuf)) (proto-fields message))
-      (when visited
-        (setf (gethash object visited) size))   ;cache the size
-      size)))
+                                           (proto-fields msg))))
+                                ((and slot (typep msg 'protobuf-enum))
+                                 (map () #'(lambda (v)
+                                             (when v
+                                               (iincf size (enum-size v msg field))))
+                                         (read-slot object slot reader)))))
+                         (t
+                          (cond ((and slot (keywordp cl))
+                                 (let ((v (read-slot object slot reader)))
+                                   (when (or v (eq cl :bool))
+                                     (iincf size (prim-size v cl field)))))
+                                ((typep (setq msg (and cl (loop for p in trace
+                                                                thereis (or (find-message-for-class p cl)
+                                                                            (find-enum-for-type p cl)))))
+                                        'protobuf-message)
+                                 (let ((v (if slot (read-slot object slot reader) object)))
+                                   (when v
+                                     (let ((tag (ilogior $wire-type-string (iash (proto-index field) 3)))
+                                           (len (object-size v protobuf :visited visited)))
+                                       (iincf size (length32 tag))
+                                       (iincf size (length32 len)))
+                                     (map () (curry #'do-field v (cons msg trace))
+                                             (proto-fields msg)))))
+                                ((and slot (typep msg 'protobuf-enum))
+                                 (let ((v (read-slot object slot reader)))
+                                   (when v
+                                     (iincf size (enum-size (read-slot object slot reader) msg field)))))))))))
+        (declare (dynamic-extent #'do-field))
+        (map () (curry #'do-field object (list message protobuf)) (proto-fields message))
+        (when visited
+          (setf (gethash object visited) size))   ;cache the size
+        size))))
