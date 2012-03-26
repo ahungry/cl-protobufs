@@ -44,6 +44,26 @@
 
 (proto:print-text-format pschema pschema)
 (proto:print-text-format (proto:deserialize-object 'proto:protobuf pschema pser 0) pschema)
+
+(eval (generate-object-size (find-message-for-class pschema 'proto:protobuf) pschema))
+(eval (generate-object-size (find-message-for-class pschema 'proto:protobuf-option) pschema))
+(eval (generate-object-size (find-message-for-class pschema 'proto:protobuf-enum) pschema))
+(eval (generate-object-size (find-message-for-class pschema 'proto:protobuf-enum-value) pschema))
+(eval (generate-object-size (find-message-for-class pschema 'proto:protobuf-message) pschema))
+(eval (generate-object-size (find-message-for-class pschema 'proto:protobuf-field) pschema))
+(eval (generate-object-size (find-message-for-class pschema 'proto:protobuf-extension) pschema))
+(eval (generate-object-size (find-message-for-class pschema 'proto:protobuf-service) pschema))
+(eval (generate-object-size (find-message-for-class pschema 'proto:protobuf-rpc) pschema))
+
+(eval (generate-serializer (find-message-for-class pschema 'proto:protobuf) pschema))
+(eval (generate-serializer (find-message-for-class pschema 'proto:protobuf-option) pschema))
+(eval (generate-serializer (find-message-for-class pschema 'proto:protobuf-enum) pschema))
+(eval (generate-serializer (find-message-for-class pschema 'proto:protobuf-enum-value) pschema))
+(eval (generate-serializer (find-message-for-class pschema 'proto:protobuf-message) pschema))
+(eval (generate-serializer (find-message-for-class pschema 'proto:protobuf-field) pschema))
+(eval (generate-serializer (find-message-for-class pschema 'proto:protobuf-extension) pschema))
+(eval (generate-serializer (find-message-for-class pschema 'proto:protobuf-service) pschema))
+(eval (generate-serializer (find-message-for-class pschema 'proto:protobuf-rpc) pschema))
 ||#
 
 #||
@@ -53,24 +73,32 @@
 
 (defclass proto-test2 ()
   ((intval :type (or null (integer -2147483648 +2147483647))
+           :initform nil
            :initarg :intval)
-   (strval :type string
+   (strval :type (or null string)
+           :initform nil
            :initarg :strval)))
 
 (defclass proto-test3 ()
   ((intval :type (or null (integer -2147483648 +2147483647))
+           :initform nil
            :initarg :intval)
    (strval :type (or null string)
+           :initform nil
            :initarg :strval)
-   (recval :type proto-test1
+   (recval :type (or null proto-test1)
+           :initform nil
            :initarg :recval)))
 
 (defclass proto-test4 ()
   ((intval :type (or null (integer -2147483648 +2147483647))
+           :initform nil
            :initarg :intval)
    (strval :type (or null string)
+           :initform nil
            :initarg :strval)
-   (recval :type proto-test2
+   (recval :type (or null proto-test2)
+           :initform nil
            :initarg :recval)))
 
 (defclass proto-test5 ()
@@ -88,6 +116,18 @@
 
 (proto:write-protobuf tschema)
 (proto:write-protobuf tschema :type :lisp)
+
+(eval (generate-object-size (find-message-for-class tschema 'proto-test1) tschema))
+(eval (generate-object-size (find-message-for-class tschema 'proto-test2) tschema))
+(eval (generate-object-size (find-message-for-class tschema 'proto-test3) tschema))
+(eval (generate-object-size (find-message-for-class tschema 'proto-test4) tschema))
+(eval (generate-object-size (find-message-for-class tschema 'proto-test5) tschema))
+
+(eval (generate-serializer (find-message-for-class tschema 'proto-test1) tschema))
+(eval (generate-serializer (find-message-for-class tschema 'proto-test2) tschema))
+(eval (generate-serializer (find-message-for-class tschema 'proto-test3) tschema))
+(eval (generate-serializer (find-message-for-class tschema 'proto-test4) tschema))
+(eval (generate-serializer (find-message-for-class tschema 'proto-test5) tschema))
 
 (setq test1 (make-instance 'proto-test1 :intval 150))
 (setq test2 (make-instance 'proto-test2 :strval "testing"))

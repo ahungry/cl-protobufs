@@ -34,7 +34,7 @@
 
 (defmethod write-protobuf-as ((type (eql :proto)) (protobuf protobuf) stream
                               &key (indentation 0))
-  (with-prefixed-accessors (name documentation syntax package imports options) (proto- protobuf)
+  (with-prefixed-accessors (name documentation syntax package imports optimize options) (proto- protobuf)
     (when documentation
       (write-protobuf-documentation type documentation stream :indentation indentation))
     (when syntax
@@ -45,6 +45,9 @@
       (dolist (import imports)
         (format stream "~&import \"~A\";~%" import))
       (terpri stream))
+    (when optimize
+      (format stream "~&option optimize_for ~A;~%~%"
+              (if (eq optimize :space) "CODE_SIZE" "SPEED")))
     (when options
       (dolist (option options)
         (format stream "~&option ~:/protobuf-option/;~%" option))
@@ -161,19 +164,19 @@
 
 (defmethod write-protobuf-as ((type (eql :lisp)) (protobuf protobuf) stream
                               &key (indentation 0))
-  (with-prefixed-accessors (name class documentation package imports options) (proto- protobuf)
+  (with-prefixed-accessors (name class documentation package imports optimize options) (proto- protobuf)
     (when package
       (format stream "~&(in-package \"~A\")~%~%" package))
     (when documentation
       (write-protobuf-documentation type documentation stream :indentation indentation))
     (format stream "~&(proto:define-proto ~(~A~)" (or class name))
-    (if (or package imports options documentation)
+    (if (or package imports optimize options documentation)
       (format stream "~%    (")
       (format stream " ("))
     (let ((spaces ""))
       (when package
         (format stream "~A:package ~A" spaces package)
-        (when (or imports options documentation)
+        (when (or imports optimize options documentation)
           (terpri stream))
         (setq spaces "     "))
       (when imports
@@ -181,6 +184,11 @@
                (format stream "~A:import \"~A\"" spaces (car imports)))
               (t
                (format stream "~A:import (~{\"~A\"~^ ~})" spaces imports)))
+        (when (or optimize options documentation)
+          (terpri stream))
+        (setq spaces "     "))
+      (when optimize
+        (format stream "~A:optimize ~(~S~)" spaces optimize)
         (when (or options documentation)
           (terpri stream))
         (setq spaces "     "))

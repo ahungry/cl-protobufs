@@ -14,7 +14,7 @@
 ;;; Protocol buffer defining macros
 
 ;; Define a schema named 'name', corresponding to a .proto file of that name
-(defmacro define-proto (name (&key proto-name syntax package import options documentation)
+(defmacro define-proto (name (&key proto-name syntax package import optimize options documentation)
                         &body messages &environment env)
   "Define a schema named 'name', corresponding to a .proto file of that name.
    'proto-name' can be used to override the defaultly generated name.
@@ -62,10 +62,11 @@
                (protobuf (make-instance 'protobuf
                            :name     ',pname
                            :class    ',cname
+                           :syntax   ,(or syntax "proto2")
                            :package  ,(if (stringp package) package (string-downcase (string package)))
                            :imports  ',(if (listp import) import (list import))
-                           :syntax   ,(or syntax "proto2")
                            :options  (list ,@options)
+                           :optimize ,optimize
                            :enums    (list ,@enums)
                            :messages (list ,@msgs)
                            :services (list ,@svcs)

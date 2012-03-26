@@ -207,10 +207,17 @@
          (option (make-instance 'protobuf-option
                    :name  key
                    :value val)))
-    (if protobuf
-      (setf (proto-options protobuf) (nconc (proto-options protobuf) (list option)))
-      ;; If nothing to graft the option into, just return it as the value
-      option)))
+    (cond (protobuf
+           (setf (proto-options protobuf) (nconc (proto-options protobuf) (list option)))
+           (when (and (string-equal key "optimize_for")
+                      (typep protobuf 'protobuf))
+             (let ((value (cond ((string-equal val "SPEED") :speed)
+                                ((string-equal val "CODE_SIZE") :space)
+                                (t nil))))
+               (setf (proto-optimize protobuf) value))))
+          (t
+           ;; If nothing to graft the option into, just return it as the value
+           option))))
 
 
 (defun parse-proto-enum (stream protobuf)

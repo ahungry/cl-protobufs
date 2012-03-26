@@ -65,6 +65,10 @@
             :accessor proto-imports
             :initarg :imports
             :initform ())
+   (optimize :type (member nil :space :speed)
+             :accessor proto-optimize
+             :initarg :optimize
+             :initform nil)
    (enums :type (list-of protobuf-enum)         ;the set of enum types
           :accessor proto-enums
           :initarg :enums
