@@ -81,6 +81,13 @@
            (setq ,vname protobuf)
            (setf (gethash ',pname *all-protobufs*) protobuf)
            (setf (gethash ',cname *all-protobufs*) protobuf)
+           #+++ignore (
+           ,@(when (eq optimize :speed)
+               (mapcar (curry #'generate-object-size  protobuf) (proto-messages protobuf)))
+           ,@(when (eq optimize :speed)
+               (mapcar (curry #'generate-serializer   protobuf) (proto-messages protobuf)))
+           ,@(when (eq optimize :speed)
+               (mapcar (curry #'generate-deserializer protobuf) (proto-messages protobuf))) )
            protobuf)))))
 
 ;; Define an enum type named 'name' and a Lisp 'deftype'
