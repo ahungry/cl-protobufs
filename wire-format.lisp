@@ -150,8 +150,8 @@
          (encode-double val buffer idx))
         ;; A few of our homegrown types
         ((:symbol)
+         ;; Note that this is consy, avoid it if possible
          (let ((val (format nil "~A:~A" (package-name (symbol-package val)) (symbol-name val))))
-           ;; Call 'string' in case we are trying to serialize a symbol name
            (encode-octets (babel:string-to-octets val :encoding :utf-8) buffer idx)))
         ((:date :time :datetime :timestamp)
          (encode-uint64 val buffer idx))))))
@@ -339,6 +339,7 @@
        (decode-double buffer index))
       ;; A few of our homegrown types
       ((:symbol)
+       ;; Note that this is consy, avoid it if possible
        (multiple-value-bind (val idx)
            (decode-octets buffer index)
          (let* ((val   (babel:octets-to-string val :encoding :utf-8))
