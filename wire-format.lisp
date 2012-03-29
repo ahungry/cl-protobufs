@@ -63,14 +63,14 @@
 
 
 (defun zig-zag-encode32 (val)
+  (declare (optimize (speed 3) (safety 0) (debug 0)))
   (declare (type (signed-byte 32) val))
-  (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
-    (logxor (ash val 1) (ash val -31))))
+  (logxor (ash val 1) (ash val -31)))
 
 (defun zig-zag-encode64 (val)
+  (declare (optimize (speed 3) (safety 0) (debug 0)))
   (declare (type (signed-byte 64) val))
-  (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
-    (logxor (ash val 1) (ash val -63))))
+  (logxor (ash val 1) (ash val -63)))
 
 (define-compiler-macro zig-zag-encode32 (&whole form val)
   (if (atom val)
@@ -87,12 +87,12 @@
     form))
 
 (defun zig-zag-decode32 (val)
-  (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
-    (logxor (ash val -1) (- (logand val 1)))))
+  (declare (optimize (speed 3) (safety 0) (debug 0)))
+  (logxor (ash val -1) (- (logand val 1))))
 
 (defun zig-zag-decode64 (val)
-  (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
-    (logxor (ash val -1) (- (logand val 1)))))
+  (declare (optimize (speed 3) (safety 0) (debug 0)))
+  (logxor (ash val -1) (- (logand val 1))))
 
 (define-compiler-macro zig-zag-decode32 (&whole form val)
   (if (atom val)
@@ -113,7 +113,8 @@
 (defun serialize-prim (val type tag buffer index)
   "Serializes a Protobufs primitive (scalar) value into the buffer at the given index.
    The value is given by 'val', the primitive type by 'type'.
-   Modifies the buffer in place, and returns the new index into the buffer."
+   Modifies the buffer in place, and returns the new index into the buffer.
+   Watch out, this function turns off most type checking and all array bounds checking."
   (declare (type (simple-array (unsigned-byte 8)) buffer)
            (type (unsigned-byte 32) tag)
            (type fixnum index))
@@ -194,7 +195,8 @@
 (defun serialize-packed (values type tag buffer index)
   "Serializes a set of packed values into the buffer at the given index.
    The values are given by 'values', the primitive type by 'type'.
-   Modifies the buffer in place, and returns the new index into the buffer."
+   Modifies the buffer in place, and returns the new index into the buffer.
+   Watch out, this function turns off most type checking and all array bounds checking."
   (declare (type (simple-array (unsigned-byte 8)) buffer)
            (type (unsigned-byte 32) tag)
            (type fixnum index))
@@ -275,7 +277,8 @@
 (defun serialize-enum (val values tag buffer index)
   "Serializes a Protobufs enum value into the buffer at the given index.
    The value is given by 'val', the enum values are in 'values'.
-   Modifies the buffer in place, and returns the new index into the buffer."
+   Modifies the buffer in place, and returns the new index into the buffer.
+   Watch out, this function turns off most type checking and all array bounds checking."
   (declare (type (simple-array (unsigned-byte 8)) buffer)
            (type (unsigned-byte 32) tag)
            (type fixnum index))
@@ -294,7 +297,8 @@
 (defun deserialize-prim (type buffer index)
   "Deserializes the next object of primitive type 'type'.
    Deserializes from the byte vector 'buffer' starting at 'index'.
-   Returns the value and and the new index into the buffer."
+   Returns the value and and the new index into the buffer.
+   Watch out, this function turns off most type checking and all array bounds checking."
   (declare (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
@@ -390,7 +394,8 @@
 (defun deserialize-packed (type buffer index)
   "Deserializes the next packed values of type 'type'.
    Deserializes from the byte vector 'buffer' starting at 'index'.
-   Returns the value and and the new index into the buffer."
+   Returns the value and and the new index into the buffer.
+   Watch out, this function turns off most type checking and all array bounds checking."
   (declare (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
@@ -436,7 +441,8 @@
 (defun deserialize-enum (values buffer index)
   "Deserializes the next enum value take from 'values'.
    Deserializes from the byte vector 'buffer' starting at 'index'.
-   Returns the value and and the new index into the buffer."
+   Returns the value and and the new index into the buffer.
+   Watch out, this function turns off most type checking and all array bounds checking."
   (declare (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
@@ -450,7 +456,8 @@
 ;;; Object sizing
 
 (defun prim-size (val type tag)
-  "Returns the size in bytes that the primitive object will take when serialized."
+  "Returns the size in bytes that the primitive object will take when serialized.
+   Watch out, this function turns off most type checking."
   (declare (type (unsigned-byte 32) tag))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
     (ecase type
@@ -470,9 +477,8 @@
        (let ((len (babel:string-size-in-octets val :encoding :utf-8)))
          (i+ (length32 tag) (length32 len) len)))
       ((:bytes)
-       (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
-         (let ((len (length val)))
-           (i+ (length32 tag) (length32 len) len))))
+       (let ((len (length val)))
+         (i+ (length32 tag) (length32 len) len)))
       ((:bool)
        (i+ (length32 tag) 1))
       ((:float)
@@ -519,7 +525,8 @@
     form))
 
 (defun packed-size (values type tag)
-  "Returns the size in bytes that the packed object will take when serialized."
+  "Returns the size in bytes that the packed object will take when serialized.
+   Watch out, this function turns off most type checking."
   (declare (type (unsigned-byte 32) tag))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
     (let ((len (let ((len 0))
@@ -575,40 +582,43 @@
 (defun encode-uint32 (val buffer index)
   "Encodes the unsigned 32-bit integer 'val' as a varint into the buffer
    at the given index.
-   Modifies the buffer, and returns the new index into the buffer."
+   Modifies the buffer, and returns the new index into the buffer.
+   Watch out, this function turns off all type checking and array bounds checking."
+  (declare (optimize (speed 3) (safety 0) (debug 0)))
   (declare (type (unsigned-byte 32) val)
            (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
-  (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
-    ;; Seven bits at a time, least significant bits first
-    (loop do (let ((bits (ldb #.(byte 7 0) val)))
-               (declare (type (unsigned-byte 8) bits))
-               (setq val (ash val -7))
-               (setf (aref buffer index) (ilogior bits (if (zerop val) 0 128)))
-               (iincf index))
-          until (zerop val)))
+  ;; Seven bits at a time, least significant bits first
+  (loop do (let ((bits (ldb #.(byte 7 0) val)))
+             (declare (type (unsigned-byte 8) bits))
+             (setq val (ash val -7))
+             (setf (aref buffer index) (ilogior bits (if (zerop val) 0 128)))
+             (iincf index))
+        until (zerop val))
   (values index buffer))                        ;return the buffer to improve 'trace'
 
 (defun encode-uint64 (val buffer index)
   "Encodes the unsigned 64-bit integer 'val' as a varint into the buffer
    at the given index.
-   Modifies the buffer, and returns the new index into the buffer."
+   Modifies the buffer, and returns the new index into the buffer.
+   Watch out, this function turns off all type checking and array bounds checking."
+  (declare (optimize (speed 3) (safety 0) (debug 0)))
   (declare (type (unsigned-byte 64) val)
            (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
-  (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
-    (loop do (let ((bits (ldb #.(byte 7 0) val)))
-               (declare (type (unsigned-byte 8) bits))
-               (setq val (ash val -7))
-               (setf (aref buffer index) (ilogior bits (if (zerop val) 0 128)))
-               (iincf index))
-          until (zerop val)))
+  (loop do (let ((bits (ldb #.(byte 7 0) val)))
+             (declare (type (unsigned-byte 8) bits))
+             (setq val (ash val -7))
+             (setf (aref buffer index) (ilogior bits (if (zerop val) 0 128)))
+             (iincf index))
+        until (zerop val))
   (values index buffer))
 
 (defun encode-fixed32 (val buffer index)
   "Encodes the unsigned 32-bit integer 'val' as a fixed int into the buffer
    at the given index.
-   Modifies the buffer, and returns the new index into the buffer."
+   Modifies the buffer, and returns the new index into the buffer.
+   Watch out, this function turns off most type checking and all array bounds checking."
   (declare (type (unsigned-byte 32) val)
            (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
@@ -624,7 +634,8 @@
 (defun encode-fixed64 (val buffer index)
   "Encodes the unsigned 64-bit integer 'val' as a fixed int into the buffer
    at the given index.
-   Modifies the buffer, and returns the new index into the buffer."
+   Modifies the buffer, and returns the new index into the buffer.
+   Watch out, this function turns off most type checking and all array bounds checking."
   (declare (type (unsigned-byte 64) val)
            (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
@@ -640,7 +651,8 @@
 (defun encode-sfixed32 (val buffer index)
   "Encodes the signed 32-bit integer 'val' as a fixed int into the buffer
    at the given index.
-   Modifies the buffer, and returns the new index into the buffer."
+   Modifies the buffer, and returns the new index into the buffer.
+   Watch out, this function turns off most type checking and all array bounds checking."
   (declare (type (signed-byte 32) val)
            (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
@@ -656,7 +668,8 @@
 (defun encode-sfixed64 (val buffer index)
   "Encodes the signed 32-bit integer 'val' as a fixed int into the buffer
    at the given index.
-   Modifies the buffer, and returns the new index into the buffer."
+   Modifies the buffer, and returns the new index into the buffer.
+   Watch out, this function turns off most type checking and all array bounds checking."
   (declare (type (signed-byte 64) val)
            (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
@@ -671,7 +684,8 @@
 
 (defun encode-single (val buffer index)
   "Encodes the single float 'val' into the buffer at the given index.
-   Modifies the buffer, and returns the new index into the buffer."
+   Modifies the buffer, and returns the new index into the buffer.
+   Watch out, this function turns off most type checking and all array bounds checking."
   (declare (type single-float val)
            (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
@@ -687,7 +701,8 @@
 
 (defun encode-double (val buffer index)
   "Encodes the double float 'val' into the buffer at the given index.
-   Modifies the buffer, and returns the new index into the buffer."
+   Modifies the buffer, and returns the new index into the buffer.
+   Watch out, this function turns off most type checking and all array bounds checking."
   (declare (type double-float val)
            (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
@@ -710,7 +725,8 @@
 
 (defun encode-octets (octets buffer index)
   "Encodes the octets into the buffer at the given index.
-   Modifies the buffer, and returns the new index into the buffer."
+   Modifies the buffer, and returns the new index into the buffer.
+   Watch out, this function turns off most type checking and all array bounds checking."
   (declare (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
@@ -728,38 +744,41 @@
 ;; then return the value and new index into the buffer
 (defun decode-uint32 (buffer index)
   "Decodes the next 32-bit varint integer in the buffer at the given index.
-   Returns both the decoded value and the new index into the buffer."
+   Returns both the decoded value and the new index into the buffer.
+   Watch out, this function turns off most type checking and all array bounds checking."
+  (declare (optimize (speed 3) (safety 0) (debug 0)))
   (declare (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
-  (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
-    ;; Seven bits at a time, least significant bits first
-    (loop with val = 0
-          for places fixnum upfrom 0 by 7
-          for byte fixnum = (prog1 (aref buffer index) (iincf index))
-          do (setq val (logior val (ash (ldb #.(byte 7 0) byte) places)))
-          until (i< byte 128)
-          finally (progn
-                    (assert (< val #.(ash 1 32)) ()
-                            "The value ~D is longer than 32 bits" val)
-                    (return (values val index))))))
+  ;; Seven bits at a time, least significant bits first
+  (loop with val = 0
+        for places fixnum upfrom 0 by 7
+        for byte fixnum = (prog1 (aref buffer index) (iincf index))
+        do (setq val (logior val (ash (ldb #.(byte 7 0) byte) places)))
+        until (i< byte 128)
+        finally (progn
+                  (assert (< val #.(ash 1 32)) ()
+                          "The value ~D is longer than 32 bits" val)
+                  (return (values val index)))))
 
 (defun decode-uint64 (buffer index)
   "Decodes the next 64-bit varint integer in the buffer at the given index.
-   Returns both the decoded value and the new index into the buffer."
+   Returns both the decoded value and the new index into the buffer.
+   Watch out, this function turns off most type checking and all array bounds checking."
+  (declare (optimize (speed 3) (safety 0) (debug 0)))
   (declare (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
-  (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
-    ;; Seven bits at a time, least significant bits first
-    (loop with val = 0
-          for places fixnum upfrom 0 by 7
-          for byte fixnum = (prog1 (aref buffer index) (iincf index))
-          do (setq val (logior val (ash (ldb #.(byte 7 0) byte) places)))
-          until (i< byte 128)
-          finally (return (values val index)))))
+  ;; Seven bits at a time, least significant bits first
+  (loop with val = 0
+        for places fixnum upfrom 0 by 7
+        for byte fixnum = (prog1 (aref buffer index) (iincf index))
+        do (setq val (logior val (ash (ldb #.(byte 7 0) byte) places)))
+        until (i< byte 128)
+        finally (return (values val index))))
 
 (defun decode-fixed32 (buffer index)
   "Decodes the next 32-bit unsigned fixed integer in the buffer at the given index.
-   Returns both the decoded value and the new index into the buffer."
+   Returns both the decoded value and the new index into the buffer.
+   Watch out, this function turns off most type checking and all array bounds checking."
   (declare (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
@@ -773,7 +792,8 @@
 
 (defun decode-sfixed32 (buffer index)
   "Decodes the next 32-bit signed fixed integer in the buffer at the given index.
-   Returns both the decoded value and the new index into the buffer."
+   Returns both the decoded value and the new index into the buffer.
+   Watch out, this function turns off most type checking and all array bounds checking."
   (declare (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
@@ -789,7 +809,8 @@
 
 (defun decode-fixed64 (buffer index)
   "Decodes the next unsigned 64-bit fixed integer in the buffer at the given index.
-   Returns both the decoded value and the new index into the buffer."
+   Returns both the decoded value and the new index into the buffer.
+   Watch out, this function turns off most type checking and all array bounds checking."
   (declare (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
@@ -803,7 +824,8 @@
 
 (defun decode-sfixed64 (buffer index)
   "Decodes the next signed 64-bit fixed integer in the buffer at the given index.
-   Returns both the decoded value and the new index into the buffer."
+   Returns both the decoded value and the new index into the buffer.
+   Watch out, this function turns off most type checking and all array bounds checking."
   (declare (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
@@ -819,7 +841,8 @@
 
 (defun decode-single (buffer index)
   "Decodes the next single float in the buffer at the given index.
-   Returns both the decoded value and the new index into the buffer."
+   Returns both the decoded value and the new index into the buffer.
+   Watch out, this function turns off most type checking and all array bounds checking."
   (declare (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
@@ -835,7 +858,8 @@
 
 (defun decode-double (buffer index)
   "Decodes the next double float in the buffer at the given index.
-   Returns both the decoded value and the new index into the buffer."
+   Returns both the decoded value and the new index into the buffer.
+   Watch out, this function turns off most type checking and all array bounds checking."
   (declare (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
@@ -857,7 +881,8 @@
 
 (defun decode-octets (buffer index)
   "Decodes the next octets in the buffer at the given index.
-   Returns both the decoded value and the new index into the buffer."
+   Returns both the decoded value and the new index into the buffer.
+   Watch out, this function turns off most type checking and all array bounds checking."
   (declare (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
@@ -872,50 +897,49 @@
 
 (defun length32 (val)
   "Returns the length that 'val' will take when encoded as a 32-bit integer."
-  (assert (< val #.(ash 1 32)) ()
-          "The value ~D is longer than 32 bits" val)
-  (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
-    (let ((size 0))
-      (declare (type fixnum size))
-      (loop do (progn
-                 (setq val (ash val -7))
-                 (iincf size))
-            until (zerop val))
-      size)))
+  (declare (optimize (speed 3) (safety 0) (debug 0)))
+  (let ((size 0))
+    (declare (type fixnum size))
+    (loop do (progn
+               (setq val (ash val -7))
+               (iincf size))
+          until (zerop val))
+    size))
 
 (defun length64 (val)
   "Returns the length that 'val' will take when encoded as a 64-bit integer."
-  (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
-    (let ((size 0))
-      (declare (type fixnum size))
-      (loop do (progn
-                 (setq val (ash val -7))
-                 (iincf size))
-            until (zerop val))
-      size)))
+  (declare (optimize (speed 3) (safety 0) (debug 0)))
+  (let ((size 0))
+    (declare (type fixnum size))
+    (loop do (progn
+               (setq val (ash val -7))
+               (iincf size))
+          until (zerop val))
+    size))
 
 
 ;;; Skipping elements
 
 (defun skip-element (buffer index wire-type)
   "Skip an element in the buffer at the index of the given wire type.
-   Returns the new index in the buffer."
+   Returns the new index in the buffer.
+   Watch out, this function turns off all type checking and all array bounds checking."
+  (declare (optimize (speed 3) (safety 0) (debug 0)))
   (declare (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index)
            (type (unsigned-byte 32) wire-type))
-  (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
-    (case wire-type
-      (($wire-type-varint)
-       (loop for byte fixnum = (prog1 (aref buffer index) (iincf index))
-             until (i< byte 128))
-       index)
-      (($wire-type-string)
-       (multiple-value-bind (len idx)
-           (decode-uint32 buffer index)
-         (declare (type (unsigned-byte 32) len)
-                  (type fixnum idx))
-         (i+ idx len)))
-      (($wire-type-32bit)
-       (i+ index 4))
-      (($wire-type-64bit)
-       (i+ index 8)))))
+  (case wire-type
+    (($wire-type-varint)
+     (loop for byte fixnum = (prog1 (aref buffer index) (iincf index))
+           until (i< byte 128))
+     index)
+    (($wire-type-string)
+     (multiple-value-bind (len idx)
+         (decode-uint32 buffer index)
+       (declare (type (unsigned-byte 32) len)
+                (type fixnum idx))
+       (i+ idx len)))
+    (($wire-type-32bit)
+     (i+ index 4))
+    (($wire-type-64bit)
+     (i+ index 8))))

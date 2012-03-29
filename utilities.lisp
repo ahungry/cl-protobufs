@@ -95,6 +95,9 @@
 (define-modify-macro iincf (&optional (delta 1)) i+)
 (define-modify-macro idecf (&optional (delta 1)) i-)
 
+(defmacro ildb (bytespec value)
+  `(ldb ,bytespec (the fixnum ,value)))
+
 )       ;#-quux
 
 

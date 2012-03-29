@@ -353,7 +353,7 @@
                                 (or (find-message-for-class protobuf class)
                                     (find-enum-for-type protobuf class)))))
                (reader (cond ((proto-reader field)
-                              `(funcall #',(proto-reader field) ,vobj))
+                              `(,(proto-reader field) ,vobj))
                              ((proto-value field)
                               `(slot-value ,vobj ',(proto-value field)))))
                (index  (proto-index field)))
@@ -372,11 +372,12 @@
                           (collect-serializer
                            (let ((tag (make-tag $wire-type-string index)))
                              `(dolist (,vval ,reader)
-                                (let ((len (object-size ,vval ,vproto :visited visited)))
+                                (let ((len (or (and visited (gethash ,vval visited))
+                                               (object-size ,vval ,vproto :visited visited))))
                                   (setq ,vidx (encode-uint32 ,tag ,vbuf ,vidx))
                                   (setq ,vidx (encode-uint32 len ,vbuf ,vidx))
                                   (serialize-object ,vval ,vproto ,vbuf ,vidx :visited visited)
-                                  (incf ,vidx len))))))
+                                  (iincf ,vidx len))))))
                          ((typep msg 'protobuf-enum)
                           (collect-serializer
                            (let ((tag (make-tag $wire-type-varint index)))
@@ -397,11 +398,12 @@
                            (let ((tag (make-tag $wire-type-string index)))
                              `(let ((,vval ,reader))
                                 (when ,vval
-                                  (let ((len (object-size ,vval ,vproto :visited visited)))
+                                  (let ((len (or (and visited (gethash ,vval visited))
+                                                 (object-size ,vval ,vproto :visited visited))))
                                     (setq ,vidx (encode-uint32 ,tag ,vbuf ,vidx))
                                     (setq ,vidx (encode-uint32 len ,vbuf ,vidx))
                                     (serialize-object ,vval ,vproto ,vbuf ,vidx :visited visited)
-                                    (incf ,vidx len)))))))
+                                    (iincf ,vidx len)))))))
                          ((typep msg 'protobuf-enum)
                           (collect-serializer
                            (let ((tag (make-tag $wire-type-varint index)))
@@ -412,8 +414,9 @@
          (declare (ignorable visited)
                   (type (simple-array (unsigned-byte 8)) ,vbuf)
                   (type fixnum ,vidx))
-        ,@serializers
-         (values ,vbuf ,vidx)))))
+         (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
+          ,@serializers
+           (values ,vbuf ,vidx))))))
 
 (defun generate-deserializer (protobuf message)
   "Generate a 'deserialize-object' method for the given message."
@@ -497,19 +500,22 @@
                                 `(setf (slot-value ,vobj ',slot) ,vval)))))))))))
     `(defmethod deserialize-object ((,vclass (eql ',(proto-class message))) ,vproto ,vbuf
                                     &optional (,vidx 0) ,vlen)
-       (let ((,vlen (or ,vlen (length ,vbuf))))
-         (declare (type fixnum ,vlen))
-         (let ((,vobj (make-instance ',(or (proto-class-override message) (proto-class message)))))
-           (loop
-              (when (>= ,vidx ,vlen)
-                (return-from deserialize-object (values ,vobj ,vidx)))
-              (multiple-value-bind (tag idx)
-                  (decode-uint32 ,vbuf ,vidx)
-                (setq ,vidx idx)
-                (case tag
-                  ,@deserializers
-                  (otherwise
-                   (setq ,vidx (skip-element ,vbuf ,vidx (ilogand tag #x7)))))))))))))
+       (declare (type (simple-array (unsigned-byte 8)) ,vbuf)
+                (type fixnum ,vidx))
+       (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
+         (let ((,vlen (or ,vlen (length ,vbuf))))
+           (declare (type fixnum ,vlen))
+           (let ((,vobj (make-instance ',(or (proto-class-override message) (proto-class message)))))
+             (loop
+               (when (>= ,vidx ,vlen)
+                 (return-from deserialize-object (values ,vobj ,vidx)))
+               (multiple-value-bind (tag idx)
+                   (decode-uint32 ,vbuf ,vidx)
+                 (setq ,vidx idx)
+                 (case tag
+                   ,@deserializers
+                   (otherwise
+                    (setq ,vidx (skip-element ,vbuf ,vidx (ilogand tag #x7))))))))))))))
 
 (defun generate-object-size (protobuf message)
   "Generate an 'object-size' method for the given message."
@@ -523,7 +529,7 @@
                                 (or (find-message-for-class protobuf class)
                                     (find-enum-for-type protobuf class)))))
                (reader (cond ((proto-reader field)
-                              `(funcall #',(proto-reader field) ,vobj))
+                              `(,(proto-reader field) ,vobj))
                              ((proto-value field)
                               `(slot-value ,vobj ',(proto-value field)))))
                (index  (proto-index field)))
@@ -542,7 +548,8 @@
                           (collect-sizer
                            (let ((tag (make-tag $wire-type-string index)))
                              `(dolist (,vval ,reader)
-                                (let ((len (object-size ,vval ,vproto :visited visited)))
+                                (let ((len (or (and visited (gethash ,vval visited))
+                                               (object-size ,vval ,vproto :visited visited))))
                                   (iincf ,vsize (length32 ,tag))
                                   (iincf ,vsize (length32 len))
                                   (iincf ,vsize len))))))
@@ -566,7 +573,8 @@
                            (let ((tag (make-tag $wire-type-string index)))
                              `(let ((,vval ,reader))
                                 (when ,vval
-                                  (let ((len (object-size ,vval ,vproto :visited visited)))
+                                  (let ((len (or (and visited (gethash ,vval visited))
+                                                 (object-size ,vval ,vproto :visited visited))))
                                     (iincf ,vsize (length32 ,tag))
                                     (iincf ,vsize (length32 len))
                                     (iincf ,vsize len)))))))
@@ -578,12 +586,13 @@
                                   (iincf ,vsize (enum-size ,vval '(,@(proto-values msg)) ,tag)))))))))))))
       `(defmethod object-size ((,vobj ,(proto-class message)) ,vproto &key visited)
          (declare (ignorable visited))
-         (let ((,vsize (and visited (gethash ,vobj visited))))
-           (when ,vsize
-             (return-from object-size ,vsize)))
-         (let ((,vsize 0))
-           (declare (type fixnum ,vsize))
-           ,@sizers
-           (when visited
-             (setf (gethash ,vobj visited) ,vsize))
-           ,vsize)))))
+         (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
+           (let ((,vsize (and visited (gethash ,vobj visited))))
+             (when ,vsize
+               (return-from object-size ,vsize)))
+           (let ((,vsize 0))
+             (declare (type fixnum ,vsize))
+             ,@sizers
+             (when visited
+               (setf (gethash ,vobj visited) ,vsize))
+             ,vsize))))))

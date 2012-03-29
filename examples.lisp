@@ -30,6 +30,20 @@
 ||#
 
 #||
+(setq bdschema (proto:write-protobuf-schema-for-classes
+                '(qres-core::country
+                  qres-core::region
+                  qres-core::region-key
+                  qres-core::city
+                  qres-core::airport
+                  qres-core::timezone
+                  qres-core::tz-variation
+                  qres-core::carrier
+                  qres-core::currency
+                  qres-core::country-currencies)))
+||#
+
+#||
 (setq pschema (proto:write-protobuf-schema-for-classes
                '(proto:protobuf proto:protobuf-option
                  proto:protobuf-enum proto:protobuf-enum-value
