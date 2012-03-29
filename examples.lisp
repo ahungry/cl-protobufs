@@ -30,6 +30,12 @@
 ||#
 
 #||
+(defclass geodata ()
+  ((countries :type (list-of qres-core::country) :initform () :initarg :countries)
+   (regions :type (list-of qres-core::region) :initform () :initarg :regions)
+   (cities :type (list-of qres-core::city) :initform () :initarg :cities)
+   (airports :type (list-of qres-core::airport) :initform () :initarg :airports)))
+
 (setq bdschema (proto:write-protobuf-schema-for-classes
                 '(qres-core::country
                   qres-core::region
@@ -40,7 +46,40 @@
                   qres-core::tz-variation
                   qres-core::carrier
                   qres-core::currency
-                  qres-core::country-currencies)))
+                  qres-core::country-currencies
+                  geodata)))
+
+(dolist (class '(qres-core::country
+                 qres-core::region
+                 qres-core::region-key
+                 qres-core::city
+                 qres-core::airport
+                 qres-core::timezone
+                 qres-core::tz-variation
+                 qres-core::carrier
+                 qres-core::currency
+                 qres-core::country-currencies
+                 geodata))
+  (eval (generate-object-size  bdschema (find-message-for-class bdschema class)))
+  (eval (generate-serializer   bdschema (find-message-for-class bdschema class)))
+  (eval (generate-deserializer bdschema (find-message-for-class bdschema class))))
+
+(let* ((countries (loop for v being the hash-values of (qres-core::country-business-data) collect (car v)))
+       (regions   (loop for v being the hash-values of (qres-core::region-business-data) collect v))
+       (cities    (loop for v being the hash-values of (qres-core::city-business-data) collect (car v)))
+       (airports  (loop for v being the hash-values of (car (qres-core::airport-business-data)) collect (car v))))
+  (setq geodata (make-instance 'geodata
+                  :countries countries
+                  :regions regions
+                  :cities cities
+                  :airports airports)))
+
+(setq gser (proto:serialize-object-to-stream geodata bdschema :stream nil))
+(proto:deserialize-object 'geodata bdschema gser 0)
+
+(equalp gser (proto:serialize-object-to-stream
+              (proto:deserialize-object 'geodata bdschema gser 0)
+              bdschema :stream nil))
 ||#
 
 #||
