@@ -163,7 +163,7 @@
 (defmethod print-object ((e protobuf-enum) stream)
   (print-unprintable-object (e stream :type t :identity t)
     (format stream "~A~@[ (~S)~]"
-            (proto-name e) (or (proto-class-override e) (proto-class e))))
+            (proto-name e) (or (proto-class-override e) (proto-class e)))))
 
 
 ;; A protobuf value within an enumeration
@@ -216,7 +216,7 @@
 (defmethod print-object ((m protobuf-message) stream)
   (print-unprintable-object (m stream :type t :identity t)
     (format stream "~A~@[ (~S)~]"
-            (proto-name m) (or (proto-class-override e) (proto-class e)))))
+            (proto-name m) (or (proto-class-override m) (proto-class m)))))
 
 (defmethod find-message-for-class ((message protobuf-message) (class symbol))
   (or (find class (proto-messages message) :key #'proto-class)
