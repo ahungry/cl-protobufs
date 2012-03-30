@@ -204,7 +204,7 @@
     (if class
       ;; If we've got a class override, define a type matching the Lisp name
       ;; of this message so that typep and subtypep work
-      (unless (eq name class)
+      (unless (or (eq name class) (find-class name nil))
         (collect-form `(deftype ,name () ',class)))
       ;; If no class override, define the class now
       (collect-form `(defclass ,name () (,@slots))))
