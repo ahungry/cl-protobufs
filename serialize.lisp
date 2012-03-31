@@ -110,13 +110,13 @@
                                                                               (find-enum-for-type p cl)))))
                                           'protobuf-message)
                                    (let ((v (if slot (read-slot object slot reader) object)))
-                                     (let ((tag (make-tag $wire-type-string (proto-index field)))
-                                           (len (object-size v protobuf :visited visited)))
-                                       (setq index (encode-uint32 tag buffer index))
-                                       (setq index (encode-uint32 len buffer index)))
                                      (when v
-                                       (map () (curry #'do-field v (cons msg trace))
-                                               (proto-fields msg)))))
+                                       (let ((tag (make-tag $wire-type-string (proto-index field)))
+                                             (len (object-size v protobuf :visited visited)))
+                                         (setq index (encode-uint32 tag buffer index))
+                                         (setq index (encode-uint32 len buffer index))
+                                         (map () (curry #'do-field v (cons msg trace))
+                                                 (proto-fields msg))))))
                                   ((typep msg 'protobuf-enum)
                                    (let ((v (read-slot object slot reader)))
                                      (when v
@@ -140,7 +140,7 @@
 
 ;; Allow clients to add their own methods
 ;; This is you might preserve object identity, e.g.
-(defgeneric deserialize-object (class protobuf buffer &optional index length)
+(defgeneric deserialize-object (class protobuf buffer index &optional length)
   (:documentation
    "Deserializes an object of the given class 'class' as a protobuf object defined
     in the schema 'protobuf' from the byte array given by 'buffer' starting at
@@ -150,7 +150,7 @@
 ;; The default method uses meta-data from the protobuf "schema"
 ;; Note that 'class' is the Lisp name of the Protobufs message (class)
 ;; It is not the name of any overriding class ('proto-class-override')
-(defmethod deserialize-object ((class symbol) protobuf buffer &optional (index 0) length)
+(defmethod deserialize-object ((class symbol) protobuf buffer index &optional length)
   (declare (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
   (check-type protobuf (or protobuf protobuf-message))
@@ -500,8 +500,7 @@
                              (setq ,vidx idx)
                              ,(when slot
                                 `(setf (slot-value ,vobj ',slot) ,vval)))))))))))
-    `(defmethod deserialize-object ((,vclass (eql ',(proto-class message))) ,vproto ,vbuf
-                                    &optional (,vidx 0) ,vlen)
+    `(defmethod deserialize-object ((,vclass (eql ',(proto-class message))) ,vproto ,vbuf ,vidx &optional ,vlen)
        (declare (type (simple-array (unsigned-byte 8)) ,vbuf)
                 (type fixnum ,vidx))
        (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
