@@ -72,11 +72,13 @@
 
 (defmethod write-protobuf-as ((type (eql :proto)) (enum protobuf-enum) stream
                               &key (indentation 0))
-  (with-prefixed-accessors (name documentation) (proto- enum)
+  (with-prefixed-accessors (name documentation options) (proto- enum)
     (when documentation
       (write-protobuf-documentation type documentation stream :indentation indentation))
     (format stream "~&~@[~VT~]enum ~A {~%"
             (and (not (zerop indentation)) indentation) name)
+    (dolist (option options)
+      (format stream "~&option ~:/protobuf-option/;~%" option))
     (dolist (value (proto-values enum))
       (write-protobuf-as type value stream :indentation (+ indentation 2)))
     (format stream "~&~@[~VT~]}~%"
@@ -93,11 +95,13 @@
 
 (defmethod write-protobuf-as ((type (eql :proto)) (message protobuf-message) stream
                               &key (indentation 0))
-  (with-prefixed-accessors (name documentation) (proto- message)
+  (with-prefixed-accessors (name documentation options) (proto- message)
     (when documentation
       (write-protobuf-documentation type documentation stream :indentation indentation))
     (format stream "~&~@[~VT~]message ~A {~%"
             (and (not (zerop indentation)) indentation) name)
+    (dolist (option options)
+      (format stream "~&option ~:/protobuf-option/;~%" option))
     (dolist (enum (proto-enums message))
       (write-protobuf-as type enum stream :indentation (+ indentation 2)))
     (dolist (msg (proto-messages message))
@@ -339,10 +343,10 @@
     (when documentation
       (write-protobuf-documentation type documentation stream :indentation indentation))
     (let ((input  (or input-class
-                      (let ((m (find-message-for-class *protobuf* input-type)))
+                      (let ((m (find-message *protobuf* input-type)))
                         (and m (proto-class m)))))
           (output (or output-class
-                      (let ((m (find-message-for-class *protobuf* output-type)))
+                      (let ((m (find-message *protobuf* output-type)))
                         (and m (proto-class m))))))
       (format stream "~&~@[~VT~](~(~S~) (~(~S~) ~(~S~))"
               (and (not (zerop indentation)) indentation)

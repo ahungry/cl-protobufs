@@ -89,36 +89,36 @@
     (format stream "~@[~A~]~@[ (package ~A)~]"
             (proto-name p) (proto-package p))))
 
-(defgeneric find-message-for-class (protobuf class)
+(defgeneric find-message (protobuf type)
   (:documentation
-   "Given a protobuf schema or message and a class or class name,
-    returns the protobuf message corresponding to the class."))
+   "Given a protobuf schema or message and a type name or class name,
+    returns the protobuf message corresponding to the type."))
 
-(defgeneric find-enum-for-type (protobuf type)
+(defmethod find-message ((protobuf protobuf) (type symbol))
+  (or (find type (proto-messages protobuf) :key #'proto-class)
+      (find type (proto-messages protobuf) :key #'proto-class-override)
+      (some #'(lambda (msg) (find-message msg type)) (proto-messages protobuf))))
+
+(defmethod find-message ((protobuf protobuf) (type class))
+  (find-message protobuf (class-name type)))
+
+(defmethod find-message ((protobuf protobuf) (type string))
+  (or (find type (proto-messages protobuf) :key #'proto-name :test #'string=)
+      (some #'(lambda (msg) (find-message msg type)) (proto-messages protobuf))))
+
+(defgeneric find-enum (protobuf type)
   (:documentation
    "Given a protobuf schema or message and the name of an enum type,
     returns the protobuf enum corresponding to the type."))
 
-(defmethod find-message-for-class ((protobuf protobuf) (class symbol))
-  (or (find class (proto-messages protobuf) :key #'proto-class)
-      (find class (proto-messages protobuf) :key #'proto-class-override)
-      (some #'(lambda (msg) (find-message-for-class msg class)) (proto-messages protobuf))))
-
-(defmethod find-message-for-class ((protobuf protobuf) (class class))
-  (find-message-for-class protobuf (class-name class)))
-
-(defmethod find-message-for-class ((protobuf protobuf) (class string))
-  (or (find class (proto-messages protobuf) :key #'proto-name :test #'string=)
-      (some #'(lambda (msg) (find-message-for-class msg class)) (proto-messages protobuf))))
-
-(defmethod find-enum-for-type ((protobuf protobuf) type)
+(defmethod find-enum ((protobuf protobuf) type)
   (or (find type (proto-enums protobuf) :key #'proto-class)
       (find type (proto-enums protobuf) :key #'proto-class-override)
-      (some #'(lambda (msg) (find-enum-for-type msg type)) (proto-messages protobuf))))
+      (some #'(lambda (msg) (find-enum msg type)) (proto-messages protobuf))))
 
-(defmethod find-enum-for-type ((protobuf protobuf) (type string))
+(defmethod find-enum ((protobuf protobuf) (type string))
   (or (find type (proto-enums protobuf) :key #'proto-name :test #'string=)
-      (some #'(lambda (msg) (find-enum-for-type msg type)) (proto-messages protobuf))))
+      (some #'(lambda (msg) (find-enum msg type)) (proto-messages protobuf))))
 
 
 ;;--- For now, we support only the built-in options
@@ -145,6 +145,9 @@
          (format stream "~S ~S" (proto-name option) (proto-value option)))
         (t                                      ;~/protobuf-option/  -- keyword/value format
          (format stream "~(:~A~) ~S" (proto-name option) (proto-value option)))))
+
+(defmethod find-option ((protobuf base-protobuf) (name string))
+  (find name (proto-options protobuf) :key #'proto-name :test #'string=))
 
 
 ;; A protobuf enumeration
@@ -218,21 +221,21 @@
     (format stream "~A~@[ (~S)~]"
             (proto-name m) (or (proto-class-override m) (proto-class m)))))
 
-(defmethod find-message-for-class ((message protobuf-message) (class symbol))
-  (or (find class (proto-messages message) :key #'proto-class)
-      (find class (proto-messages message) :key #'proto-class-override)))
+(defmethod find-message ((message protobuf-message) (type symbol))
+  (or (find type (proto-messages message) :key #'proto-class)
+      (find type (proto-messages message) :key #'proto-class-override)))
 
-(defmethod find-message-for-class ((message protobuf-message) (class class))
-  (find-message-for-class message (class-name class)))
+(defmethod find-message ((message protobuf-message) (type class))
+  (find-message message (class-name type)))
 
-(defmethod find-message-for-class ((message protobuf-message) (class string))
-  (find class (proto-messages message) :key #'proto-name :test #'string=))
+(defmethod find-message ((message protobuf-message) (type string))
+  (find type (proto-messages message) :key #'proto-name :test #'string=))
 
-(defmethod find-enum-for-type ((message protobuf-message) type)
+(defmethod find-enum ((message protobuf-message) type)
   (or (find type (proto-enums message) :key #'proto-class)
       (find type (proto-enums message) :key #'proto-class-override)))
 
-(defmethod find-enum-for-type ((message protobuf-message) (type string))
+(defmethod find-enum ((message protobuf-message) (type string))
   (find type (proto-enums message) :key #'proto-name :test #'string=))
 
 

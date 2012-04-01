@@ -327,7 +327,7 @@
 (defun ensure-type (trace message field type)
   (unless (keywordp type)
     (let ((msg (loop for p in trace
-                     thereis (or (find-message-for-class p type)
-                                 (find-enum-for-type p type)))))
+                     thereis (or (find-message p type)
+                                 (find-enum p type)))))
       (unless msg
         (push (cons message field) (gethash type *undefined-messages*))))))

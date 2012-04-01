@@ -21,7 +21,7 @@
 (defmethod print-text-format ((object standard-object) protobuf &key (stream *standard-output*))
   (check-type protobuf (or protobuf protobuf-message))
   (let* ((class   (class-of object))
-         (message (find-message-for-class protobuf class)))
+         (message (find-message protobuf class)))
     (assert message ()
             "There is no Protobuf message for the class ~S" class)
     (labels ((safe-slot-value (object slot)
@@ -34,8 +34,8 @@
                ;; method to clean things up first
                (let* ((cl  (if (eq (proto-class field) 'boolean) :bool (proto-class field)))
                       (msg (and cl (loop for p in trace
-                                         thereis (or (find-message-for-class p cl)
-                                                     (find-enum-for-type p cl)))))
+                                         thereis (or (find-message p cl)
+                                                     (find-enum p cl)))))
                       (slot (proto-value field)))
                  (cond ((eq (proto-required field) :repeated)
                         (cond ((and slot (keywordp cl))

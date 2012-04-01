@@ -130,16 +130,19 @@
                    :direction :input
                    :external-format :utf-8
                    :element-type 'character)
-    (parse-protobuf-from-stream stream :name (pathname-name (pathname stream)))))
+    (parse-protobuf-from-stream stream
+                                :name  (class-name->proto (pathname-name (pathname stream)))
+                                :class (pathname-name (pathname stream)))))
 
 ;; The syntax for Protocol Buffers is so simple that it doesn't seem worth
 ;; writing a sophisticated parser
 ;; Note that we don't put the result into *all-protobufs*; do that at a higher level
-(defun parse-protobuf-from-stream (stream &key name)
+(defun parse-protobuf-from-stream (stream &key name class)
   "Parses a top-level .proto file from the stream 'stream'.
    Returns the protobuf schema that describes the .proto file."
   (let* ((protobuf   (make-instance 'protobuf
-                       :name name))
+                       :name  name
+                       :class class))
          (*protobuf* protobuf)
          (*protobuf-package* nil))
     (loop
@@ -209,10 +212,10 @@
                    :value val)))
     (cond (protobuf
            (setf (proto-options protobuf) (nconc (proto-options protobuf) (list option)))
-           (when (and (string-equal key "optimize_for")
+           (when (and (string= key "optimize_for")
                       (typep protobuf 'protobuf))
-             (let ((value (cond ((string-equal val "SPEED") :speed)
-                                ((string-equal val "CODE_SIZE") :space)
+             (let ((value (cond ((string= val "SPEED") :speed)
+                                ((string= val "CODE_SIZE") :space)
                                 (t nil))))
                (setf (proto-optimize protobuf) value))))
           (t
@@ -236,7 +239,9 @@
           (maybe-skip-comments stream)
           (setf (proto-enums protobuf) (nconc (proto-messages protobuf) (list enum)))
           (return-from parse-proto-enum))
-        (parse-proto-enum-value stream enum name)))))
+        (if (string= name "option")
+          (parse-proto-option stream enum #\;)
+          (parse-proto-enum-value stream enum name))))))
 
 (defun parse-proto-enum-value (stream enum name)
   "Parse a Protobufs enum vvalue from 'stream'.
@@ -272,6 +277,8 @@
                (parse-proto-enum stream message))
               ((string= token "message")
                (parse-proto-message stream message))
+              ((string= token "option")
+               (parse-proto-option stream message #\;))
               ((member token '("required" "optional" "repeated") :test #'string=)
                (parse-proto-field stream message token))
               (t
@@ -337,7 +344,9 @@
           (maybe-skip-comments stream)
           (setf (proto-services protobuf) (nconc (proto-services protobuf) (list service)))
           (return-from parse-proto-service))
-        (cond ((string= token "rpc")
+        (cond ((string= token "option")
+               (parse-proto-option stream service #\;))
+              ((string= token "rpc")
                (parse-proto-rpc stream service token))
               (t
                (error "Unrecognized token ~A at position ~D"

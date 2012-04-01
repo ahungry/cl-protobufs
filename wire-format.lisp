@@ -342,11 +342,8 @@
        ;; Note that this is consy, avoid it if possible
        (multiple-value-bind (val idx)
            (decode-octets buffer index)
-         (let* ((val   (babel:octets-to-string val :encoding :utf-8))
-                (colon (position #\: val))
-                (pkg   (subseq val 0 colon))
-                (sym   (subseq val (i+ colon 1))))
-           (values (intern sym pkg) idx))))
+         (let ((val (babel:octets-to-string val :encoding :utf-8)))
+           (values (make-lisp-symbol val) idx))))
       ((:date :time :datetime :timestamp)
        (decode-uint64 buffer index)))))
 

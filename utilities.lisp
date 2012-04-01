@@ -47,6 +47,14 @@
     (if package (intern name package) (make-symbol name))))
 
 
+(defun make-lisp-symbol (string)
+  "Intern a string of the 'package:string' and return the symbol."
+  (let* ((colon (position #\: string))
+         (pkg   (subseq string 0 colon))
+         (sym   (subseq string (i+ colon 1))))
+    (intern sym pkg)))
+
+
 (define-condition protobufs-warning (warning simple-condition) ())
 
 (defun protobufs-warn (format-control &rest format-arguments)
