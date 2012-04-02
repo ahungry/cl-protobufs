@@ -16,9 +16,9 @@
 ;;; Serialization
 
 ;; Serialize the object using the given protobuf "schema"
-(defun serialize-object-to-stream (object protobuf &key (stream *standard-output*) visited)
-  "Serializes the object 'object' as a protobuf object defined in the schema 'protobuf'
-   onto the stream 'stream' using the wire format.
+(defun serialize-object-to-stream (object class protobuf &key (stream *standard-output*) visited)
+   "Serializes the object 'object' of class 'class' using message(s) defined in the
+    schema 'protobuf' onto the stream 'stream' using the wire format.
    'visited' is a hash table used to cache object sizes. If it is supplied, it will be
    cleared before it is used; otherwise, a fresh table will be created.
    The return value is the buffer containing the serialized object. If the stream is
@@ -26,9 +26,9 @@
   (let* ((visited (let ((v (or visited (make-hash-table))))
                     (clrhash v)
                     v))
-         (size    (object-size object protobuf :visited visited))
+         (size    (object-size object class protobuf :visited visited))
          (buffer  (make-array size :element-type '(unsigned-byte 8))))
-    (serialize-object object protobuf buffer 0 :visited visited)
+    (serialize-object object class protobuf buffer 0 :visited visited)
     (when stream
       (write-sequence buffer stream))
     buffer))
@@ -36,24 +36,23 @@
 ;; Allow clients to add their own methods
 ;; This is how we address the problem of cycles, e.g. -- if you have an object
 ;; that may contain cycles, serialize the cyclic object using a "handle"
-(defgeneric serialize-object (object protobuf buffer index &key visited)
+(defgeneric serialize-object (object class protobuf buffer index &key visited)
   (:documentation
-   "Serializes the object 'object' as a protobuf object defined in the schema 'protobuf'
-    into the byte array given by 'buffer' starting at the fixnum index 'index' using
-    the wire format.
+   "Serializes the object 'object' of class 'class' using message(s) defined in the
+    schema 'protobuf' into the byte array given by 'buffer' starting at the fixnum
+    index 'index' using the wire format.
     'visited' is a hash table used to cache object sizes.
     The return value is the buffer containing the serialized object."))
 
 ;; 'visited' is used to cache object sizes
 ;; If it's passed in explicitly, it is assumed to already have the sizes within it
 ;; The default method uses meta-data from the protobuf "schema"
-(defmethod serialize-object ((object standard-object) protobuf buffer index &key visited)
+(defmethod serialize-object (object class protobuf buffer index &key visited)
   (declare (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
   (check-type protobuf (or protobuf protobuf-message))
-  (let* ((class   (class-of object))
-         (message (find-message protobuf class))
-         (visited (or visited (make-hash-table))))
+  (let ((message (find-message protobuf class))
+        (visited (or visited (make-hash-table))))
     (assert message ()
             "There is no Protobuf message for the class ~S" class)
     (macrolet ((read-slot (object slot reader)
@@ -89,7 +88,7 @@
                                      ;; To serialize an embedded message, first say that it's
                                      ;; a string, then encode its size, then serialize its fields
                                      (let ((tag (make-tag $wire-type-string (proto-index field)))
-                                           (len (object-size v protobuf :visited visited)))
+                                           (len (object-size v cl protobuf :visited visited)))
                                        (setq index (encode-uint32 tag buffer index))
                                        (setq index (encode-uint32 len buffer index)))
                                      (map () (curry #'do-field v (cons msg trace))
@@ -112,7 +111,7 @@
                                    (let ((v (if slot (read-slot object slot reader) object)))
                                      (when v
                                        (let ((tag (make-tag $wire-type-string (proto-index field)))
-                                             (len (object-size v protobuf :visited visited)))
+                                             (len (object-size v cl protobuf :visited visited)))
                                          (setq index (encode-uint32 tag buffer index))
                                          (setq index (encode-uint32 len buffer index))
                                          (map () (curry #'do-field v (cons msg trace))
@@ -130,7 +129,7 @@
 ;;; Deserialization
 
 (defun deserialize-object-from-stream (class protobuf &key (stream *standard-input*))
-  "Deserializes an object of the give class 'class' as a protobuf object defined
+  "Deserializes an object of the given class 'class' as a protobuf object defined
    in the schema 'protobuf' from the stream 'stream' using the wire format.
    The return value is the object."
   (let* ((size    (file-length stream))
@@ -159,8 +158,7 @@
     (labels ((deserialize (class trace &optional (end length))
                (declare (type fixnum end))
                (let* ((message (loop for p in trace
-                                     thereis (or (find-message p class)
-                                                 (find-enum p class))))
+                                     thereis (find-message p class)))
                       (object  (make-instance (or (proto-class-override message) class)))
                       ;; Map from the name of a repeated slot to the value
                       ;; that should be stored in the slot
@@ -255,22 +253,22 @@
 ;; Allow clients to add their own methods
 ;; This is how we address the problem of cycles, e.g. -- if you have an object
 ;; that may contain cycles, return the size of the "handle" to the object
-(defgeneric object-size (object protobuf &key visited)
+(defgeneric object-size (object class protobuf &key visited)
   (:documentation
-   "Computes the size in bytes of the object 'object' defined in the schema 'protobuf'.
+   "Computes the size in bytes of the object 'object' of class 'class'defined in the
+    schema 'protobuf'.
     'visited' is a hash table used to cache object sizes.
     The return value is the size of the object in bytes."))
 
 ;; 'visited' is used to cache object sizes
 ;; The default method uses meta-data from the protobuf "schema"
-(defmethod object-size ((object standard-object) protobuf &key visited)
+(defmethod object-size (object class protobuf &key visited)
   (check-type protobuf (or protobuf protobuf-message))
   (let ((size (and visited (gethash object visited))))
     (when size
       (return-from object-size size)))
-  (let* ((class   (class-of object))
-         (message (find-message protobuf class))
-         (size    0))
+  (let ((message (find-message protobuf class))
+        (size    0))
     (declare (type fixnum size))
     (assert message ()
             "There is no Protobuf message for the class ~S" class)
@@ -304,7 +302,7 @@
                                           'protobuf-message)
                                    (dolist (v (if slot (read-slot object slot reader) (list object)))
                                      (let ((tag (make-tag $wire-type-string (proto-index field)))
-                                           (len (object-size v protobuf :visited visited)))
+                                           (len (object-size v cl protobuf :visited visited)))
                                        (iincf size (length32 tag))
                                        (iincf size (length32 len)))
                                      (map () (curry #'do-field v (cons msg trace))
@@ -327,7 +325,7 @@
                                    (let ((v (if slot (read-slot object slot reader) object)))
                                      (when v
                                        (let ((tag (make-tag $wire-type-string (proto-index field)))
-                                             (len (object-size v protobuf :visited visited)))
+                                             (len (object-size v cl protobuf :visited visited)))
                                          (iincf size (length32 tag))
                                          (iincf size (length32 len)))
                                        (map () (curry #'do-field v (cons msg trace))
@@ -348,7 +346,7 @@
 
 (defun generate-serializer (protobuf message)
   "Generate a 'serialize-object' method for the given message."
-  (with-gensyms (vobj vproto vbuf vidx vval)
+  (with-gensyms (vobj vproto vbuf vidx vval vclass)
     (with-collectors ((serializers collect-serializer))
       (dolist (field (proto-fields message))
         (let* ((class  (if (eq (proto-class field) 'boolean) :bool (proto-class field)))
@@ -378,10 +376,10 @@
                            (let ((tag (make-tag $wire-type-string index)))
                              `(dolist (,vval ,reader)
                                 (let ((len (or (and visited (gethash ,vval visited))
-                                               (object-size ,vval ,vproto :visited visited))))
+                                               (object-size ,vval ',class ,vproto :visited visited))))
                                   (setq ,vidx (encode-uint32 ,tag ,vbuf ,vidx))
                                   (setq ,vidx (encode-uint32 len ,vbuf ,vidx))
-                                  (serialize-object ,vval ,vproto ,vbuf ,vidx :visited visited)
+                                  (serialize-object ,vval ',class ,vproto ,vbuf ,vidx :visited visited)
                                   (iincf ,vidx len))))))
                          ((typep msg 'protobuf-enum)
                           (collect-serializer
@@ -404,10 +402,10 @@
                              `(let ((,vval ,reader))
                                 (when ,vval
                                   (let ((len (or (and visited (gethash ,vval visited))
-                                                 (object-size ,vval ,vproto :visited visited))))
+                                                 (object-size ,vval ',class ,vproto :visited visited))))
                                     (setq ,vidx (encode-uint32 ,tag ,vbuf ,vidx))
                                     (setq ,vidx (encode-uint32 len ,vbuf ,vidx))
-                                    (serialize-object ,vval ,vproto ,vbuf ,vidx :visited visited)
+                                    (serialize-object ,vval ',class ,vproto ,vbuf ,vidx :visited visited)
                                     (iincf ,vidx len)))))))
                          ((typep msg 'protobuf-enum)
                           (collect-serializer
@@ -415,7 +413,7 @@
                              `(let ((,vval ,reader))
                                 (when ,vval
                                   (setq ,vidx (serialize-enum ,vval '(,@(proto-values msg)) ,tag ,vbuf ,vidx)))))))))))))
-      `(defmethod serialize-object ((,vobj ,(proto-class message)) ,vproto ,vbuf ,vidx &key visited) 
+      `(defmethod serialize-object (,vobj (,vclass (eql ',(proto-class message))) ,vproto ,vbuf ,vidx &key visited)
          (declare (ignorable visited)
                   (type (simple-array (unsigned-byte 8)) ,vbuf)
                   (type fixnum ,vidx))
@@ -523,7 +521,7 @@
 
 (defun generate-object-size (protobuf message)
   "Generate an 'object-size' method for the given message."
-  (with-gensyms (vobj vproto vsize vval)
+  (with-gensyms (vobj vproto vsize vval vclass)
     (with-collectors ((sizers collect-sizer))
       (dolist (field (proto-fields message))
         (let* ((class  (if (eq (proto-class field) 'boolean) :bool (proto-class field)))
@@ -553,7 +551,7 @@
                            (let ((tag (make-tag $wire-type-string index)))
                              `(dolist (,vval ,reader)
                                 (let ((len (or (and visited (gethash ,vval visited))
-                                               (object-size ,vval ,vproto :visited visited))))
+                                               (object-size ,vval ',class ,vproto :visited visited))))
                                   (iincf ,vsize (length32 ,tag))
                                   (iincf ,vsize (length32 len))
                                   (iincf ,vsize len))))))
@@ -578,7 +576,7 @@
                              `(let ((,vval ,reader))
                                 (when ,vval
                                   (let ((len (or (and visited (gethash ,vval visited))
-                                                 (object-size ,vval ,vproto :visited visited))))
+                                                 (object-size ,vval ',class ,vproto :visited visited))))
                                     (iincf ,vsize (length32 ,tag))
                                     (iincf ,vsize (length32 len))
                                     (iincf ,vsize len)))))))
@@ -588,7 +586,7 @@
                              `(let ((,vval ,reader))
                                 (when ,vval
                                   (iincf ,vsize (enum-size ,vval '(,@(proto-values msg)) ,tag)))))))))))))
-      `(defmethod object-size ((,vobj ,(proto-class message)) ,vproto &key visited)
+      `(defmethod object-size (,vobj (,vclass (eql ',(proto-class message))) ,vproto &key visited)
          (declare (ignorable visited))
          (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
            (let ((,vsize (and visited (gethash ,vobj visited))))

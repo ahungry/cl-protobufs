@@ -26,7 +26,7 @@
                :enum-filter #'quake::quake-enum-filter
                :value-filter #'quake::quake-value-filter))
 
-(proto:serialize-object-to-stream pnr cschema :stream nil)
+(proto:serialize-object-to-stream pnr 'qres-core::legacy-pnr cschema :stream nil)
 ||#
 
 #||
@@ -60,9 +60,10 @@
                  qres-core::currency
                  qres-core::country-currencies
                  geodata))
-  (eval (proto-impl:generate-object-size  bdschema (proto-impl:find-message bdschema class)))
-  (eval (proto-impl:generate-serializer   bdschema (proto-impl:find-message bdschema class)))
-  (eval (proto-impl:generate-deserializer bdschema (proto-impl:find-message bdschema class))))
+  (let ((message (proto-impl:find-message bdschema class)))
+    (eval (proto-impl:generate-object-size  bdschema message))
+    (eval (proto-impl:generate-serializer   bdschema message))
+    (eval (proto-impl:generate-deserializer bdschema message))))
 
 (let* ((countries (loop for v being the hash-values of (qres-core::country-business-data) collect (car v)))
        (regions   (loop for v being the hash-values of (qres-core::region-business-data) collect v))
@@ -74,12 +75,12 @@
                   :cities cities
                   :airports airports)))
 
-(setq gser (proto:serialize-object-to-stream geodata bdschema :stream nil))
+(setq gser (proto:serialize-object-to-stream geodata 'geodata bdschema :stream nil))
 (proto:deserialize-object 'geodata bdschema gser 0)
 
 (equalp gser (proto:serialize-object-to-stream
               (proto:deserialize-object 'geodata bdschema gser 0)
-              bdschema :stream nil))
+              'geodata bdschema :stream nil))
 ||#
 
 #||
@@ -92,41 +93,25 @@
 (proto:write-protobuf pschema)
 (proto:write-protobuf pschema :type :lisp)
 
-(setq pser (proto:serialize-object-to-stream pschema pschema :stream nil))
+(setq pser (proto:serialize-object-to-stream pschema 'proto:protobuf pschema :stream nil))
 (describe (proto:deserialize-object 'proto:protobuf pschema pser 0))
 
-(proto:print-text-format pschema pschema)
-(proto:print-text-format (proto:deserialize-object 'proto:protobuf pschema pser 0) pschema)
+(proto:print-text-format pschema 'proto:protobuf pschema)
+(proto:print-text-format (proto:deserialize-object 'proto:protobuf pschema pser 0) 'proto:protobuf pschema)
 
-(eval (generate-object-size pschema (find-message pschema 'proto:protobuf)))
-(eval (generate-object-size pschema (find-message pschema 'proto:protobuf-option)))
-(eval (generate-object-size pschema (find-message pschema 'proto:protobuf-enum)))
-(eval (generate-object-size pschema (find-message pschema 'proto:protobuf-enum-value)))
-(eval (generate-object-size pschema (find-message pschema 'proto:protobuf-message)))
-(eval (generate-object-size pschema (find-message pschema 'proto:protobuf-field)))
-(eval (generate-object-size pschema (find-message pschema 'proto:protobuf-extension)))
-(eval (generate-object-size pschema (find-message pschema 'proto:protobuf-service)))
-(eval (generate-object-size pschema (find-message pschema 'proto:protobuf-rpc)))
-
-(eval (generate-serializer pschema (find-message pschema 'proto:protobuf)))
-(eval (generate-serializer pschema (find-message pschema 'proto:protobuf-option)))
-(eval (generate-serializer pschema (find-message pschema 'proto:protobuf-enum)))
-(eval (generate-serializer pschema (find-message pschema 'proto:protobuf-enum-value)))
-(eval (generate-serializer pschema (find-message pschema 'proto:protobuf-message)))
-(eval (generate-serializer pschema (find-message pschema 'proto:protobuf-field)))
-(eval (generate-serializer pschema (find-message pschema 'proto:protobuf-extension)))
-(eval (generate-serializer pschema (find-message pschema 'proto:protobuf-service)))
-(eval (generate-serializer pschema (find-message pschema 'proto:protobuf-rpc)))
-
-(eval (generate-deserializer pschema (find-message pschema 'proto:protobuf)))
-(eval (generate-deserializer pschema (find-message pschema 'proto:protobuf-option)))
-(eval (generate-deserializer pschema (find-message pschema 'proto:protobuf-enum)))
-(eval (generate-deserializer pschema (find-message pschema 'proto:protobuf-enum-value)))
-(eval (generate-deserializer pschema (find-message pschema 'proto:protobuf-message)))
-(eval (generate-deserializer pschema (find-message pschema 'proto:protobuf-field)))
-(eval (generate-deserializer pschema (find-message pschema 'proto:protobuf-extension)))
-(eval (generate-deserializer pschema (find-message pschema 'proto:protobuf-service)))
-(eval (generate-deserializer pschema (find-message pschema 'proto:protobuf-rpc)))
+(dolist (class '(proto:protobuf
+                 proto:protobuf-option
+                 proto:protobuf-enum
+                 proto:protobuf-enum-value
+                 proto:protobuf-message
+                 proto:protobuf-field
+                 proto:protobuf-extension
+                 proto:protobuf-service
+                 proto:protobuf-rpc))
+  (let ((message (proto-impl:find-message pschema class)))
+    (eval (proto-impl:generate-object-size  pschema message))
+    (eval (proto-impl:generate-serializer   pschema message))
+    (eval (proto-impl:generate-deserializer pschema message))))
 ||#
 
 #||
@@ -204,25 +189,25 @@
 (setq test4 (make-instance 'proto-test4 :recval test2))
 (setq test5 (make-instance 'proto-test5 :color :red :intvals '(2 3 5 7) :strvals '("two" "three" "five" "seven")))
 
-(setq tser1 (proto:serialize-object-to-stream test1 tschema :stream nil))
+(setq tser1 (proto:serialize-object-to-stream test1 'proto-test1 tschema :stream nil))
 (equalp tser1 #(#x08 #x96 #x01))
 (describe (proto:deserialize-object 'proto-test1 tschema tser1 0))
 
-(setq tser2 (proto:serialize-object-to-stream test2 tschema :stream nil))
+(setq tser2 (proto:serialize-object-to-stream test2 'proto-test2 tschema :stream nil))
 (equalp tser2 #(#x12 #x07 #x74 #x65 #x73 #x74 #x69 #x6E #x67))
 (describe (proto:deserialize-object 'proto-test2 tschema tser2 0))
 
-(setq tser3 (proto:serialize-object-to-stream test3 tschema :stream nil))
+(setq tser3 (proto:serialize-object-to-stream test3 'proto-test3 tschema :stream nil))
 (equalp tser3 #(#x1A #x03 #x08 #x96 #x01))
 (describe (proto:deserialize-object 'proto-test3 tschema tser3 0))
 (describe (slot-value (proto:deserialize-object 'proto-test3 tschema tser3 0) 'recval))
 
-(setq tser4 (proto:serialize-object-to-stream test4 tschema :stream nil))
+(setq tser4 (proto:serialize-object-to-stream test4 'proto-test4 tschema :stream nil))
 (equalp tser4 #(#x1A #x09 #x12 #x07 #x74 #x65 #x73 #x74 #x69 #x6E #x67))
 (describe (proto:deserialize-object 'proto-test4 tschema tser4 0))
 (describe (slot-value (proto:deserialize-object 'proto-test4 tschema tser4 0) 'recval))
 
-(setq tser5 (proto:serialize-object-to-stream test5 tschema :stream nil))
+(setq tser5 (proto:serialize-object-to-stream test5 'proto-test5 tschema :stream nil))
 (equalp tser5 #(#x08 #x01
                 #x10 #x04 #x02 #x03 #x05 #x07
                 #x1A #x03 #x74 #x77 #x6F #x1A #x05 #x74 #x68 #x72 #x65 #x65 #x1A #x04 #x66 #x69 #x76 #x65 #x1A #x05 #x73 #x65 #x76 #x65 #x6E))
@@ -414,7 +399,7 @@
 (proto:write-protobuf *color-wheel* :type :lisp)
 
 (setq clr (make-instance 'color :color :red))
-(setq cser (proto:serialize-object-to-stream clr *color-wheel* :stream nil))
+(setq cser (proto:serialize-object-to-stream clr 'color *color-wheel* :stream nil))
 (proto:print-text-format clr *color-wheel*)
 (proto:print-text-format (proto:deserialize-object 'color *color-wheel* cser 0) *color-wheel*)
 ||#
