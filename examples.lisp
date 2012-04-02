@@ -165,23 +165,11 @@
 (proto:write-protobuf tschema)
 (proto:write-protobuf tschema :type :lisp)
 
-(eval (generate-object-size tschema (find-message tschema 'proto-test1)))
-(eval (generate-object-size tschema (find-message tschema 'proto-test2)))
-(eval (generate-object-size tschema (find-message tschema 'proto-test3)))
-(eval (generate-object-size tschema (find-message tschema 'proto-test4)))
-(eval (generate-object-size tschema (find-message tschema 'proto-test5)))
-
-(eval (generate-serializer tschema (find-message tschema 'proto-test1)))
-(eval (generate-serializer tschema (find-message tschema 'proto-test2)))
-(eval (generate-serializer tschema (find-message tschema 'proto-test3)))
-(eval (generate-serializer tschema (find-message tschema 'proto-test4)))
-(eval (generate-serializer tschema (find-message tschema 'proto-test5)))
-
-(eval (generate-deserializer tschema (find-message tschema 'proto-test1)))
-(eval (generate-deserializer tschema (find-message tschema 'proto-test2)))
-(eval (generate-deserializer tschema (find-message tschema 'proto-test3)))
-(eval (generate-deserializer tschema (find-message tschema 'proto-test4)))
-(eval (generate-deserializer tschema (find-message tschema 'proto-test5)))
+(dolist (class '(proto-test1 proto-test2 proto-test3 proto-test4 proto-test5))
+  (let ((message (proto-impl:find-message tschema class)))
+    (eval (proto-impl:generate-object-size  tschema message))
+    (eval (proto-impl:generate-serializer   tschema message))
+    (eval (proto-impl:generate-deserializer tschema message))))
 
 (setq test1 (make-instance 'proto-test1 :intval 150))
 (setq test2 (make-instance 'proto-test2 :strval "testing"))
@@ -220,19 +208,19 @@
                 '(0 -1 1 -2 2 -2147483648 2147483647 -1152921504606846976 1152921504606846975))
         '(0 1 2 3 4 4294967295 4294967294 2305843009213693951 2305843009213693950))
 
-(proto:print-text-format test1 tschema)
+(proto:print-text-format test1 'proto-test1 tschema)
 (proto:print-text-format (proto:deserialize-object 'proto-test1 tschema tser1 0) tschema)
 
-(proto:print-text-format test2 tschema)
+(proto:print-text-format test2 'proto-test2 tschema)
 (proto:print-text-format (proto:deserialize-object 'proto-test2 tschema tser2 0) tschema)
 
-(proto:print-text-format test3 tschema)
+(proto:print-text-format test3 'proto-test3 tschema)
 (proto:print-text-format (proto:deserialize-object 'proto-test3 tschema tser3 0) tschema)
 
-(proto:print-text-format test4 tschema)
+(proto:print-text-format test4 'proto-test4 tschema)
 (proto:print-text-format (proto:deserialize-object 'proto-test4 tschema tser4 0) tschema)
 
-(proto:print-text-format test5 tschema)
+(proto:print-text-format test5 'proto-test5 tschema)
 (proto:print-text-format (proto:deserialize-object 'proto-test5 tschema tser5 0) tschema)
 ||#
 
@@ -400,8 +388,8 @@
 
 (setq clr (make-instance 'color :color :red))
 (setq cser (proto:serialize-object-to-stream clr 'color *color-wheel* :stream nil))
-(proto:print-text-format clr *color-wheel*)
-(proto:print-text-format (proto:deserialize-object 'color *color-wheel* cser 0) *color-wheel*)
+(proto:print-text-format clr 'color *color-wheel*)
+(proto:print-text-format (proto:deserialize-object 'color *color-wheel* cser 0) 'color *color-wheel*)
 ||#
 
 #||

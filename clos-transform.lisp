@@ -124,7 +124,7 @@
                                  (find slot-name (class-direct-slots c) :key #'slot-definition-name))
                              (class-precedence-list class))))
     (and direct-slotd (first (slot-definition-readers direct-slotd)))))
-                       
+
 ;; Returns Protobuf type, a class or primitive type, whether or not to pack the field,
 ;; and (optionally) a set of enum values
 (defun clos-type-to-protobuf-type (type &optional type-filter enum-filter)
@@ -142,7 +142,7 @@
                ((symbol keyword)
                 (values "string" :symbol))
                (otherwise
-                (if (ignore-errors 
+                (if (ignore-errors
                       (subtypep type '(or string character)))
                   (values "string" :string)
                   (values (class-name->proto type) type))))))

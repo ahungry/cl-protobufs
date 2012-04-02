@@ -96,7 +96,7 @@
 
 (defmethod find-message ((protobuf protobuf) (type symbol))
   (or (find type (proto-messages protobuf) :key #'proto-class)
-      (find type (proto-messages protobuf) :key #'proto-class-override)
+      (find type (proto-messages protobuf) :key #'proto-alias-for)
       (some #'(lambda (msg) (find-message msg type)) (proto-messages protobuf))))
 
 (defmethod find-message ((protobuf protobuf) (type class))
@@ -113,7 +113,7 @@
 
 (defmethod find-enum ((protobuf protobuf) type)
   (or (find type (proto-enums protobuf) :key #'proto-class)
-      (find type (proto-enums protobuf) :key #'proto-class-override)
+      (find type (proto-enums protobuf) :key #'proto-alias-for)
       (some #'(lambda (msg) (find-enum msg type)) (proto-messages protobuf))))
 
 (defmethod find-enum ((protobuf protobuf) (type string))
@@ -147,15 +147,20 @@
          (format stream "~(:~A~) ~S" (proto-name option) (proto-value option)))))
 
 (defmethod find-option ((protobuf base-protobuf) (name string))
-  (find name (proto-options protobuf) :key #'proto-name :test #'string=))
+  (let ((option (find name (proto-options protobuf) :key #'proto-name :test #'string=)))
+    (and option (proto-value option))))
+
+(defmethod find-option ((options list) (name string))
+  (let ((option (find name options :key #'proto-name :test #'string=)))
+    (and option (proto-value option))))
 
 
 ;; A protobuf enumeration
 (defclass protobuf-enum (base-protobuf)
-  ((class-override :type (or null symbol)       ;use this if you want to "overlay" an existing class
-                   :accessor proto-class-override
-                   :initarg :class-override
-                   :initform nil)
+  ((alias :type (or null symbol)                ;use this if you want to make this enum
+          :accessor proto-alias-for             ;  be an alias for an existing Lisp enum
+          :initarg :alias-for
+          :initform nil)
    (values :type (list-of protobuf-enum-value)  ;all the values for this enum type
            :accessor proto-values
            :initarg :values
@@ -166,7 +171,7 @@
 (defmethod print-object ((e protobuf-enum) stream)
   (print-unprintable-object (e stream :type t :identity t)
     (format stream "~A~@[ (~S)~]"
-            (proto-name e) (or (proto-class-override e) (proto-class e)))))
+            (proto-name e) (or (proto-alias-for e) (proto-class e)))))
 
 
 ;; A protobuf value within an enumeration
@@ -193,10 +198,10 @@
          :accessor proto-conc-name
          :initarg :conc-name
          :initform nil)
-   (class-override :type (or null symbol)       ;use this if you want to "overlay" an existing class
-                   :accessor proto-class-override
-                   :initarg :class-override
-                   :initform nil)
+   (alias :type (or null symbol)                ;use this if you want to make this message
+          :accessor proto-alias-for             ;  be an alias for an existing Lisp class
+          :initarg :alias-for
+          :initform nil)
    (enums :type (list-of protobuf-enum)         ;the embedded enum types
           :accessor proto-enums
           :initarg :enums
@@ -219,11 +224,11 @@
 (defmethod print-object ((m protobuf-message) stream)
   (print-unprintable-object (m stream :type t :identity t)
     (format stream "~A~@[ (~S)~]"
-            (proto-name m) (or (proto-class-override m) (proto-class m)))))
+            (proto-name m) (or (proto-alias-for m) (proto-class m)))))
 
 (defmethod find-message ((message protobuf-message) (type symbol))
   (or (find type (proto-messages message) :key #'proto-class)
-      (find type (proto-messages message) :key #'proto-class-override)))
+      (find type (proto-messages message) :key #'proto-alias-for)))
 
 (defmethod find-message ((message protobuf-message) (type class))
   (find-message message (class-name type)))
@@ -233,7 +238,7 @@
 
 (defmethod find-enum ((message protobuf-message) type)
   (or (find type (proto-enums message) :key #'proto-class)
-      (find type (proto-enums message) :key #'proto-class-override)))
+      (find type (proto-enums message) :key #'proto-alias-for)))
 
 (defmethod find-enum ((message protobuf-message) (type string))
   (find type (proto-enums message) :key #'proto-name :test #'string=))

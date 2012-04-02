@@ -91,13 +91,13 @@
            protobuf)))))
 
 ;; Define an enum type named 'name' and a Lisp 'deftype'
-(defmacro define-enum (name (&key proto-name conc-name type options documentation)
+(defmacro define-enum (name (&key proto-name conc-name alias-for options documentation)
                        &body values)
   "Define an enum type named 'name' and a Lisp 'deftype'.
    'proto-name' can be used to override the defaultly generated Protobufs name.
    'conc-name' will be used as the prefix to the Lisp enum names, if it's supplied.
-   If 'type' is given, no Lisp deftype is defined. This feature is intended to be used
-   to model enum types that already exist in Lisp.
+   If 'alias-for' is given, no Lisp type is defined. Instead, the enum will be
+   used as an alias for an enum type that already exists in Lisp.
    'options' is a set of keyword/value pairs, both of which are strings.
    The body consists of the enum values in the form (name &key index)."
   (with-collectors ((vals  collect-val)
@@ -115,12 +115,12 @@
                            :index ,idx
                            :value ,val-name)))))
 
-    (if type
-      ;; If we've got a type override, define a type matching the Lisp name
+    (if alias-for
+      ;; If we've got an alias, define a type matching the Lisp name
       ;; of this message so that typep and subtypep work
-      (unless (eq name type)
-        (collect-form `(deftype ,name () ',type)))
-      ;; If no type override, define the type now
+      (unless (eq name alias-for)
+        (collect-form `(deftype ,name () ',alias-for)))
+      ;; If no alias, define the Lisp enum type now
       (collect-form `(deftype ,name () '(member ,@vals))))
     (let ((options (loop for (key val) on options by #'cddr
                          collect `(make-instance 'protobuf-option
@@ -131,23 +131,24 @@
          (make-instance 'protobuf-enum
            :name   ,(or proto-name (class-name->proto name))
            :class  ',name
-           :class-override ',type
+           :alias-for ',alias-for
            :options (list ,@options)
            :values  (list ,@evals)
            :documentation ,documentation)
          ,forms))))
 
 ;; Define a message named 'name' and a Lisp 'defclass'
-(defmacro define-message (name (&key proto-name conc-name class options documentation)
+(defmacro define-message (name (&key proto-name conc-name alias-for options documentation)
                           &body fields &environment env)
   "Define a message named 'name' and a Lisp 'defclass'.
    'proto-name' can be used to override the defaultly generated Protobufs name.
    The body consists of fields, or 'define-enum' or 'define-message' forms.
    'conc-name' will be used as the prefix to the Lisp slot accessors, if it's supplied.
-   If 'class' is given, no Lisp class is defined. This feature is intended to be used
-   to model messages that will be serialized from existing Lisp classes; unless you
-   get the slot names correct in each field, it will be the case that trying to
-   deserialize into a Lisp object won't work.
+   If 'alias-for' is given, no Lisp class is defined. Instead, the message will be
+   used as an alias for a class that already exists in Lisp. This feature is intended
+   to be used to defined messages that will be serialized from existing Lisp classes;
+   unless you get the slot names or readers exactly right for each field, it will be
+   the case that trying to (de)serialize into a Lisp object won't work.
    'options' is a set of keyword/value pairs, both of which are strings.
    Fields take the form (name &key type default reader)
    'name' can be either a symbol giving the field name, or a list whose
@@ -185,7 +186,7 @@
                                       (symbol-package slot))))
                (multiple-value-bind (ptype pclass)
                    (clos-type-to-protobuf-type type)
-                 (unless class
+                 (unless alias-for
                    (collect-slot `(,slot :type ,type
                                          :accessor ,accessor
                                          :initarg ,(kintern (symbol-name slot))
@@ -201,12 +202,12 @@
                                    :default ,(and default (format nil "~A" default))
                                    :packed  ,(and (eq reqd :repeated)
                                                   (packed-type-p pclass)))))))))))
-    (if class
-      ;; If we've got a class override, define a type matching the Lisp name
+    (if alias-for
+      ;; If we've got an alias, define a type matching the Lisp name
       ;; of this message so that typep and subtypep work
-      (unless (or (eq name class) (find-class name nil))
-        (collect-form `(deftype ,name () ',class)))
-      ;; If no class override, define the class now
+      (unless (or (eq name alias-for) (find-class name nil))
+        (collect-form `(deftype ,name () ',alias-for)))
+      ;; If no alias, define the class now
       (collect-form `(defclass ,name () (,@slots))))
     (let ((options (loop for (key val) on options by #'cddr
                          collect `(make-instance 'protobuf-option
@@ -217,7 +218,7 @@
          (make-instance 'protobuf-message
            :name  ,(or proto-name (class-name->proto name))
            :class ',name
-           :class-override ',class
+           :alias-for ',alias-for
            :conc-name ,(and conc-name (string conc-name))
            :options  (list ,@options)
            :enums    (list ,@enums)

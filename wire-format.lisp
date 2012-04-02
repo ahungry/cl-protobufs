@@ -150,8 +150,10 @@
          (encode-double val buffer idx))
         ;; A few of our homegrown types
         ((:symbol)
-         ;; Note that this is consy, avoid it if possible
-         (let ((val (format nil "~A:~A" (package-name (symbol-package val)) (symbol-name val))))
+         (let ((val (if (keywordp val)
+                      (string val)
+                      ;; Non-keyword symbols are consy, avoid them if possible
+                      (format nil "~A:~A" (package-name (symbol-package val)) (symbol-name val)))))
            (encode-octets (babel:string-to-octets val :encoding :utf-8) buffer idx)))
         ((:date :time :datetime :timestamp)
          (encode-uint64 val buffer idx))))))
@@ -485,7 +487,9 @@
        (i+ (length32 tag) 8))
       ;; A few of our homegrown types
       ((:symbol)
-       (let* ((len (i+ (length (package-name (symbol-package val))) 1 (length (symbol-name val)))))
+       (let ((len (if (keywordp val)
+                    (length (symbol-name val))
+                    (i+ (length (package-name (symbol-package val))) 1 (length (symbol-name val))))))
          (i+ (length32 tag) (length32 len) len)))
       ((:date :time :datetime :timestamp)
        (i+ (length32 tag) 8)))))

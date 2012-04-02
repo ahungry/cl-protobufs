@@ -50,8 +50,8 @@
 (defun make-lisp-symbol (string)
   "Intern a string of the 'package:string' and return the symbol."
   (let* ((colon (position #\: string))
-         (pkg   (subseq string 0 colon))
-         (sym   (subseq string (i+ colon 1))))
+         (pkg   (if colon (subseq string 0 colon) "KEYWORD"))
+         (sym   (if colon (subseq string (i+ colon 1)) string)))
     (intern sym pkg)))
 
 
@@ -62,6 +62,8 @@
         :format-control format-control
         :format-arguments format-arguments))
 
+
+;;; Fast fixnum arithmetic
 
 #-quux
 (progn

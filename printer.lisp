@@ -223,15 +223,15 @@
 (defmethod write-protobuf-as ((type (eql :lisp)) (enum protobuf-enum) stream
                               &key (indentation 0))
   (terpri stream)
-  (with-prefixed-accessors (class class-override documentation) (proto- enum)
+  (with-prefixed-accessors (class alias-for documentation) (proto- enum)
     (when documentation
       (write-protobuf-documentation type documentation stream :indentation indentation))
     (format stream "~@[~VT~](proto:define-enum ~(~S~)"
             (and (not (zerop indentation)) indentation) class)
-    (cond ((or class-override documentation)
-           (format stream "~%~@[~VT~](~:[~*~*~;:class ~(~S~)~@[~%~VT~]~]~:[~*~;:documentation ~S~])"
+    (cond ((or alias-for documentation)
+           (format stream "~%~@[~VT~](~:[~*~*~;:alias-for ~(~S~)~@[~%~VT~]~]~:[~*~;:documentation ~S~])"
                    (+ indentation 4)
-                   class-override class-override (and documentation (+ indentation 5))
+                   alias-for alias-for (and documentation (+ indentation 5))
                    documentation documentation))
           (t
            (format stream " ()")))
@@ -250,16 +250,16 @@
 
 (defmethod write-protobuf-as ((type (eql :lisp)) (message protobuf-message) stream
                               &key (indentation 0))
-  (with-prefixed-accessors (class class-override conc-name documentation) (proto- message)
+  (with-prefixed-accessors (class alias-for conc-name documentation) (proto- message)
     (when documentation
       (write-protobuf-documentation type documentation stream :indentation indentation))
     (format stream "~&~@[~VT~](proto:define-message ~(~S~)"
             (and (not (zerop indentation)) indentation) class)
 
-    (cond ((or class-override conc-name documentation)
-           (format stream "~%~@[~VT~](~:[~*~*~;:class ~(~S~)~@[~%~VT~]~]~:[~*~*~;:conc-name ~(~S~)~@[~%~VT~]~]~:[~*~;:documentation ~S~])"
+    (cond ((or alias-for conc-name documentation)
+           (format stream "~%~@[~VT~](~:[~*~*~;:alias-for ~(~S~)~@[~%~VT~]~]~:[~*~*~;:conc-name ~(~S~)~@[~%~VT~]~]~:[~*~;:documentation ~S~])"
                    (+ indentation 4)
-                   class-override class-override (and (or documentation conc-name) (+ indentation 5))
+                   alias-for alias-for (and (or documentation conc-name) (+ indentation 5))
                    conc-name conc-name (and documentation (+ indentation 5))
                    documentation documentation))
           (t

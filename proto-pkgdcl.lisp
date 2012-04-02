@@ -41,7 +41,7 @@
    "DEFINE-MESSAGE"
    "DEFINE-EXTENSION"
    "DEFINE-SERVICE"
-   
+
    ;; Upgradability testing
    "PROTOBUF-UPGRADABLE"
 
@@ -66,8 +66,8 @@
    ;; Model class protocol
    "ABSTRACT-PROTOBUF"
    "BASE-PROTOBUF"
+   "PROTO-ALIAS-FOR"
    "PROTO-CLASS"
-   "PROTO-CLASS-OVERRIDE"
    "PROTO-DEFAULT"
    "PROTO-DOCUMENTATION"
    "PROTO-ENUMS"
@@ -80,7 +80,7 @@
    "PROTO-INDEX"
    "PROTO-INPUT-TYPE"
    "PROTO-MESSAGES"
-   "PROTO-NAME"  
+   "PROTO-NAME"
    "PROTO-OPTIMIZE"
    "PROTO-OPTIONS"
    "PROTO-OUTPUT-TYPE"
@@ -105,7 +105,7 @@
    ;; Protobuf defining macros
    "ENSURE-ALL-PROTOBUFS"
    "ENSURE-PROTOBUF"
-   
+
    ;; CLOS to Protobufs transformer
    "CLASS-TO-PROTOBUF-MESSAGE"
    "SLOT-TO-PROTOBUF-FIELD"

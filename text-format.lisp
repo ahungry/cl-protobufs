@@ -13,16 +13,16 @@
 
 ;;; Print objects using Protobufs text format
 
-(defgeneric print-text-format (object class protobuf &key stream)
+(defgeneric print-text-format (object type protobuf &key stream)
   (:documentation
-   "Prints the object 'object' of class 'class' using message(s) define in the
+   "Prints the object 'object' of type 'type' using message(s) define in the
     schema 'protobuf' onto the stream 'stream' using the textual format."))
 
-(defmethod print-text-format (object class protobuf &key (stream *standard-output*))
+(defmethod print-text-format (object type protobuf &key (stream *standard-output*))
   (check-type protobuf (or protobuf protobuf-message))
-  (let ((message (find-message protobuf class)))
+  (let ((message (find-message protobuf type)))
     (assert message ()
-            "There is no Protobuf message for the class ~S" class)
+            "There is no Protobuf message having the type ~S" type)
     (macrolet ((read-slot (object slot reader)
                  ;; Don't do a boundp check, we assume the object is fully populated
                  ;; Unpopulated slots should be "nullable" and should contain nil
@@ -33,19 +33,19 @@
                  ;; We don't do cycle detection here
                  ;; If the client needs it, he can define his own 'print-text-format'
                  ;; method to clean things up first
-                 (let* ((cl     (if (eq (proto-class field) 'boolean) :bool (proto-class field)))
+                 (let* ((type   (if (eq (proto-class field) 'boolean) :bool (proto-class field)))
                         (slot   (proto-value field))
                         (reader (proto-reader field))
                         msg)
                    (when (or slot reader)
                      (cond ((eq (proto-required field) :repeated)
-                            (cond ((keywordp cl)
+                            (cond ((keywordp type)
                                    (map () #'(lambda (v)
-                                               (print-prim v cl field stream indent))
+                                               (print-prim v type field stream indent))
                                            (read-slot object slot reader)))
-                                  ((typep (setq msg (and cl (loop for p in trace
-                                                                  thereis (or (find-message p cl)
-                                                                              (find-enum p cl)))))
+                                  ((typep (setq msg (and type (loop for p in trace
+                                                                    thereis (or (find-message p type)
+                                                                                (find-enum p type)))))
                                           'protobuf-message)
                                    (let ((values (if slot (read-slot object slot reader) (list object))))
                                      (when values
@@ -61,13 +61,13 @@
                                                (print-enum v msg field stream indent))
                                            (read-slot object slot reader)))))
                            (t
-                            (cond ((keywordp cl)
+                            (cond ((keywordp type)
                                    (let ((v (read-slot object slot reader)))
-                                     (when (or v (eq cl :bool))
-                                       (print-prim v cl field stream indent))))
-                                  ((typep (setq msg (and cl (loop for p in trace
-                                                                  thereis (or (find-message p cl)
-                                                                              (find-enum p cl)))))
+                                     (when (or v (eq type :bool))
+                                       (print-prim v type field stream indent))))
+                                  ((typep (setq msg (and type (loop for p in trace
+                                                                    thereis (or (find-message p type)
+                                                                                (find-enum p type)))))
                                           'protobuf-message)
                                    (let ((v (if slot (read-slot object slot reader) object)))
                                      (when v
@@ -99,12 +99,15 @@
       ((:bytes)
        (format stream "~S~%" val))
       ((:bool)
-       (format stream "~A~%" (if (zerop val) "false" "true")))
+       (format stream "~A~%" (if val "true" "false")))
       ((:float :double)
        (format stream "~D~%" val))
       ;; A few of our homegrown types
       ((:symbol)
-       (format stream "~A~%" val))
+       (let ((val (if (keywordp val)
+                    (string val)
+                    (format nil "~A:~A" (package-name (symbol-package val)) (symbol-name val)))))
+         (format stream "\"~A\"~%" val)))
       ((:date :time :datetime :timestamp)
        (format stream "~D~%" val)))))
 

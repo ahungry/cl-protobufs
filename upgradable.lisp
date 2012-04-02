@@ -111,7 +111,7 @@
                (not (eq new :required))))
          (type-upgradable (old new)
            ;;--- Handle conversions between embedded messages and bytes
-           (or 
+           (or
             (string= old new)
             ;; These varint types are all compatible
             (and (member old '("int32" "uint32" "int64" "uint64" "bool") :test #'string=)

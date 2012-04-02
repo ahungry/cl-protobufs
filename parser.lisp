@@ -238,6 +238,12 @@
           (expect-char stream #\} "enum")
           (maybe-skip-comments stream)
           (setf (proto-enums protobuf) (nconc (proto-messages protobuf) (list enum)))
+          (let ((type (find-option enum "lisp_name")))
+            (when type
+              (setf (proto-class enum) (make-lisp-symbol type))))
+          (let ((alias (find-option enum "lisp_alias")))
+            (when alias
+              (setf (proto-alias-for enum) (make-lisp-symbol alias))))
           (return-from parse-proto-enum))
         (if (string= name "option")
           (parse-proto-option stream enum #\;)
@@ -272,6 +278,12 @@
           (expect-char stream #\} "message")
           (maybe-skip-comments stream)
           (setf (proto-messages protobuf) (nconc (proto-messages protobuf) (list message)))
+          (let ((type (find-option message "lisp_name")))
+            (when type
+              (setf (proto-class message) (make-lisp-symbol type))))
+          (let ((alias (find-option message "lisp_alias")))
+            (when alias
+              (setf (proto-alias-for message) (make-lisp-symbol alias))))
           (return-from parse-proto-message))
         (cond ((string= token "enum")
                (parse-proto-enum stream message))
@@ -295,10 +307,8 @@
          (opts (prog1 (parse-proto-field-options stream)
                  (expect-char stream #\; "message")
                  (maybe-skip-comments stream)))
-         (dflt   (let ((opt (find "default" opts :key #'proto-name :test #'string=)))
-                   (and opt (proto-value opt))))
-         (packed (let ((opt (find "packed" opts :key #'proto-name :test #'string=)))
-                   (and opt (string= (proto-value opt) "true"))))
+         (dflt   (find-option opts "default"))
+         (packed (find-option opts "packed"))
          (ptype  (if (member type '("int32" "int64" "uint32" "uint64" "sint32" "sint64"
                                     "fixed32" "fixed64" "sfixed32" "sfixed64"
                                     "string" "bytes" "bool" "float" "double") :test #'string=)
@@ -314,7 +324,10 @@
                    :required (kintern required)
                    :index idx
                    :default dflt
-                   :packed packed)))
+                   :packed  (and packed (string= packed "true")))))
+    (let ((slot (find-option opts "lisp_name")))
+      (when slot
+        (setf (proto-value field) (make-lisp-symbol type))))
     (setf (proto-fields message) (nconc (proto-fields message) (list field)))))
 
 (defun parse-proto-field-options (stream)
@@ -360,7 +373,7 @@
          (in   (prog2 (expect-char stream #\( "service")
                    (parse-token stream)
                  (expect-char stream #\) "service")))
-         (ret  (parse-token stream))  
+         (ret  (parse-token stream))
          (out  (prog2 (expect-char stream #\( "service")
                    (parse-token stream)
                  (expect-char stream #\) "service")))
@@ -377,6 +390,9 @@
                 :output-type  out
                 :output-class (proto->class-name out *protobuf-package*)
                 :options opts)))
+    (let ((name (find-option rpc "lisp_name")))
+      (when name
+        (setf (proto-class rpc) (make-lisp-symbol name))))
     (assert (string= ret "returns") ()
             "Syntax error in 'message' at position ~D" (file-position stream))
     (setf (proto-rpcs service) (nconc (proto-rpcs service) (list rpc)))))
