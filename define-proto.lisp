@@ -199,7 +199,12 @@
                    (collect-slot `(,slot :type ,type
                                          :accessor ,accessor
                                          :initarg ,(kintern (symbol-name slot))
-                                         ,@(and default (list :initform default)))))
+                                         ,@(cond ((and (null default) (eq reqd :repeated))
+                                                  `(:initform ()))
+                                                 ((and (null default) (eq reqd :optional))
+                                                  `(:initform nil))
+                                                 (default
+                                                   `(:initform ,default))))))
                  (collect-field `(make-instance 'protobuf-field
                                    :name  ,(or name (slot-name->proto slot))
                                    :type  ,ptype
