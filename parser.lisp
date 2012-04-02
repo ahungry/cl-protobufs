@@ -141,8 +141,8 @@
   "Parses a top-level .proto file from the stream 'stream'.
    Returns the protobuf schema that describes the .proto file."
   (let* ((protobuf   (make-instance 'protobuf
-                       :name  name
-                       :class class))
+                       :class class
+                       :name  name))
          (*protobuf* protobuf)
          (*protobuf-package* nil))
     (loop
@@ -230,8 +230,8 @@
                  (expect-char stream #\{ "enum")
                  (maybe-skip-comments stream)))
          (enum (make-instance 'protobuf-enum
-                 :name name
-                 :class (proto->class-name name *protobuf-package*))))
+                 :class (proto->class-name name *protobuf-package*)
+                 :name name)))
     (loop
       (let ((name (parse-token stream)))
         (when (null name)
@@ -270,8 +270,8 @@
                  (expect-char stream #\{ "message")
                  (maybe-skip-comments stream)))
          (message (make-instance 'protobuf-message
-                    :name name
-                    :class (proto->class-name name *protobuf-package*))))
+                    :class (proto->class-name name *protobuf-package*)
+                    :name name)))
     (loop
       (let ((token (parse-token stream)))
         (when (null token)
@@ -349,7 +349,8 @@
                  (expect-char stream #\{ "service")
                  (maybe-skip-comments stream)))
          (service (make-instance 'protobuf-service
-                    :name name)))
+                    :class (proto->class-name name *protobuf-package*)
+		    :name name)))
     (loop
       (let ((token (parse-token stream)))
         (when (null token)
@@ -383,16 +384,16 @@
                  (maybe-skip-comments stream)
                  opts))
          (rpc (make-instance 'protobuf-rpc
-                :name  name
                 :class (proto->class-name name *protobuf-package*)
-                :input-type  in
-                :input-class (proto->class-name in *protobuf-package*)
-                :output-type  out
-                :output-class (proto->class-name out *protobuf-package*)
+                :name  name
+                :input-type  (proto->class-name in *protobuf-package*)
+                :input-name  in 
+                :output-type (proto->class-name out *protobuf-package*)
+                :output-name out
                 :options opts)))
     (let ((name (find-option rpc "lisp_name")))
       (when name
-        (setf (proto-class rpc) (make-lisp-symbol name))))
+        (setf (proto-function rpc) (make-lisp-symbol name))))
     (assert (string= ret "returns") ()
             "Syntax error in 'message' at position ~D" (file-position stream))
     (setf (proto-rpcs service) (nconc (proto-rpcs service) (list rpc)))))

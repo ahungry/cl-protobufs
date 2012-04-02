@@ -26,6 +26,9 @@
                :enum-filter #'quake::quake-enum-filter
                :value-filter #'quake::quake-value-filter))
 
+(proto:write-protobuf cschema)
+(proto:write-protobuf cschema :type :lisp)
+
 (proto:serialize-object-to-stream pnr 'qres-core::legacy-pnr cschema :stream nil)
 ||#
 
@@ -48,6 +51,9 @@
                   qres-core::currency
                   qres-core::country-currencies
                   geodata)))
+
+(proto:write-protobuf bdschema)
+(proto:write-protobuf bdschema :type :lisp)
 
 (dolist (class '(qres-core::country
                  qres-core::region
@@ -264,13 +270,13 @@
                                       :default "LOW")))))
        (rpcs  (list (make-instance 'proto:protobuf-rpc
                       :name "GetColor"
-                      :input-type nil
-                      :output-type "Color")
+                      :input-name "string"
+                      :output-name "Color")
                     (make-instance 'proto:protobuf-rpc
                       :name "SetColor"
-                      :input-type "Color"
-                      :output-type "Color"
-                      :options (list (make-instance 'protobuf-option
+                      :input-name "Color"
+                      :output-name "Color"
+                      :options (list (make-instance 'proto:protobuf-option
                                        :name "deadline" :value "1.0")))))
        (svcs  (list (make-instance 'proto:protobuf-service
                       :name "ColorWheel"
@@ -306,7 +312,7 @@
     (contrast :type (or null contrast-name) :default :low))
   (proto:define-service color-wheel
       (:documentation "Get and set colors")
-    (get-color (nil color))
+    (get-color (string color))
     (set-color (color color)
                :options ("deadline" "1.0"))))
 
@@ -369,14 +375,14 @@
                            :RPCS (LIST (MAKE-INSTANCE 'PROTOBUF-RPC
                                          :NAME "GetColor"
                                          :CLASS 'GET-COLOR
-                                         :INPUT-TYPE NIL
-                                         :OUTPUT-TYPE "Color"
+                                         :INPUT-NAME "string"
+                                         :OUTPUT-NAME "Color"
                                          :OPTIONS (LIST))
                                        (MAKE-INSTANCE 'PROTOBUF-RPC
                                          :NAME "SetColor"
                                          :CLASS 'SET-COLOR
-                                         :INPUT-TYPE "Color"
-                                         :OUTPUT-TYPE "Color"
+                                         :INPUT-NAME "Color"
+                                         :OUTPUT-NAME "Color"
                                          :OPTIONS (LIST (MAKE-INSTANCE 'PROTOBUF-OPTION
                                                           :NAME "deadline" :VALUE "1.0")))))))))
 
@@ -413,13 +419,13 @@ message Color {
 }
 
 service ColorWheel {
-  rpc GetColor () returns (Color);
+  rpc GetColor (string) returns (Color);
   rpc SetColor (Color) returns (Color) {
     option deadline = \"1.0\";
   }
 }"))
   (with-input-from-string (s ps)
-    (setq ppp (parse-protobuf-from-stream s))))
+    (setq ppp (proto:parse-protobuf-from-stream s))))
 
 (proto:write-protobuf ppp)
 (proto:write-protobuf ppp :type :lisp)

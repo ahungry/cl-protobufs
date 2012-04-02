@@ -13,14 +13,15 @@
 
 ;;; Protocol buffer defining macros
 
-;; Define a schema named 'name', corresponding to a .proto file of that name
-(defmacro define-proto (name (&key proto-name syntax package import optimize options documentation)
+;; Define a schema named 'type', corresponding to a .proto file of that name
+(defmacro define-proto (type (&key name syntax package import optimize options documentation)
                         &body messages &environment env)
-  "Define a schema named 'name', corresponding to a .proto file of that name.
-   'proto-name' can be used to override the defaultly generated name.
+  "Define a schema named 'type', corresponding to a .proto file of that name.
+   'name' can be used to override the defaultly generated Protobufs name.
    'syntax' and 'package' are as they would be in a .proto file.
    'imports' is a list of pathname strings to be imported.
    'options' is a property list, i.e., (\"key1\" \"val1\" \"key2\" \"val2\" ...).
+
    The body consists of 'define-enum', 'define-message' or 'define-service' forms."
   (with-collectors ((enums collect-enum)
                     (msgs  collect-msg)
@@ -48,20 +49,19 @@
            (collect-msg model))
           ((define-service)
            (collect-svc model)))))
-    (let ((vname (fintern "*~A*" name))
-          (pname (or proto-name (class-name->proto name)))
-          (cname name)
+    (let ((var  (fintern "*~A*" type))
+          (name (or name (class-name->proto type)))
           (options (loop for (key val) on options by #'cddr
                          collect `(make-instance 'protobuf-option
                                     :name ,key
                                     :value ,val))))
       `(progn
          ,@forms
-         (defvar ,vname nil)
-         (let ((old      ,vname)
+         (defvar ,var nil)
+         (let ((old ,var)
                (protobuf (make-instance 'protobuf
-                           :name     ',pname
-                           :class    ',cname
+                           :class    ',type
+                           :name     ',name
                            :syntax   ,(or syntax "proto2")
                            :package  ,(if (stringp package) package (string-downcase (string package)))
                            :imports  ',(if (listp import) import (list import))
@@ -76,11 +76,12 @@
                  (protobuf-upgradable old protobuf)
                (unless upgradable
                  (protobufs-warn "The old schema for ~S (~A) can't be safely upgraded; proceeding anyway"
-                                 ',cname ',pname)
+                                 ',type ',name)
                  (map () #'protobufs-warn warnings))))
-           (setq ,vname protobuf)
-           (setf (gethash ',pname *all-protobufs*) protobuf)
-           (setf (gethash ',cname *all-protobufs*) protobuf)
+           (setq ,var protobuf)
+           ;; Record this schema under both its Lisp and its Protobufs name
+           (setf (gethash ',type *all-protobufs*) protobuf)
+           (setf (gethash ',name *all-protobufs*) protobuf)
            #+++ignore (
            ,@(when (eq optimize :speed)
                (mapcar (curry #'generate-object-size  protobuf) (proto-messages protobuf)))
@@ -90,16 +91,17 @@
                (mapcar (curry #'generate-deserializer protobuf) (proto-messages protobuf))) )
            protobuf)))))
 
-;; Define an enum type named 'name' and a Lisp 'deftype'
-(defmacro define-enum (name (&key proto-name conc-name alias-for options documentation)
+;; Define an enum type named 'type' and a Lisp 'deftype'
+(defmacro define-enum (type (&key name conc-name alias-for options documentation)
                        &body values)
   "Define an enum type named 'name' and a Lisp 'deftype'.
-   'proto-name' can be used to override the defaultly generated Protobufs name.
+   'name' can be used to override the defaultly generated Protobufs enum name.
    'conc-name' will be used as the prefix to the Lisp enum names, if it's supplied.
    If 'alias-for' is given, no Lisp type is defined. Instead, the enum will be
    used as an alias for an enum type that already exists in Lisp.
    'options' is a set of keyword/value pairs, both of which are strings.
-   The body consists of the enum values in the form (name &key index)."
+
+   The body consists of the enum values in the form 'name' or (name index)."
   (with-collectors ((vals  collect-val)
                     (evals collect-eval)
                     (forms collect-form))
@@ -116,21 +118,22 @@
                            :value ,val-name)))))
 
     (if alias-for
-      ;; If we've got an alias, define a type matching the Lisp name
-      ;; of this message so that typep and subtypep work
-      (unless (eq name alias-for)
-        (collect-form `(deftype ,name () ',alias-for)))
+      ;; If we've got an alias, define a a type that is the subtype of
+      ;; the Lisp enum so that typep and subtypep work
+      (unless (eq type alias-for)
+        (collect-form `(deftype ,type () ',alias-for)))
       ;; If no alias, define the Lisp enum type now
-      (collect-form `(deftype ,name () '(member ,@vals))))
-    (let ((options (loop for (key val) on options by #'cddr
+      (collect-form `(deftype ,type () '(member ,@vals))))
+    (let ((name (or name (class-name->proto type)))
+          (options (loop for (key val) on options by #'cddr
                          collect `(make-instance 'protobuf-option
                                     :name ,key
                                     :value ,val))))
       `(progn
          define-enum
          (make-instance 'protobuf-enum
-           :name   ,(or proto-name (class-name->proto name))
-           :class  ',name
+           :class  ',type
+           :name   ',name
            :alias-for ',alias-for
            :options (list ,@options)
            :values  (list ,@evals)
@@ -138,10 +141,10 @@
          ,forms))))
 
 ;; Define a message named 'name' and a Lisp 'defclass'
-(defmacro define-message (name (&key proto-name conc-name alias-for options documentation)
+(defmacro define-message (type (&key name conc-name alias-for options documentation)
                           &body fields &environment env)
-  "Define a message named 'name' and a Lisp 'defclass'.
-   'proto-name' can be used to override the defaultly generated Protobufs name.
+  "Define a message named 'type' and a Lisp 'defclass'.
+   'name' can be used to override the defaultly generated Protobufs message name.
    The body consists of fields, or 'define-enum' or 'define-message' forms.
    'conc-name' will be used as the prefix to the Lisp slot accessors, if it's supplied.
    If 'alias-for' is given, no Lisp class is defined. Instead, the message will be
@@ -150,9 +153,15 @@
    unless you get the slot names or readers exactly right for each field, it will be
    the case that trying to (de)serialize into a Lisp object won't work.
    'options' is a set of keyword/value pairs, both of which are strings.
-   Fields take the form (name &key type default reader)
-   'name' can be either a symbol giving the field name, or a list whose
-   first element is the field name and whose second element is the index."
+
+   Fields take the form (slot &key type name default reader)
+   'slot' can be either a symbol giving the field name, or a list whose
+   first element is the slot name and whose second element is the index.
+   'type' is the type of the slot.
+   'name' can be used to override the defaultly generated Protobufs field name.
+   'default' is the default value for the slot.
+   'reader' is a Lisp slot reader function to use to get the value, instead of
+   using 'slot-value'; this is often used when aliasing an existing class."
   (with-collectors ((enums collect-enum)
                     (msgs  collect-msg)
                     (flds  collect-field)
@@ -178,7 +187,7 @@
           (otherwise
            (when (i= index 18999)                       ;skip over the restricted range
              (setq index 19999))
-           (destructuring-bind (slot &key type default reader proto-name) fld
+           (destructuring-bind (slot &key type default reader name) fld
              (let* ((idx  (if (listp slot) (second slot) (iincf index)))
                     (slot (if (listp slot) (first slot) slot))
                     (reqd (clos-type-to-protobuf-required type))
@@ -192,7 +201,7 @@
                                          :initarg ,(kintern (symbol-name slot))
                                          ,@(and default (list :initform default)))))
                  (collect-field `(make-instance 'protobuf-field
-                                   :name  ,(or proto-name (slot-name->proto slot))
+                                   :name  ,(or name (slot-name->proto slot))
                                    :type  ,ptype
                                    :class ',pclass
                                    :required ,reqd
@@ -203,21 +212,22 @@
                                    :packed  ,(and (eq reqd :repeated)
                                                   (packed-type-p pclass)))))))))))
     (if alias-for
-      ;; If we've got an alias, define a type matching the Lisp name
-      ;; of this message so that typep and subtypep work
-      (unless (or (eq name alias-for) (find-class name nil))
-        (collect-form `(deftype ,name () ',alias-for)))
+      ;; If we've got an alias, define a a type that is the subtype of
+      ;; the Lisp class that typep and subtypep work
+      (unless (or (eq type alias-for) (find-class type nil))
+        (collect-form `(deftype ,type () ',alias-for)))
       ;; If no alias, define the class now
-      (collect-form `(defclass ,name () (,@slots))))
-    (let ((options (loop for (key val) on options by #'cddr
+      (collect-form `(defclass ,type () (,@slots))))
+    (let ((name (or name (class-name->proto type)))
+          (options (loop for (key val) on options by #'cddr
                          collect `(make-instance 'protobuf-option
                                     :name ,key
                                     :value ,val))))
       `(progn
          define-message
          (make-instance 'protobuf-message
-           :name  ,(or proto-name (class-name->proto name))
-           :class ',name
+           :class ',type
+           :name  ',name
            :alias-for ',alias-for
            :conc-name ,(and conc-name (string conc-name))
            :options  (list ,@options)
@@ -237,42 +247,53 @@
        :to   ,to)
      ()))
 
-;; Define a service named 'name' with generic functions declared for
+;; Define a service named 'type' with generic functions declared for
 ;; each of the RPCs within the service
-(defmacro define-service (name (&key proto-name options documentation)
+(defmacro define-service (type (&key name options documentation)
                           &body rpc-specs)
-  "Define a service named 'name' and a Lisp 'defgeneric'.
-   'proto-name' can be used to override the defaultly generated Protobufs name.
+  "Define a service named 'type' and Lisp 'defgeneric' for all its RPCs.
+   'name' can be used to override the defaultly generated Protobufs service name.
    'options' is a set of keyword/value pairs, both of which are strings.
-   The body is a set of RPC specs of the form (name (input-type output-type) &key options)."
+
+   The body is a set of RPC specs of the form (name (input-type output-type) &key options).
+   'input-type' and 'output-type' may also be of the form (type &key name)."
   (with-collectors ((rpcs collect-rpc)
                     (forms collect-form))
     (dolist (rpc rpc-specs)
-      (destructuring-bind (name (input-class output-class) &key options) rpc
-        (let ((options (loop for (key val) on options by #'cddr
-                             collect `(make-instance 'protobuf-option
-                                        :name ,key
-                                        :value ,val))))
+      (destructuring-bind (function (input-type output-type) &key name options) rpc
+        (let* ((input-name (and (listp input-type)
+                                (getf (cdr input-type) :name)))
+               (input-type (if (listp input-type) (car input-type) input-type))
+               (output-name (and (listp output-type)
+                                 (getf (cdr output-type) :name)))
+               (output-type (if (listp output-type) (car output-type) output-type))
+               (options (loop for (key val) on options by #'cddr
+                              collect `(make-instance 'protobuf-option
+                                         :name ,key
+                                         :value ,val))))
           (collect-rpc `(make-instance 'protobuf-rpc
-                          :name ,(class-name->proto name)
-                          :class ',name
-                          :input-type  ,(and input-class  (class-name->proto input-class))
-                          :input-class ',input-class
-                          :output-type  ,(and output-class (class-name->proto output-class))
-                          :output-class ',output-class
+                          :class ',function
+                          :name  ',(or name (class-name->proto function))
+                          :input-type  ',input-type
+                          :input-name  ',(or input-name (class-name->proto input-type))
+                          :output-type ',output-type
+                          :output-name ',(or output-name (class-name->proto output-type))
                           :options (list ,@options)))
-          ;;--- Is this really all we need as the stub for the RPC?
-          (collect-form `(defgeneric ,name (,@(and input-class (list input-class)))
-                           (declare (values ,output-class)))))))
-    (let ((options (loop for (key val) on options by #'cddr
+          (let ((vcontroller (intern (symbol-name 'controller) (symbol-package function)))
+                (vcallback   (intern (symbol-name 'callback) (symbol-package function))))
+            ;;--- Is this really what the stub's signature should be?
+            (collect-form `(defgeneric ,function (,vcontroller ,input-type &optional ,vcallback)
+                             (declare (values ,output-type))))))))
+    (let ((name (or name (class-name->proto type)))
+          (options (loop for (key val) on options by #'cddr
                          collect `(make-instance 'protobuf-option
                                     :name ,key
                                     :value ,val))))
       `(progn
          define-service
          (make-instance 'protobuf-service
-           :name ,(or proto-name (class-name->proto name))
-           :class ',name
+           :class ',type
+           :name  ',name
            :options  (list ,@options)
            :rpcs (list ,@rpcs)
            :documentation ,documentation)

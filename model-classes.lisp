@@ -30,14 +30,14 @@
 (defclass abstract-protobuf () ())
 
 (defclass base-protobuf (abstract-protobuf)
-  ((name :type (or null string)                 ;the name of this .proto file/enum/message, etc
+  ((class :type (or null symbol)                ;the Lisp name for this object
+          :accessor proto-class                 ;this often names a type or class
+          :initarg :class
+          :initform nil)
+   (name :type (or null string)                 ;the Protobufs name for this enum, message, etc
          :reader proto-name
          :initarg :name
          :initform nil)
-   (class :type (or null symbol)                ;a Lisp "class name" for this object
-          :accessor proto-class
-          :initarg :class
-          :initform nil)
    (options :type (list-of protobuf-option)     ;options, mostly just passed along
             :accessor proto-options
             :initarg :options
@@ -86,8 +86,8 @@
 
 (defmethod print-object ((p protobuf) stream)
   (print-unprintable-object (p stream :type t :identity t)
-    (format stream "~@[~A~]~@[ (package ~A)~]"
-            (proto-name p) (proto-package p))))
+    (format stream "~@[~S~]~@[ (package ~A)~]"
+            (proto-class p) (proto-package p))))
 
 (defgeneric find-message (protobuf type)
   (:documentation
@@ -170,8 +170,8 @@
 
 (defmethod print-object ((e protobuf-enum) stream)
   (print-unprintable-object (e stream :type t :identity t)
-    (format stream "~A~@[ (~S)~]"
-            (proto-name e) (or (proto-alias-for e) (proto-class e)))))
+    (format stream "~S~@[ (alias for ~S)~]"
+            (proto-class e) (proto-alias-for e))))
 
 
 ;; A protobuf value within an enumeration
@@ -188,8 +188,8 @@
 
 (defmethod print-object ((v protobuf-enum-value) stream)
   (print-unprintable-object (v stream :type t :identity t)
-    (format stream "~A = ~D~@[ (~S)~]"
-            (proto-name v) (proto-index v) (proto-value v))))
+    (format stream "~A = ~D"
+            (proto-name v) (proto-index v))))
 
 
 ;; A protobuf message
@@ -223,8 +223,8 @@
 
 (defmethod print-object ((m protobuf-message) stream)
   (print-unprintable-object (m stream :type t :identity t)
-    (format stream "~A~@[ (~S)~]"
-            (proto-name m) (or (proto-alias-for m) (proto-class m)))))
+    (format stream "~S~@[ (alias for ~S)~]"
+            (proto-class m) (proto-alias-for m))))
 
 (defmethod find-message ((message protobuf-message) (type symbol))
   (or (find type (proto-messages message) :key #'proto-class)
@@ -283,10 +283,8 @@
 
 (defmethod print-object ((f protobuf-field) stream)
   (print-unprintable-object (f stream :type t :identity t)
-    (format stream "~A ~A~:[~*~*~; (~S~@[ :: ~S~])~] = ~D"
-            (proto-type f) (proto-name f)
-            (or (proto-value f) (proto-class f)) (proto-value f) (proto-class f)
-            (proto-index f))))
+    (format stream "~S :: ~S = ~D"
+            (proto-value f) (proto-class f) (proto-index f))))
 
 
 ;; An extension within a message
@@ -324,31 +322,29 @@
 
 ;; A protobuf RPC within a service
 (defclass protobuf-rpc (base-protobuf)
-  ((itype :type (or null string)                ;the name of the input message type
-          :accessor proto-input-type
-          :initarg :input-type
-          :initform nil)
-   (iclass :type (or null symbol)               ;the name of the input message Lisp class
-           :accessor proto-input-class
-           :initarg :input-class
+  ((itype :type (or null symbol)                ;the Lisp type name of the input
+           :accessor proto-input-type
+           :initarg :input-type
            :initform nil)
-   (otype :type (or null string)                ;the name of the output message type
-          :accessor proto-output-type
-          :initarg :output-type
+   (iname :type (or null string)                ;the Protobufs name of the input
+          :accessor proto-input-name
+          :initarg :input-name
           :initform nil)
-   (oclass :type (or null symbol)               ;the name of the output message Lisp class
-           :accessor proto-output-class
-           :initarg :output-class
-           :initform nil))
+   (otype :type (or null symbol)                ;the Lisp type name of the output
+           :accessor proto-output-type
+           :initarg :output-type
+           :initform nil)
+   (oname :type (or null string)                ;the Protobufs name of the output
+          :accessor proto-output-name
+          :initarg :output-name
+          :initform nil))
   (:documentation
    "The model class that represents one RPC with a Protobufs service."))
 
 (defmethod print-object ((r protobuf-rpc) stream)
   (print-unprintable-object (r stream :type t :identity t)
-    (format stream "~A (~@[~A~]) => (~@[~A~])"
-            (or (proto-function r) (proto-name r))
-            (or (proto-input-class r)  (proto-input-type r))
-            (or (proto-output-class r) (proto-output-type r)))))
+    (format stream "~S (~S) => (~S)"
+            (proto-function r) (proto-input-type r) (proto-output-type r))))
 
 ;; The 'class' slot really holds the name of the function,
 ;; so let's give it a better name

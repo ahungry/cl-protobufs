@@ -62,8 +62,8 @@
             (incf index 1)                              ;don't worry about the 19000-19999 restriction
             (collect-field field))))
       (make-instance 'protobuf-message
-        :name  (class-name->proto (class-name class))
         :class (class-name class)
+        :name  (class-name->proto (class-name class))
         :enums (delete-duplicates enums :key #'proto-name :test #'string-equal)
         :messages (delete-duplicates msgs :key #'proto-name :test #'string-equal)
         :fields fields))))
@@ -86,8 +86,8 @@
                                       (every #'(lambda (name) (starts-with name prefix)) names))
                              (setq names (mapcar #'(lambda (name) (subseq name (length prefix))) names)))
                            (make-instance 'protobuf-enum
-                             :name   (class-name->proto ename)
                              :class  (intern ename (symbol-package (slot-definition-name slot)))
+                             :name   (class-name->proto ename)
                              :values (loop for name in names
                                            for val in enums
                                            for index upfrom 1

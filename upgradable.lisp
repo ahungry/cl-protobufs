@@ -159,7 +159,7 @@
   ;; No need to check that the names are equal, our caller did that already
   (and
    ;; Are their inputs and outputs the same?
-   (upgrade-warn (string= (proto-input-type old) (proto-input-type new))
+   (upgrade-warn (string= (proto-input-name old) (proto-input-name new))
                  "Input type for ~A, ~A, is not upgradable to ~A" (proto-name old))
-   (upgrade-warn (string= (proto-output-type old) (proto-output-type new))
+   (upgrade-warn (string= (proto-output-name old) (proto-output-name new))
                  "Output type for ~A, ~A, is not upgradable to ~A" (proto-name old))))

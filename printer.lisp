@@ -72,11 +72,18 @@
 
 (defmethod write-protobuf-as ((type (eql :proto)) (enum protobuf-enum) stream
                               &key (indentation 0))
-  (with-prefixed-accessors (name documentation options) (proto- enum)
+  (with-prefixed-accessors (name class alias-for documentation options) (proto- enum)
     (when documentation
       (write-protobuf-documentation type documentation stream :indentation indentation))
     (format stream "~&~@[~VT~]enum ~A {~%"
             (and (not (zerop indentation)) indentation) name)
+    (let ((other (and class (not (string= name (class-name->proto class))) class)))
+      (when other
+        (format stream "~&~VToption lisp_name=\"~A:~A\";~%"
+                (+ indentation 2) (package-name (symbol-package class)) (symbol-name class))))
+    (when alias-for
+      (format stream "~&~VToption lisp_alias=\"~A:~A\";~%"
+              (+ indentation 2) (package-name (symbol-package alias-for)) (symbol-name alias-for)))
     (dolist (option options)
       (format stream "~&option ~:/protobuf-option/;~%" option))
     (dolist (value (proto-values enum))
@@ -95,13 +102,21 @@
 
 (defmethod write-protobuf-as ((type (eql :proto)) (message protobuf-message) stream
                               &key (indentation 0))
-  (with-prefixed-accessors (name documentation options) (proto- message)
+  (with-prefixed-accessors (name class alias-for documentation options) (proto- message)
     (when documentation
       (write-protobuf-documentation type documentation stream :indentation indentation))
     (format stream "~&~@[~VT~]message ~A {~%"
             (and (not (zerop indentation)) indentation) name)
+    (let ((other (and class (not (string= name (class-name->proto class))) class)))
+      (when other
+        (format stream "~&~VToption lisp_name=\"~A:~A\";~%"
+                (+ indentation 2) (package-name (symbol-package class)) (symbol-name class))))
+    (when alias-for
+      (format stream "~&~VToption lisp_alias=\"~A:~A\";~%"
+              (+ indentation 2) (package-name (symbol-package alias-for)) (symbol-name alias-for)))
     (dolist (option options)
-      (format stream "~&option ~:/protobuf-option/;~%" option))
+      (format stream "~&~VToption ~:/protobuf-option/;~%"
+              (+ indentation 2) option))
     (dolist (enum (proto-enums message))
       (write-protobuf-as type enum stream :indentation (+ indentation 2)))
     (dolist (msg (proto-messages message))
@@ -116,13 +131,13 @@
 (defparameter *protobuf-field-comment-column* 56)
 (defmethod write-protobuf-as ((type (eql :proto)) (field protobuf-field) stream
                               &key (indentation 0))
-  (with-prefixed-accessors (name type documentation required index default packed) (proto- field)
+  (with-prefixed-accessors (name documentation required index default packed) (proto- field)
     (let ((dflt (if (stringp default)
                   (if (string-empty-p default) nil default)
                   default)))
       (format stream "~&~@[~VT~]~(~A~) ~A ~A = ~D~@[ [default = ~A]~]~@[ [packed=true]~*~];~:[~*~*~;~VT// ~A~]~%"
               (and (not (zerop indentation)) indentation)
-              required type name index dflt packed
+              required (proto-type field) name index dflt packed
               documentation *protobuf-field-comment-column* documentation))))
 
 (defmethod write-protobuf-as ((type (eql :proto)) (extension protobuf-extension) stream
@@ -147,12 +162,12 @@
 
 (defmethod write-protobuf-as ((type (eql :proto)) (rpc protobuf-rpc) stream
                               &key (indentation 0))
-  (with-prefixed-accessors (name documentation input-type output-type options) (proto- rpc)
+  (with-prefixed-accessors (name documentation input-name output-name options) (proto- rpc)
     (when documentation
       (write-protobuf-documentation type documentation stream :indentation indentation))
     (format stream "~&~@[~VT~]rpc ~A (~@[~A~])~@[ returns (~A)~]"
             (and (not (zerop indentation)) indentation)
-            name input-type output-type)
+            name input-name output-name)
     (cond (options
            (format stream " {~%")
            (dolist (option options)
@@ -223,18 +238,22 @@
 (defmethod write-protobuf-as ((type (eql :lisp)) (enum protobuf-enum) stream
                               &key (indentation 0))
   (terpri stream)
-  (with-prefixed-accessors (class alias-for documentation) (proto- enum)
+  (with-prefixed-accessors (name class alias-for documentation) (proto- enum)
     (when documentation
       (write-protobuf-documentation type documentation stream :indentation indentation))
     (format stream "~@[~VT~](proto:define-enum ~(~S~)"
             (and (not (zerop indentation)) indentation) class)
-    (cond ((or alias-for documentation)
-           (format stream "~%~@[~VT~](~:[~*~*~;:alias-for ~(~S~)~@[~%~VT~]~]~:[~*~;:documentation ~S~])"
-                   (+ indentation 4)
-                   alias-for alias-for (and documentation (+ indentation 5))
-                   documentation documentation))
-          (t
-           (format stream " ()")))
+    (let ((other (and name (not (string= name (class-name->proto class))) name)))
+      (cond ((or other alias-for documentation)
+             (format stream "~%~@[~VT~](~:[~*~*~;:name ~(~S~)~@[~%~VT~]~]~
+                                        ~:[~*~*~;:alias-for ~(~S~)~@[~%~VT~]~]~
+                                        ~:[~*~;:documentation ~S~])"
+                     (+ indentation 4)
+                     other other (and (or alias-for documentation) (+ indentation 5))
+                     alias-for alias-for (and documentation (+ indentation 5))
+                     documentation documentation))
+            (t
+             (format stream " ()"))))
     (loop for (value . more) on (proto-values enum) doing
       (write-protobuf-as type value stream :indentation (+ indentation 2))
       (when more
@@ -250,20 +269,24 @@
 
 (defmethod write-protobuf-as ((type (eql :lisp)) (message protobuf-message) stream
                               &key (indentation 0))
-  (with-prefixed-accessors (class alias-for conc-name documentation) (proto- message)
+  (with-prefixed-accessors (name class alias-for conc-name documentation) (proto- message)
     (when documentation
       (write-protobuf-documentation type documentation stream :indentation indentation))
     (format stream "~&~@[~VT~](proto:define-message ~(~S~)"
             (and (not (zerop indentation)) indentation) class)
-
-    (cond ((or alias-for conc-name documentation)
-           (format stream "~%~@[~VT~](~:[~*~*~;:alias-for ~(~S~)~@[~%~VT~]~]~:[~*~*~;:conc-name ~(~S~)~@[~%~VT~]~]~:[~*~;:documentation ~S~])"
-                   (+ indentation 4)
-                   alias-for alias-for (and (or documentation conc-name) (+ indentation 5))
-                   conc-name conc-name (and documentation (+ indentation 5))
-                   documentation documentation))
-          (t
-           (format stream " ()")))
+    (let ((other (and name (not (string= name (class-name->proto class))) name)))
+      (cond ((or alias-for conc-name documentation)
+             (format stream "~%~@[~VT~](~:[~*~*~;:name ~(~S~)~@[~%~VT~]~]~
+                                        ~:[~*~*~;:alias-for ~(~S~)~@[~%~VT~]~]~
+                                        ~:[~*~*~;:conc-name ~(~S~)~@[~%~VT~]~]~
+                                        ~:[~*~;:documentation ~S~])"
+                     (+ indentation 4)
+                     other other (and (or alias-for conc-name documentation) (+ indentation 5))
+                     alias-for alias-for (and (or documentation conc-name) (+ indentation 5))
+                     conc-name conc-name (and documentation (+ indentation 5))
+                     documentation documentation))
+            (t
+             (format stream " ()"))))
     (loop for (enum . more) on (proto-enums message) doing
       (write-protobuf-as type enum stream :indentation (+ indentation 2))
       (when more
@@ -285,7 +308,7 @@
 (defparameter *protobuf-slot-comment-column* 56)
 (defmethod write-protobuf-as ((type (eql :lisp)) (field protobuf-field) stream
                               &key (indentation 0))
-  (with-prefixed-accessors (value reader type class documentation required default) (proto- field)
+  (with-prefixed-accessors (value reader class documentation required default) (proto- field)
     (let ((dflt (protobuf-default-to-clos-init default class))
           (clss (let ((cl (case class
                             ((:int32 :uint32 :int64 :uint64 :sint32 :sint64
@@ -339,19 +362,13 @@
 (defmethod write-protobuf-as ((type (eql :lisp)) (rpc protobuf-rpc) stream
                               &key (indentation 0))
   (with-prefixed-accessors
-      (function documentation input-type input-class output-type output-class options) (proto- rpc)
+      (function documentation input-type output-type options) (proto- rpc)
     (when documentation
       (write-protobuf-documentation type documentation stream :indentation indentation))
-    (let ((input  (or input-class
-                      (let ((m (find-message *protobuf* input-type)))
-                        (and m (proto-class m)))))
-          (output (or output-class
-                      (let ((m (find-message *protobuf* output-type)))
-                        (and m (proto-class m))))))
-      (format stream "~&~@[~VT~](~(~S~) (~(~S~) ~(~S~))"
-              (and (not (zerop indentation)) indentation)
-              function input output)
-      (when options
-        (format stream "~%~VT:options (~{~@/protobuf-option/~^ ~})"
-                (+ indentation 2) options))
-      (format stream ")"))))
+    (format stream "~&~@[~VT~](~(~S~) (~(~S~) ~(~S~))"
+            (and (not (zerop indentation)) indentation)
+            function input-type output-type)
+    (when options
+      (format stream "~%~VT:options (~{~@/protobuf-option/~^ ~})"
+              (+ indentation 2) options))
+    (format stream ")")))
