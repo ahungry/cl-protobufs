@@ -96,7 +96,6 @@
 
 (defmethod find-message ((protobuf protobuf) (type symbol))
   (or (find type (proto-messages protobuf) :key #'proto-class)
-      (find type (proto-messages protobuf) :key #'proto-alias-for)
       (some #'(lambda (msg) (find-message msg type)) (proto-messages protobuf))))
 
 (defmethod find-message ((protobuf protobuf) (type class))
@@ -113,7 +112,6 @@
 
 (defmethod find-enum ((protobuf protobuf) type)
   (or (find type (proto-enums protobuf) :key #'proto-class)
-      (find type (proto-enums protobuf) :key #'proto-alias-for)
       (some #'(lambda (msg) (find-enum msg type)) (proto-messages protobuf))))
 
 (defmethod find-enum ((protobuf protobuf) (type string))
@@ -227,8 +225,7 @@
             (proto-class m) (proto-alias-for m))))
 
 (defmethod find-message ((message protobuf-message) (type symbol))
-  (or (find type (proto-messages message) :key #'proto-class)
-      (find type (proto-messages message) :key #'proto-alias-for)))
+  (find type (proto-messages message) :key #'proto-class))
 
 (defmethod find-message ((message protobuf-message) (type class))
   (find-message message (class-name type)))
@@ -237,8 +234,7 @@
   (find type (proto-messages message) :key #'proto-name :test #'string=))
 
 (defmethod find-enum ((message protobuf-message) type)
-  (or (find type (proto-enums message) :key #'proto-class)
-      (find type (proto-enums message) :key #'proto-alias-for)))
+  (find type (proto-enums message) :key #'proto-class))
 
 (defmethod find-enum ((message protobuf-message) (type string))
   (find type (proto-enums message) :key #'proto-name :test #'string=))

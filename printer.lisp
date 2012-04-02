@@ -79,10 +79,10 @@
             (and (not (zerop indentation)) indentation) name)
     (let ((other (and class (not (string= name (class-name->proto class))) class)))
       (when other
-        (format stream "~&~VToption lisp_name=\"~A:~A\";~%"
+        (format stream "~&~VToption lisp_name = \"~A:~A\";~%"
                 (+ indentation 2) (package-name (symbol-package class)) (symbol-name class))))
     (when alias-for
-      (format stream "~&~VToption lisp_alias=\"~A:~A\";~%"
+      (format stream "~&~VToption lisp_alias = \"~A:~A\";~%"
               (+ indentation 2) (package-name (symbol-package alias-for)) (symbol-name alias-for)))
     (dolist (option options)
       (format stream "~&option ~:/protobuf-option/;~%" option))
@@ -109,10 +109,10 @@
             (and (not (zerop indentation)) indentation) name)
     (let ((other (and class (not (string= name (class-name->proto class))) class)))
       (when other
-        (format stream "~&~VToption lisp_name=\"~A:~A\";~%"
+        (format stream "~&~VToption lisp_name = \"~A:~A\";~%"
                 (+ indentation 2) (package-name (symbol-package class)) (symbol-name class))))
     (when alias-for
-      (format stream "~&~VToption lisp_alias=\"~A:~A\";~%"
+      (format stream "~&~VToption lisp_alias = \"~A:~A\";~%"
               (+ indentation 2) (package-name (symbol-package alias-for)) (symbol-name alias-for)))
     (dolist (option options)
       (format stream "~&~VToption ~:/protobuf-option/;~%"
