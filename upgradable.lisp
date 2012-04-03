@@ -40,9 +40,9 @@
     (and
      ;; Are they named the same?
      (upgrade-warn (string= (proto-name old) (proto-name new))
-                   "Protobuf schema name changed from ~A to ~A")
+                   "Protobuf schema name changed from '~A' to '~A'")
      (upgrade-warn (string= (proto-package old) (proto-package new))
-                   "Protobuf schema package changed from ~A to ~A")
+                   "Protobuf schema package changed from '~A' to '~A'")
      ;; Is every enum in 'old' upgradable to an enum in 'new'?
      (loop for old-enum in (proto-enums old)
            as new-enum = (find (proto-name old-enum) (proto-enums new)
@@ -73,8 +73,8 @@
   ;; No need to check that the names are equal, our caller did that already
   ;; Do they have the same index?
   (upgrade-warn (= (proto-index old) (proto-index new))
-                "Enum index for ~A changed from ~D to ~D"
-                (format nil "~A within ~A" (proto-name old) (proto-name enum))))
+                "Enum index for '~A' changed from ~D to ~D"
+                (format nil "~A.~A" (proto-name enum) (proto-name old))))
 
 
 (defmethod protobuf-upgradable ((old protobuf-message) (new protobuf-message) &optional what)
@@ -100,8 +100,8 @@
                   (protobuf-upgradable old-fld new-fld old)
                   ;; If there's no new field, the old one must not be required
                   (or (member (proto-required old-fld) '(:optional :repeated))
-                      (push (format nil "Old field ~A was required, and is now missing"
-                                    (proto-name old-fld))
+                      (push (format nil "Old field '~A.~A' was required, and is now missing"
+                                    (proto-name old) (proto-name old-fld))
                             *upgrade-warnings*))))))
 
 (defmethod protobuf-upgradable ((old protobuf-field) (new protobuf-field) &optional message)
@@ -134,15 +134,15 @@
     (and
      ;; Do they have the same index?
      (upgrade-warn (= (proto-index old) (proto-index new))
-                   "Field index for ~A changed from ~D to ~D"
-                   (format nil "~A within ~A" (proto-name old) (proto-name message)))
+                   "Field index for '~A' changed from ~D to ~D"
+                   (format nil "~A.~A" (proto-name message) (proto-name old)))
      ;; Are the arity and type upgradable?
      (upgrade-warn (arity-upgradable (proto-required old) (proto-required new))
                    "Arity of ~A, ~S, is not upgradable to ~S"
-                   (format nil "~A within ~A" (proto-name old) (proto-name message)))
+                   (format nil  "~A.~A" (proto-name message) (proto-name old)))
      (upgrade-warn (type-upgradable (proto-type old) (proto-type new))
-                   "Type of ~A, ~A, is not upgradable to ~A"
-                   (format nil "~A within ~A" (proto-name old) (proto-name message))))))
+                   "Type of '~A', ~A, is not upgradable to ~A"
+                   (format nil  "~A.~A" (proto-name message) (proto-name old))))))
 
 
 (defmethod protobuf-upgradable ((old protobuf-service) (new protobuf-service) &optional what)
@@ -155,11 +155,12 @@
         always (and new-rpc (protobuf-upgradable old-rpc new-rpc old))))
 
 (defmethod protobuf-upgradable ((old protobuf-rpc) (new protobuf-rpc) &optional service)
-  (declare (ignore service))
   ;; No need to check that the names are equal, our caller did that already
   (and
    ;; Are their inputs and outputs the same?
    (upgrade-warn (string= (proto-input-name old) (proto-input-name new))
-                 "Input type for ~A, ~A, is not upgradable to ~A" (proto-name old))
+                 "Input type for ~A, ~A, is not upgradable to ~A"
+                 (format nil  "~A.~A" (proto-name service) (proto-name old)))
    (upgrade-warn (string= (proto-output-name old) (proto-output-name new))
-                 "Output type for ~A, ~A, is not upgradable to ~A" (proto-name old))))
+                 "Output type for ~A, ~A, is not upgradable to ~A"
+                 (format nil  "~A.~A" (proto-name service) (proto-name old)))))

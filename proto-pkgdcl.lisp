@@ -47,6 +47,7 @@
 
    ;; CLOS to Protobufs transformer
    "WRITE-PROTOBUF-SCHEMA-FOR-CLASSES"
+   "GENERATE-PROTOBUF-SCHEMA-FOR-CLASSES"
 
    ;; Serialization
    "SERIALIZE-OBJECT-TO-STREAM"
@@ -56,7 +57,16 @@
    "OBJECT-SIZE"
 
    ;; Text printing
-   "PRINT-TEXT-FORMAT"))
+   "PRINT-TEXT-FORMAT")
+
+  ;; The "compatibility" API, whose names are taken from the Python API
+  (:export
+   "CLEAR"
+   "IS-INITIALIZED"
+   "OCTET-SIZE"
+   "SERIALIZE"
+   "MERGE-FROM-ARRAY"
+   "MERGE-FROM-MESSAGE"))
 
 (defpackage protobufs-implementation
   (:nicknames :proto-impl)
@@ -107,6 +117,7 @@
    "PROTO-VALUE"
    "PROTO-VALUES"
    "FIND-PROTOBUF"
+   "FIND-MESSAGE-FOR-CLASS"
    "FIND-MESSAGE"
    "FIND-ENUM"
    "FIND-OPTION"
@@ -119,6 +130,7 @@
    "ENSURE-PROTOBUF"
 
    ;; CLOS to Protobufs transformer
+   "*ALIAS-EXISTING-CLASSES*"
    "CLASS-TO-PROTOBUF-MESSAGE"
    "SLOT-TO-PROTOBUF-FIELD"
    "CLOS-TYPE-TO-PROTOBUF-TYPE"

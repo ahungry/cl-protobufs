@@ -20,6 +20,13 @@
   "Given a name (a string or a symbol), return the 'protobuf' schema having that name."
   (gethash name *all-protobufs*))
 
+(defvar *all-messages* (make-hash-table)
+  "A table mapping Lisp class names to 'protobuf' messages.")
+
+(defun find-message-for-class (class)
+  "Given the name of a class, return the 'protobuf' message and schema for the class."
+  (gethash class *all-messages*))
+
 ;; A few things (the pretty printer) want to keep track of the current schema
 (defvar *protobuf* nil)
 (defvar *protobuf-package* nil)
@@ -83,6 +90,13 @@
              :initform ()))
   (:documentation
    "The model class that represents a Protobufs schema, i.e., one .proto file."))
+
+(defmethod initialize-instance :after ((protobuf protobuf) &rest initargs)
+  (declare (ignore initargs))
+  ;; Record this schema under both its Lisp and its Protobufs name
+  (with-slots (class name) protobuf
+    (setf (gethash class *all-protobufs*) protobuf)
+    (setf (gethash name *all-protobufs*) protobuf)))
 
 (defmethod print-object ((p protobuf) stream)
   (print-unreadable-object (p stream :type t :identity t)
@@ -218,6 +232,11 @@
                :initform ()))
     (:documentation
    "The model class that represents a Protobufs message."))
+
+(defmethod initialize-instance :after ((message protobuf-message) &rest initargs)
+  (declare (ignore initargs))
+  (with-slots (class) message
+    (setf (gethash class *all-messages*) message)))
 
 (defmethod print-object ((m protobuf-message) stream)
   (print-unreadable-object (m stream :type t :identity t)

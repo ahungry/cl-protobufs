@@ -48,5 +48,8 @@
                              (:file "wire-format")
                              (:file "text-format")
                              (:file "serialize")
+                             (:file "api")
                              (:file "asdf-support")
                              (:file "examples")))))
+
+

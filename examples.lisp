@@ -39,7 +39,7 @@
    (cities :type (list-of qres-core::city) :initform () :initarg :cities)
    (airports :type (list-of qres-core::airport) :initform () :initarg :airports)))
 
-(setq bdschema (proto:write-protobuf-schema-for-classes
+(setq bdschema (proto:generate-protobuf-schema-for-classes
                 '(qres-core::country
                   qres-core::region
                   qres-core::region-key
@@ -90,7 +90,7 @@
 ||#
 
 #||
-(setq pschema (proto:write-protobuf-schema-for-classes
+(setq pschema (proto:generate-protobuf-schema-for-classes
                '(proto:protobuf proto:protobuf-option
                  proto:protobuf-enum proto:protobuf-enum-value
                  proto:protobuf-message proto:protobuf-field proto:protobuf-extension
@@ -99,7 +99,7 @@
 (proto:write-protobuf pschema)
 (proto:write-protobuf pschema :type :lisp)
 
-(setq pser (proto:serialize-object-to-stream pschema 'proto:protobuf pschema :stream nil))
+(progn (setq pser (proto:serialize-object-to-stream pschema 'proto:protobuf pschema :stream nil)) nil)
 (describe (proto:deserialize-object 'proto:protobuf pschema pser 0))
 
 (proto:print-text-format pschema 'proto:protobuf pschema)
@@ -165,7 +165,7 @@
             :initform ()
             :initarg :strvals)))
 
-(setq tschema (proto:write-protobuf-schema-for-classes
+(setq tschema (proto:generate-protobuf-schema-for-classes
                '(proto-test1 proto-test2 proto-test3 proto-test4 proto-test5)))
 
 (proto:write-protobuf tschema)

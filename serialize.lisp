@@ -47,7 +47,7 @@
 ;; 'visited' is used to cache object sizes
 ;; If it's passed in explicitly, it is assumed to already have the sizes within it
 ;; The default method uses meta-data from the protobuf "schema"
-(defmethod serialize-object (object type protobuf buffer index &key visited)
+(defmethod serialize-object (object (type symbol) protobuf buffer index &key visited)
   (declare (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
   (check-type protobuf (or protobuf protobuf-message))
@@ -154,7 +154,7 @@
   (check-type protobuf (or protobuf protobuf-message))
   (let ((length (or length (length buffer))))
     (declare (type fixnum length))
-    (labels ((deserialize (type trace &optional (end length))
+    (labels ((deserialize (type trace end)
                (declare (type fixnum end))
                (let* ((message (loop for p in trace
                                      thereis (find-message p type)))
@@ -244,7 +244,7 @@
                                          (when slot
                                            (setf (slot-value object slot) val))))))))))))))
       (declare (dynamic-extent #'deserialize))
-      (deserialize type (list protobuf)))))
+      (deserialize type (list protobuf) length))))
 
 
 ;;; Object sizes
@@ -261,7 +261,7 @@
 
 ;; 'visited' is used to cache object sizes
 ;; The default method uses meta-data from the protobuf "schema"
-(defmethod object-size (object type protobuf &key visited)
+(defmethod object-size (object (type symbol) protobuf &key visited)
   (check-type protobuf (or protobuf protobuf-message))
   (let ((size (and visited (gethash object visited))))
     (when size
@@ -412,7 +412,8 @@
                              `(let ((,vval ,reader))
                                 (when ,vval
                                   (setq ,vidx (serialize-enum ,vval '(,@(proto-values msg)) ,tag ,vbuf ,vidx)))))))))))))
-      `(defmethod serialize-object (,vobj (,vclass (eql ',(proto-class message))) ,vproto ,vbuf ,vidx &key visited)
+      `(defmethod serialize-object
+           (,vobj (,vclass (eql ',(proto-class message))) ,vproto ,vbuf ,vidx &key visited)
          (declare (ignorable visited)
                   (type (simple-array (unsigned-byte 8)) ,vbuf)
                   (type fixnum ,vidx))
@@ -497,7 +498,8 @@
                              (setq ,vidx idx)
                              ,(when slot
                                 `(setf (slot-value ,vobj ',slot) ,vval)))))))))))
-    `(defmethod deserialize-object ((,vclass (eql ',(proto-class message))) ,vproto ,vbuf ,vidx &optional ,vlen)
+    `(defmethod deserialize-object
+         ((,vclass (eql ',(proto-class message))) ,vproto ,vbuf ,vidx &optional ,vlen)
        (declare (type (simple-array (unsigned-byte 8)) ,vbuf)
                 (type fixnum ,vidx))
        (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
@@ -585,7 +587,8 @@
                              `(let ((,vval ,reader))
                                 (when ,vval
                                   (iincf ,vsize (enum-size ,vval '(,@(proto-values msg)) ,tag)))))))))))))
-      `(defmethod object-size (,vobj (,vclass (eql ',(proto-class message))) ,vproto &key visited)
+      `(defmethod object-size
+           (,vobj (,vclass (eql ',(proto-class message))) ,vproto &key visited)
          (declare (ignorable visited))
          (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
            (let ((,vsize (and visited (gethash ,vobj visited))))

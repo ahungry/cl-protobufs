@@ -17,10 +17,26 @@
 ;;  - How do we decide if there's an ownership hierarchy that should produce embedded messages?
 ;;  - How do we decide if there are volatile slots that should not be included in the message?
 (defun write-protobuf-schema-for-classes (classes
-                                          &key (stream *standard-output*) (type :proto) proto-name
-                                               package slot-filter type-filter enum-filter value-filter)
+                                          &key (stream *standard-output*) (type :proto) name package
+                                               slot-filter type-filter enum-filter value-filter)
   "Given a set of CLOS classes, generates a Protobufs schema for the classes
    and pretty prints the schema to the stream.
+   The return value is the schema."
+  (let ((protobuf (generate-protobuf-schema-for-classes classes
+                                                        :name name :package package
+                                                        :slot-filter slot-filter
+                                                        :type-filter type-filter
+                                                        :enum-filter enum-filter
+                                                        :value-filter value-filter)))
+    (fresh-line stream)
+    (write-protobuf protobuf :stream stream :type type)
+    (terpri stream)
+    protobuf))
+
+(defun generate-protobuf-schema-for-classes (classes
+                                             &key name package
+                                                  slot-filter type-filter enum-filter value-filter)
+  "Given a set of CLOS classes, generates a Protobufs schema for the classes.
    The return value is the schema."
   (let* ((messages (mapcar #'(lambda (c)
                                (class-to-protobuf-message c :slot-filter slot-filter
@@ -29,15 +45,16 @@
                                                             :value-filter value-filter))
                            classes))
          (protobuf (make-instance 'protobuf
-                     :name proto-name
+                     :name name
                      :package (and package (if (stringp package) package (string-downcase (string package))))
                      :messages messages)))
-    (when stream
-      (fresh-line stream)
-      (write-protobuf protobuf :stream stream :type type)
-      (terpri stream))
     protobuf))
 
+
+;; Controls whether or not to use ':alias-for' for the generated Protobuf
+;; Bind this to 'true' when you plan to use the generated Protobufs code in
+;; a Lisp world that includes that classes from which the code was generated
+(defvar *alias-existing-classes* nil)
 
 (defun class-to-protobuf-message (class
                                   &key slot-filter type-filter enum-filter value-filter)
@@ -64,6 +81,7 @@
       (make-instance 'protobuf-message
         :class (class-name class)
         :name  (class-name->proto (class-name class))
+        :alias-for (and *alias-existing-classes* (class-name class))
         :enums (delete-duplicates enums :key #'proto-name :test #'string=)
         :messages (delete-duplicates msgs :key #'proto-name :test #'string=)
         :fields fields))))
@@ -103,7 +121,12 @@
                       :required reqd
                       :index index
                       :value   (slot-definition-name slot)
-                      :reader  (find-slot-definition-reader class slot)
+                      :reader  (let ((reader (find-slot-definition-reader class slot)))
+                                 ;; Only use the reader if it is "interesting"
+                                 (unless (string= (symbol-name reader)
+                                                  (format nil "~A-~A" 
+                                                          (class-name class) (slot-definition-name slot)))
+                                   reader))
                       :default (clos-init-to-protobuf-default (slot-definition-initform slot) value-filter)
                       :packed  packed)))
         (values field nil enum)))))

@@ -79,9 +79,6 @@
                                  ',type ',name)
                  (map () #'protobufs-warn warnings))))
            (setq ,var protobuf)
-           ;; Record this schema under both its Lisp and its Protobufs name
-           (setf (gethash ',type *all-protobufs*) protobuf)
-           (setf (gethash ',name *all-protobufs*) protobuf)
            #+++ignore (
            ,@(when (eq optimize :speed)
                (mapcar (curry #'generate-object-size  protobuf) (proto-messages protobuf)))
