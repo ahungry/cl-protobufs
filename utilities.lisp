@@ -11,7 +11,7 @@
 (in-package "PROTO-IMPL")
 
 
-;;; Utilities
+;;; Code generation utilities
 
 (defun class-name->proto (x)
   "Given a Lisp class name, returns a Protobufs message or enum name."
@@ -33,7 +33,7 @@
 
 (defun proto->class-name (x &optional package)
   "Given a Protobufs message or enum type name, returns a Lisp class or type name."
-  (let ((name (string-upcase (uncamel-case x))))
+  (let ((name (nstring-upcase (uncamel-case x))))
     (if package (intern name package) (make-symbol name))))
 
 (defun proto->enum-name (x &optional package)
@@ -43,7 +43,7 @@
 
 (defun proto->slot-name (x &optional package)
   "Given a Protobufs field value name, returns a Lisp slot name."
-  (let ((name (string-upcase (uncamel-case x))))
+  (let ((name (nstring-upcase (uncamel-case x))))
     (if package (intern name package) (make-symbol name))))
 
 
@@ -51,8 +51,20 @@
   "Intern a string of the 'package:string' and return the symbol."
   (let* ((colon (position #\: string))
          (pkg   (if colon (subseq string 0 colon) "KEYWORD"))
-         (sym   (if colon (subseq string (i+ colon 1)) string)))
+         (sym   (if colon (subseq string (+ colon 1)) string)))
     (intern sym pkg)))
+
+#-quux
+(defun fintern (format-string &rest format-args)
+  "Interns a new symbol in the current package."
+  (declare (dynamic-extent format-args))
+  (intern (nstring-upcase (apply #'format nil format-string format-args))))
+
+#-quux
+(defun kintern (format-string &rest format-args)
+  "Interns a new symbol in the keyword package."
+  (declare (dynamic-extent format-args))
+  (intern (nstring-upcase (apply #'format nil format-string format-args)) "KEYWORD"))
 
 
 (define-condition protobufs-warning (warning simple-condition) ())
@@ -63,10 +75,45 @@
         :format-arguments format-arguments))
 
 
-;;; Fast fixnum arithmetic
+;;; Other utilities
 
 #-quux
 (progn
+
+;;; Parameterized list types
+
+(deftype list-of (type)
+  (cond ((eq type t)     'list)
+        ((eq type 'null) 'null)
+        (t
+         (let ((predicate (%declare-list-of type)))
+           `(and list (satisfies ,predicate))))))
+
+(defmacro declare-list-of (type)
+  `(eval-when (:compile-toplevel :load-toplevel :execute)
+     (%declare-list-of ',type)))
+
+(defun %declare-list-of (type)
+  (unless (or (eq type t)
+              (eq type 'null))
+    (let ((predicate (intern (format nil "~A-~A" 'list-of type) (symbol-package type))))
+      (unless (fboundp predicate)
+        (setf (symbol-function predicate)
+              #'(lambda (list)
+                  (and (listp list)
+                       (loop for elt in list
+                             always (typep elt type))))))
+      predicate)))
+
+(declare-list-of integer)
+(declare-list-of string)
+(declare-list-of keyword)
+(declare-list-of symbol)
+(declare-list-of single-float)
+(declare-list-of double-float)
+
+
+;;; Optimized fixnum arithmetic
 
 (defmacro i+ (&rest fixnums)
   `(the fixnum (+ ,@(loop for n in fixnums collect `(the fixnum ,n)))))
@@ -74,14 +121,23 @@
 (defmacro i- (number &rest fixnums)
   `(the fixnum (- (the fixnum ,number) ,@(loop for n in fixnums collect `(the fixnum ,n)))))
 
+(defmacro i* (&rest fixnums)
+  `(the fixnum (* ,@(loop for n in fixnums collect `(the fixnum ,n)))))
+
 (defmacro i= (&rest fixnums)
   `(= ,@(loop for n in fixnums collect `(the fixnum ,n))))
 
 (defmacro i< (&rest fixnums)
   `(< ,@(loop for n in fixnums collect `(the fixnum ,n))))
 
+(defmacro i<= (&rest fixnums)
+  `(<= ,@(loop for n in fixnums collect `(the fixnum ,n))))
+
 (defmacro i> (&rest fixnums)
   `(> ,@(loop for n in fixnums collect `(the fixnum ,n))))
+
+(defmacro i>= (&rest fixnums)
+  `(>= ,@(loop for n in fixnums collect `(the fixnum ,n))))
 
 (defmacro iash (value count)
   `(the fixnum (ash (the fixnum ,value) (the fixnum ,count))))
@@ -107,6 +163,106 @@
 
 (defmacro ildb (bytespec value)
   `(ldb ,bytespec (the fixnum ,value)))
+
+
+;;; Collectors, etc
+
+(defmacro with-gensyms ((&rest bindings) &body body)
+  `(let ,(mapcar #'(lambda (b) `(,b (gensym ,(string b)))) bindings)
+     ,@body))
+
+(defmacro with-prefixed-accessors (names (prefix object) &body body)
+  `(with-accessors (,@(loop for name in names
+                            collect `(,name ,(fintern "~A~A" prefix name))))
+       ,object
+     ,@body))
+
+
+(defmacro with-collectors ((&rest collection-descriptions) &body body)
+  (let ((let-bindings  ())
+        (flet-bindings ())
+        (dynamic-extents ())
+        (vobj '#:OBJECT))
+    (dolist (description collection-descriptions)
+      (destructuring-bind (place name) description
+        (let ((vtail (make-symbol (format nil "~A-TAIL" place))))
+          (setq dynamic-extents
+                (nconc dynamic-extents `(#',name)))
+          (setq let-bindings
+                (nconc let-bindings
+                       `((,place ())
+                         (,vtail nil))))
+          (setq flet-bindings
+                (nconc flet-bindings
+                       `((,name (,vobj)
+                           (setq ,vtail (if ,vtail
+                                          (setf (cdr ,vtail)  (list ,vobj))
+                                          (setf ,place (list ,vobj)))))))))))
+    `(let (,@let-bindings)
+       (flet (,@flet-bindings)
+         ,@(and dynamic-extents
+                `((declare (dynamic-extent ,@dynamic-extents))))
+         ,@body))))
+
+
+(defun curry (function &rest args)
+  (if (and args (null (cdr args)))                      ;fast test for length = 1
+    (let ((arg (car args)))
+      #'(lambda (&rest more-args)
+          (apply function arg more-args)))
+    #'(lambda (&rest more-args)
+        (apply function (append args more-args)))))
+
+(define-compiler-macro curry (&whole form function &rest args &environment env)
+  (declare (ignore env))
+  (if (and (listp function)
+           (eq (first function) 'function)
+           (symbolp (second function))
+           (and args (null (cdr args))))
+    `#'(lambda (&rest more-args)
+         (apply ,function ,(car args) more-args))
+    form))
+
+
+;;; String utilities
+
+(defun starts-with (string prefix &key (start 0))
+  (and (i>= (length string) (i+ start (length prefix)))
+       (string-equal string prefix :start1 start :end1 (i+ start (length prefix)))
+       prefix))
+
+(defun ends-with (string suffix &key (end (length string)))
+  (and (i>= end (length suffix))
+       (string-equal string suffix :start1 (i- end (length suffix)) :end1 end)
+       suffix))
+
+
+;; (camel-case "camel-case") => "CamelCase"
+(defun camel-case (string &key (separators '(#\-)))
+  (let ((words (split-string string :separators separators)))
+    (format nil "~{~@(~A~)~}" words)))
+
+;; (camel-case-but-one "camel-case") => "camelCase"
+(defun camel-case-but-one (string &key (separators '(#\-)))
+  (let ((words (split-string string :separators separators)))
+    (format nil "~(~A~)~{~@(~A~)~}" (car words) (cdr words))))
+
+;; (uncamel-case "CamelCase") => "Camel-Case"
+(defun uncamel-case (string &key (separator #\-))
+  (format nil (format nil "~~{~~A~~^~C~~}" separator)
+          (cl-ppcre:split "(?<=[a-z])(?=[A-Z])" string)))
+
+
+(defun split-string (line &key (start 0) (end (length line)) (separators '(#\-)))
+  (unless (i= start end)
+    (loop for this fixnum = start then (i+ next 1)
+          for next fixnum = (or (position-if #'(lambda (ch) (member ch separators)) line
+                                             :start this :end end)
+                                end)
+          for piece = (string-right-trim '(#\space) (subseq line this next))
+          when (not (i= (length piece) 0))
+            collect piece
+          until (i>= next end))))
 
 )       ;#-quux
 

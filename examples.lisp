@@ -81,7 +81,7 @@
                   :cities cities
                   :airports airports)))
 
-(setq gser (proto:serialize-object-to-stream geodata 'geodata bdschema :stream nil))
+(progn (setq gser (proto:serialize-object-to-stream geodata 'geodata bdschema :stream nil)) nil)
 (proto:deserialize-object 'geodata bdschema gser 0)
 
 (equalp gser (proto:serialize-object-to-stream

@@ -85,7 +85,7 @@
    "The model class that represents a Protobufs schema, i.e., one .proto file."))
 
 (defmethod print-object ((p protobuf) stream)
-  (print-unprintable-object (p stream :type t :identity t)
+  (print-unreadable-object (p stream :type t :identity t)
     (format stream "~@[~S~]~@[ (package ~A)~]"
             (proto-class p) (proto-package p))))
 
@@ -133,7 +133,7 @@
    "The model class that represents a Protobufs options, i.e., a keyword/value pair."))
 
 (defmethod print-object ((o protobuf-option) stream)
-  (print-unprintable-object (o stream :type t :identity t)
+  (print-unreadable-object (o stream :type t :identity t)
     (format stream "~A~@[ = ~S~]" (proto-name o) (proto-value o))))
 
 (defun cl-user::protobuf-option (stream option colon-p atsign-p)
@@ -167,7 +167,7 @@
    "The model class that represents a Protobufs enumeration type."))
 
 (defmethod print-object ((e protobuf-enum) stream)
-  (print-unprintable-object (e stream :type t :identity t)
+  (print-unreadable-object (e stream :type t :identity t)
     (format stream "~S~@[ (alias for ~S)~]"
             (proto-class e) (proto-alias-for e))))
 
@@ -185,7 +185,7 @@
    "The model class that represents a Protobufs enumeration value."))
 
 (defmethod print-object ((v protobuf-enum-value) stream)
-  (print-unprintable-object (v stream :type t :identity t)
+  (print-unreadable-object (v stream :type t :identity t)
     (format stream "~A = ~D"
             (proto-name v) (proto-index v))))
 
@@ -220,7 +220,7 @@
    "The model class that represents a Protobufs message."))
 
 (defmethod print-object ((m protobuf-message) stream)
-  (print-unprintable-object (m stream :type t :identity t)
+  (print-unreadable-object (m stream :type t :identity t)
     (format stream "~S~@[ (alias for ~S)~]"
             (proto-class m) (proto-alias-for m))))
 
@@ -278,7 +278,7 @@
             "Protobuf field indexes between 19000 and 19999 are not allowed")))
 
 (defmethod print-object ((f protobuf-field) stream)
-  (print-unprintable-object (f stream :type t :identity t)
+  (print-unreadable-object (f stream :type t :identity t)
     (format stream "~S :: ~S = ~D"
             (proto-value f) (proto-class f) (proto-index f))))
 
@@ -296,7 +296,7 @@
    "The model class that represents an extension with a Protobufs message."))
 
 (defmethod print-object ((e protobuf-extension) stream)
-  (print-unprintable-object (e stream :type t :identity t)
+  (print-unreadable-object (e stream :type t :identity t)
     (format stream "~D - ~D"
             (proto-extension-from e) (proto-extension-from e))))
 
@@ -311,7 +311,7 @@
    "The model class that represents a Protobufs service."))
 
 (defmethod print-object ((s protobuf-service) stream)
-  (print-unprintable-object (s stream :type t :identity t)
+  (print-unreadable-object (s stream :type t :identity t)
     (format stream "~A"
             (proto-name s))))
 
@@ -338,7 +338,7 @@
    "The model class that represents one RPC with a Protobufs service."))
 
 (defmethod print-object ((r protobuf-rpc) stream)
-  (print-unprintable-object (r stream :type t :identity t)
+  (print-unreadable-object (r stream :type t :identity t)
     (format stream "~S (~S) => (~S)"
             (proto-function r) (proto-input-type r) (proto-output-type r))))
 
@@ -349,3 +349,14 @@
 
 (defmethod (setf proto-function) (function (rpc protobuf-rpc))
   (setf (proto-function rpc) function))
+
+
+;; Better type checking for these guys
+(declare-list-of protobuf-option)
+(declare-list-of protobuf-enum)
+(declare-list-of protobuf-enum-value)
+(declare-list-of protobuf-message)
+(declare-list-of protobuf-extension)
+(declare-list-of protobuf-field)
+(declare-list-of protobuf-service)
+(declare-list-of protobuf-rpc)

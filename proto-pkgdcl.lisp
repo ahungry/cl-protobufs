@@ -60,7 +60,17 @@
 
 (defpackage protobufs-implementation
   (:nicknames :proto-impl)
-  (:use :common-lisp :quux :protobufs)
+  (:use :common-lisp #+quux :quux :protobufs)
+
+  #-quux
+  (:import-from :closer-mop
+   "CLASS-SLOTS"
+   "CLASS-DIRECT-SLOTS"
+   "CLASS-PRECEDENCE-LIST"
+   "SLOT-DEFINITION-NAME"
+   "SLOT-DEFINITION-TYPE"
+   "SLOT-DEFINITION-INITFORM"
+   "SLOT-DEFINITION-READERS")
 
   (:export
    ;; Model class protocol

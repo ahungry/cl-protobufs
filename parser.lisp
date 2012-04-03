@@ -15,15 +15,18 @@
 
 ;;; Parsing utilities
 
-(defun-inline proto-whitespace-char-p (ch)
+(declaim (inline proto-whitespace-char-p))
+(defun proto-whitespace-char-p (ch)
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
     (and ch (member ch '(#\space #\tab #\return #\newline)))))
 
-(defun-inline proto-eol-char-p (ch)
+(declaim (inline proto-eol-char-p))
+(defun proto-eol-char-p (ch)
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
     (and ch (member ch '(#\return #\newline)))))
 
-(defun-inline proto-token-char-p (ch)
+(declaim (inline proto-token-char-p))
+(defun proto-token-char-p (ch)
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
     (and ch (or (alpha-char-p ch)
                 (digit-char-p ch)

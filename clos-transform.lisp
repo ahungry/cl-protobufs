@@ -64,8 +64,8 @@
       (make-instance 'protobuf-message
         :class (class-name class)
         :name  (class-name->proto (class-name class))
-        :enums (delete-duplicates enums :key #'proto-name :test #'string-equal)
-        :messages (delete-duplicates msgs :key #'proto-name :test #'string-equal)
+        :enums (delete-duplicates enums :key #'proto-name :test #'string=)
+        :messages (delete-duplicates msgs :key #'proto-name :test #'string=)
         :fields fields))))
 
 ;; Returns a field, (optionally) an inner message, and (optionally) an inner enum
@@ -265,7 +265,7 @@
 
 (defun protobuf-default-to-clos-init (default type)
   (cond ((or (null default)
-             (and (stringp default) (string-empty-p default)))
+             (and (stringp default) (i= (length default) 0)))
          nil)
         ((member type '(:int32 :uint32 :int64 :uint64 :sint32 :sint64
                         :fixed32 :sfixed32 :fixed64 :sfixed64

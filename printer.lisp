@@ -133,7 +133,7 @@
                               &key (indentation 0))
   (with-prefixed-accessors (name documentation required index default packed) (proto- field)
     (let ((dflt (if (stringp default)
-                  (if (string-empty-p default) nil default)
+                  (if (i= (length default) 0) nil default)
                   default)))
       (format stream "~&~@[~VT~]~(~A~) ~A ~A = ~D~@[ [default = ~A]~]~@[ [packed=true]~*~];~:[~*~*~;~VT// ~A~]~%"
               (and (not (zerop indentation)) indentation)
