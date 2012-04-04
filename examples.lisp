@@ -102,8 +102,8 @@
 (progn (setq pser (proto:serialize-object-to-stream pschema 'proto:protobuf :stream nil)) nil)
 (describe (proto:deserialize-object 'proto:protobuf pser))
 
-(proto:print-text-format pschema 'proto:protobuf)
-(proto:print-text-format (proto:deserialize-object 'proto:protobuf pser) 'proto:protobuf)
+(proto:print-text-format pschema)
+(proto:print-text-format (proto:deserialize-object 'proto:protobuf pser))
 
 (dolist (class '(proto:protobuf
                  proto:protobuf-option
@@ -165,23 +165,38 @@
             :initform ()
             :initarg :strvals)))
 
+(defclass proto-test6 ()
+  ((intvals :type (list-of integer)
+            :initform ()
+            :initarg :intvals)
+   (strvals :type (list-of string)
+            :initform ()
+            :initarg :strvals)
+   (recvals :type (list-of proto-test2)
+            :initform ()
+            :initarg :recvals)))
+
 (setq tschema (proto:generate-protobuf-schema-for-classes
-               '(proto-test1 proto-test2 proto-test3 proto-test4 proto-test5)))
+               '(proto-test1 proto-test2 proto-test3 proto-test4 proto-test5 proto-test6)))
 
 (proto:write-protobuf tschema)
 (proto:write-protobuf tschema :type :lisp)
 
-(dolist (class '(proto-test1 proto-test2 proto-test3 proto-test4 proto-test5))
+(dolist (class '(proto-test1 proto-test2 proto-test3 proto-test4 proto-test5 proto-test6))
   (let ((message (proto-impl:find-message tschema class)))
     (eval (proto-impl:generate-object-size  message))
     (eval (proto-impl:generate-serializer   message))
     (eval (proto-impl:generate-deserializer message))))
 
-(setq test1 (make-instance 'proto-test1 :intval 150))
-(setq test2 (make-instance 'proto-test2 :strval "testing"))
-(setq test3 (make-instance 'proto-test3 :recval test1))
-(setq test4 (make-instance 'proto-test4 :recval test2))
-(setq test5 (make-instance 'proto-test5 :color :red :intvals '(2 3 5 7) :strvals '("two" "three" "five" "seven")))
+(setq test1  (make-instance 'proto-test1 :intval 150))
+(setq test2  (make-instance 'proto-test2 :strval "testing"))
+(setq test2b (make-instance 'proto-test2 :strval "1 2 3"))
+(setq test3  (make-instance 'proto-test3 :recval test1))
+(setq test4  (make-instance 'proto-test4 :recval test2))
+(setq test5  (make-instance 'proto-test5 :color :red
+                                         :intvals '(2 3 5 7) :strvals '("two" "three" "five" "seven")))
+(setq test6  (make-instance 'proto-test6 :intvals '(2 3 5 7) :strvals '("two" "three" "five" "seven")
+                                         :recvals (list test2 test2b)))
 
 (setq tser1 (proto:serialize-object-to-stream test1 'proto-test1 :stream nil))
 (equalp tser1 #(#x08 #x96 #x01))
@@ -207,6 +222,12 @@
                 #x1A #x03 #x74 #x77 #x6F #x1A #x05 #x74 #x68 #x72 #x65 #x65 #x1A #x04 #x66 #x69 #x76 #x65 #x1A #x05 #x73 #x65 #x76 #x65 #x6E))
 (describe (proto:deserialize-object 'proto-test5 tser5))
 
+(setq tser6 (proto:serialize-object-to-stream test6 'proto-test6 :stream nil))
+(equalp tser6 #(#x08 #x04 #x02 #x03 #x05 #x07 #x12 #x03 #x74 #x77 #x6F #x12 #x05 #x74 #x68 #x72 #x65 #x65 #x12 #x04 #x66 #x69 #x76 #x65 #x12 #x05 #x73 #x65 #x76 #x65 #x6E #x1A #x09 #x12 #x07 #x74 #x65 #x73 #x74 #x69 #x6E #x67 #x1A #x07 #x12 #x05 #x31 #x20 #x32 #x20 #x33))
+(describe (proto:deserialize-object 'proto-test6 tser6))
+(describe (slot-value (proto:deserialize-object 'proto-test6 tser6) 'recvals))
+
+
 (equalp (mapcar #'proto-impl:zig-zag-encode32
                 '(0 -1 1 -2 2 -2147483648 2147483647))
         '(0 1 2 3 4 4294967295 4294967294))
@@ -214,20 +235,23 @@
                 '(0 -1 1 -2 2 -2147483648 2147483647 -1152921504606846976 1152921504606846975))
         '(0 1 2 3 4 4294967295 4294967294 2305843009213693951 2305843009213693950))
 
-(proto:print-text-format test1 'proto-test1)
-(proto:print-text-format (proto:deserialize-object 'proto-test1 tser1) 'proto-test1)
+(proto:print-text-format test1)
+(proto:print-text-format (proto:deserialize-object 'proto-test1 tser1))
 
-(proto:print-text-format test2 'proto-test2)
-(proto:print-text-format (proto:deserialize-object 'proto-test2 tser2) 'proto-test2)
+(proto:print-text-format test2)
+(proto:print-text-format (proto:deserialize-object 'proto-test2 tser2))
 
-(proto:print-text-format test3 'proto-test3)
-(proto:print-text-format (proto:deserialize-object 'proto-test3 tser3) 'proto-test3)
+(proto:print-text-format test3)
+(proto:print-text-format (proto:deserialize-object 'proto-test3 tser3))
 
-(proto:print-text-format test4 'proto-test4)
-(proto:print-text-format (proto:deserialize-object 'proto-test4 tser4) 'proto-test3)
+(proto:print-text-format test4)
+(proto:print-text-format (proto:deserialize-object 'proto-test4 tser4))
 
-(proto:print-text-format test5 'proto-test5)
-(proto:print-text-format (proto:deserialize-object 'proto-test5 tser5) 'proto-test5)
+(proto:print-text-format test5)
+(proto:print-text-format (proto:deserialize-object 'proto-test5 tser5))
+
+(proto:print-text-format test6)
+(proto:print-text-format (proto:deserialize-object 'proto-test6 tser6))
 ||#
 
 #||
@@ -394,8 +418,8 @@
 
 (setq clr (make-instance 'color :color :red))
 (setq cser (proto:serialize-object-to-stream clr 'color :stream nil))
-(proto:print-text-format clr 'color)
-(proto:print-text-format (proto:deserialize-object 'color cser) 'color)
+(proto:print-text-format clr)
+(proto:print-text-format (proto:deserialize-object 'color cser))
 ||#
 
 #||

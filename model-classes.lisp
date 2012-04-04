@@ -23,9 +23,12 @@
 (defvar *all-messages* (make-hash-table)
   "A table mapping Lisp class names to 'protobuf' messages.")
 
-(defun find-message-for-class (class)
+(defmethod find-message-for-class ((class symbol))
   "Given the name of a class, return the 'protobuf' message and schema for the class."
   (gethash class *all-messages*))
+
+(defmethod find-message-for-class ((class class))
+  (gethash (class-name class) *all-messages*))
 
 ;; A few things (the pretty printer) want to keep track of the current schema
 (defvar *protobuf* nil)

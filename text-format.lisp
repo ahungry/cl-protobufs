@@ -18,7 +18,8 @@
    "Prints the object 'object' of type 'type' using message(s) define in the
     schema 'protobuf' onto the stream 'stream' using the textual format."))
 
-(defmethod print-text-format (object type &key (stream *standard-output*))
+(defmethod print-text-format (object &optional (type (class-of object))
+                              &key (stream *standard-output*))
   (let ((message (find-message-for-class type)))
     (assert message ()
             "There is no Protobuf message having the type ~S" type)
@@ -47,10 +48,9 @@
                                           'protobuf-message)
                                    (let ((values (if slot (read-slot object slot reader) (list object))))
                                      (when values
-                                       (format stream "~&~VT~A:~%" (+ indent 2) (proto-name field))
-                                       (let ((indent (+ indent 4)))
+                                       (let ((indent (+ indent 2)))
                                          (dolist (v values)
-                                           (format stream "~&~VT~A {~%" indent (proto-name msg))
+                                           (format stream "~&~VT~A: {~%" indent (proto-name field))
                                            (map () (curry #'do-field v msg indent)
                                                    (proto-fields msg))
                                            (format stream "~&~VT}~%" indent))))))
@@ -68,9 +68,8 @@
                                           'protobuf-message)
                                    (let ((v (if slot (read-slot object slot reader) object)))
                                      (when v
-                                       (format stream "~&~VT~A:~%" (+ indent 2) (proto-name field))
-                                       (let ((indent (+ indent 4)))
-                                         (format stream "~&~VT~A {~%" indent (proto-name msg))
+                                       (let ((indent (+ indent 2)))
+                                         (format stream "~&~VT~A: {~%" indent (proto-name field))
                                          (map () (curry #'do-field v msg indent)
                                                  (proto-fields msg))
                                          (format stream "~&~VT}~%" indent)))))
