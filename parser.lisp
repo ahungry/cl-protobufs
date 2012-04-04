@@ -353,7 +353,7 @@
                  (maybe-skip-comments stream)))
          (service (make-instance 'protobuf-service
                     :class (proto->class-name name *protobuf-package*)
-		    :name name)))
+                    :name name)))
     (loop
       (let ((token (parse-token stream)))
         (when (null token)

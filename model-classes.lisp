@@ -94,9 +94,15 @@
 (defmethod initialize-instance :after ((protobuf protobuf) &rest initargs)
   (declare (ignore initargs))
   ;; Record this schema under both its Lisp and its Protobufs name
-  (with-slots (class name) protobuf
+  (with-slots (class name messages) protobuf
     (setf (gethash class *all-protobufs*) protobuf)
-    (setf (gethash name *all-protobufs*) protobuf)))
+    (setf (gethash name *all-protobufs*) protobuf)
+    (dolist (msg messages)
+      (setf (proto-parent msg) protobuf))))
+
+(defmethod (setf proto-messages) :after (messages (protobuf protobuf))
+  (dolist (msg messages)
+    (setf (proto-parent msg) protobuf)))
 
 (defmethod print-object ((p protobuf) stream)
   (print-unreadable-object (p stream :type t :identity t)
@@ -109,15 +115,13 @@
     returns the protobuf message corresponding to the type."))
 
 (defmethod find-message ((protobuf protobuf) (type symbol))
-  (or (find type (proto-messages protobuf) :key #'proto-class)
-      (some #'(lambda (msg) (find-message msg type)) (proto-messages protobuf))))
+  (find type (proto-messages protobuf) :key #'proto-class))
 
 (defmethod find-message ((protobuf protobuf) (type class))
   (find-message protobuf (class-name type)))
 
 (defmethod find-message ((protobuf protobuf) (type string))
-  (or (find type (proto-messages protobuf) :key #'proto-name :test #'string=)
-      (some #'(lambda (msg) (find-message msg type)) (proto-messages protobuf))))
+  (find type (proto-messages protobuf) :key #'proto-name :test #'string=))
 
 (defgeneric find-enum (protobuf type)
   (:documentation
@@ -125,12 +129,10 @@
     returns the protobuf enum corresponding to the type."))
 
 (defmethod find-enum ((protobuf protobuf) type)
-  (or (find type (proto-enums protobuf) :key #'proto-class)
-      (some #'(lambda (msg) (find-enum msg type)) (proto-messages protobuf))))
+  (find type (proto-enums protobuf) :key #'proto-class))
 
 (defmethod find-enum ((protobuf protobuf) (type string))
-  (or (find type (proto-enums protobuf) :key #'proto-name :test #'string=)
-      (some #'(lambda (msg) (find-enum msg type)) (proto-messages protobuf))))
+  (find type (proto-enums protobuf) :key #'proto-name :test #'string=))
 
 
 ;;--- For now, we support only the built-in options
@@ -206,7 +208,10 @@
 
 ;; A protobuf message
 (defclass protobuf-message (base-protobuf)
-  ((conc :type (or null string)                 ;the conc-name used for Lisp accessors
+  ((parent :type (or protobuf protobuf-message)
+           :accessor proto-parent
+           :initarg :parent)
+   (conc :type (or null string)                 ;the conc-name used for Lisp accessors
          :accessor proto-conc-name
          :initarg :conc-name
          :initform nil)
@@ -235,8 +240,14 @@
 
 (defmethod initialize-instance :after ((message protobuf-message) &rest initargs)
   (declare (ignore initargs))
-  (with-slots (class) message
-    (setf (gethash class *all-messages*) message)))
+  (with-slots (class messages) message
+    (setf (gethash class *all-messages*) message)
+    (dolist (msg messages)
+      (setf (proto-parent msg) message))))
+
+(defmethod (setf proto-messages) :after (messages (message protobuf-message))
+  (dolist (msg messages)
+    (setf (proto-parent msg) message)))
 
 (defmethod print-object ((m protobuf-message) stream)
   (print-unreadable-object (m stream :type t :identity t)
@@ -244,19 +255,23 @@
             (proto-class m) (proto-alias-for m))))
 
 (defmethod find-message ((message protobuf-message) (type symbol))
-  (find type (proto-messages message) :key #'proto-class))
+  (or (find type (proto-messages message) :key #'proto-class)
+      (find-message (proto-parent message) type)))
 
 (defmethod find-message ((message protobuf-message) (type class))
   (find-message message (class-name type)))
 
 (defmethod find-message ((message protobuf-message) (type string))
-  (find type (proto-messages message) :key #'proto-name :test #'string=))
+  (or (find type (proto-messages message) :key #'proto-name :test #'string=)
+      (find-message (proto-parent message) type)))
 
 (defmethod find-enum ((message protobuf-message) type)
-  (find type (proto-enums message) :key #'proto-class))
+  (or (find type (proto-enums message) :key #'proto-class)
+      (find-enum (proto-parent message) type)))
 
 (defmethod find-enum ((message protobuf-message) (type string))
-  (find type (proto-enums message) :key #'proto-name :test #'string=))
+  (or (find type (proto-enums message) :key #'proto-name :test #'string=)
+      (find-enum (proto-parent message) type)))
 
 
 ;; A protobuf field within a message

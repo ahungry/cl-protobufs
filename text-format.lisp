@@ -13,14 +13,13 @@
 
 ;;; Print objects using Protobufs text format
 
-(defgeneric print-text-format (object type protobuf &key stream)
+(defgeneric print-text-format (object type &key stream)
   (:documentation
    "Prints the object 'object' of type 'type' using message(s) define in the
     schema 'protobuf' onto the stream 'stream' using the textual format."))
 
-(defmethod print-text-format (object type protobuf &key (stream *standard-output*))
-  (check-type protobuf (or protobuf protobuf-message))
-  (let ((message (find-message protobuf type)))
+(defmethod print-text-format (object type &key (stream *standard-output*))
+  (let ((message (find-message-for-class type)))
     (assert message ()
             "There is no Protobuf message having the type ~S" type)
     (macrolet ((read-slot (object slot reader)
@@ -43,9 +42,8 @@
                                    (map () #'(lambda (v)
                                                (print-prim v type field stream indent))
                                            (read-slot object slot reader)))
-                                  ((typep (setq msg (and type (loop for p in trace
-                                                                    thereis (or (find-message p type)
-                                                                                (find-enum p type)))))
+                                  ((typep (setq msg (and type (or (find-message trace type)
+                                                                  (find-enum trace type))))
                                           'protobuf-message)
                                    (let ((values (if slot (read-slot object slot reader) (list object))))
                                      (when values
@@ -53,7 +51,7 @@
                                        (let ((indent (+ indent 4)))
                                          (dolist (v values)
                                            (format stream "~&~VT~A {~%" indent (proto-name msg))
-                                           (map () (curry #'do-field v (cons msg trace) indent)
+                                           (map () (curry #'do-field v msg indent)
                                                    (proto-fields msg))
                                            (format stream "~&~VT}~%" indent))))))
                                   ((typep msg 'protobuf-enum)
@@ -65,16 +63,15 @@
                                    (let ((v (read-slot object slot reader)))
                                      (when (or v (eq type :bool))
                                        (print-prim v type field stream indent))))
-                                  ((typep (setq msg (and type (loop for p in trace
-                                                                    thereis (or (find-message p type)
-                                                                                (find-enum p type)))))
+                                  ((typep (setq msg (and type (or (find-message trace type)
+                                                                  (find-enum trace type))))
                                           'protobuf-message)
                                    (let ((v (if slot (read-slot object slot reader) object)))
                                      (when v
                                        (format stream "~&~VT~A:~%" (+ indent 2) (proto-name field))
                                        (let ((indent (+ indent 4)))
                                          (format stream "~&~VT~A {~%" indent (proto-name msg))
-                                         (map () (curry #'do-field v (cons msg trace) indent)
+                                         (map () (curry #'do-field v msg indent)
                                                  (proto-fields msg))
                                          (format stream "~&~VT}~%" indent)))))
                                   ((typep msg 'protobuf-enum)
@@ -83,7 +80,7 @@
                                        (print-enum v msg field stream indent)))))))))))
         (declare (dynamic-extent #'do-field))
         (format stream "~&~A {~%" (proto-name message))
-        (map () (curry #'do-field object (list message protobuf) 0) (proto-fields message))
+        (map () (curry #'do-field object message 0) (proto-fields message))
         (format stream "~&}~%")
         nil))))
 

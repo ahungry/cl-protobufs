@@ -81,11 +81,11 @@
            (setq ,var protobuf)
            #+++ignore (
            ,@(when (eq optimize :speed)
-               (mapcar (curry #'generate-object-size  protobuf) (proto-messages protobuf)))
+               (mapcar #'generate-object-size (proto-messages protobuf)))
            ,@(when (eq optimize :speed)
-               (mapcar (curry #'generate-serializer   protobuf) (proto-messages protobuf)))
+               (mapcar #'generate-serializer (proto-messages protobuf)))
            ,@(when (eq optimize :speed)
-               (mapcar (curry #'generate-deserializer protobuf) (proto-messages protobuf))) )
+               (mapcar #'generate-deserializer (proto-messages protobuf))) )
            protobuf)))))
 
 ;; Define an enum type named 'type' and a Lisp 'deftype'
