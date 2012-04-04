@@ -454,3 +454,31 @@ service ColorWheel {
 (proto:write-protobuf ppp)
 (proto:write-protobuf ppp :type :lisp)
 ||#
+
+#||
+(proto:define-proto list ()
+  (proto:define-message list (:alias-for list)
+    (atom-car :type (or null string) :reader atom-car)
+    (list-car :type (or null list)   :reader list-car)
+    (cdr      :type (or null list)   :reader list-cdr)))
+
+(defun atom-car (x)
+  (let ((car (car x)))
+    (etypecase car
+      (string car)
+      (list   nil))))
+
+(defun list-car (x)
+  (let ((car (car x)))
+    (etypecase car
+      (string nil)
+      (list   car))))
+
+(defun list-cdr (x) 
+  (let ((cdr (cdr x)))
+    (assert (listp cdr) ())
+    cdr))
+
+(proto:serialize-object-to-stream '("this" "is" "a" ("nested" "test")) 'list)
+(proto:print-text-format '("this" "is" "a" ("nested" "test")) 'list)
+||#

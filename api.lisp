@@ -47,7 +47,7 @@
         (object-size object type visited)))))
 
 ;; This is simpler than 'serialize-object', but doesn't fully support aliasing
-(defgeneric serialize (object buffer &optional start end)
+(defgeneric serialize (object &optional buffer start end)
   (:documentation
    "Serialize 'object' into 'buffer' using the wire format, starting at the index
    'start' and going no farther than 'end'. 'object' is an object whose Lisp class
@@ -61,7 +61,9 @@
       (let* ((visited (make-hash-table))
              (size    (object-size object type visited))
              (start   (or start 0))
-             (buffer  (make-array size :element-type '(unsigned-byte 8))))
+             (buffer  (or buffer (make-array size :element-type '(unsigned-byte 8)))))
+        (assert (>= (length buffer) size) ()
+                "The buffer ~S is not large enough to hold ~S" buffer object)
         (serialize-object object type buffer start visited)
         buffer))))
 
