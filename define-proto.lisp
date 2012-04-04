@@ -184,23 +184,26 @@
           (otherwise
            (when (i= index 18999)                       ;skip over the restricted range
              (setq index 19999))
-           (destructuring-bind (slot &key type default reader name) fld
+           (destructuring-bind (slot &key type (default nil default-p) reader name) fld
              (let* ((idx  (if (listp slot) (second slot) (iincf index)))
                     (slot (if (listp slot) (first slot) slot))
                     (reqd (clos-type-to-protobuf-required type))
-                    (accessor (intern (if conc-name (format nil "~A~A" conc-name slot) (symbol-name slot))
-                                      (symbol-package slot))))
+                    (reader (if (eq reader 't)
+                              (intern (if conc-name (format nil "~A~A" conc-name slot) (symbol-name slot))
+                                      (symbol-package slot))
+                              reader)))
                (multiple-value-bind (ptype pclass)
                    (clos-type-to-protobuf-type type)
                  (unless alias-for
                    (collect-slot `(,slot :type ,type
-                                         :accessor ,accessor
+                                         ,@(and reader
+                                                `(:accessor ,reader))
                                          :initarg ,(kintern (symbol-name slot))
-                                         ,@(cond ((and (null default) (eq reqd :repeated))
+                                         ,@(cond ((and (not default-p) (eq reqd :repeated))
                                                   `(:initform ()))
-                                                 ((and (null default) (eq reqd :optional))
+                                                 ((and (not default-p) (eq reqd :optional))
                                                   `(:initform nil))
-                                                 (default
+                                                 (default-p
                                                    `(:initform ,default))))))
                  (collect-field `(make-instance 'protobuf-field
                                    :name  ,(or name (slot-name->proto slot))
