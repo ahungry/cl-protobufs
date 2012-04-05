@@ -52,7 +52,7 @@
    "Serialize 'object' into 'buffer' using the wire format, starting at the index
    'start' and going no farther than 'end'. 'object' is an object whose Lisp class
    corresponds to a Protobufs message.")
-  (:method ((object standard-object) buffer &optional (start 0) end)
+  (:method ((object standard-object) &optional buffer (start 0) end)
     (declare (ignore end))
     (let* ((message (find-message-for-class (class-of object)))
            (type    (and message (proto-class message))))

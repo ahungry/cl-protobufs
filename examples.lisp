@@ -457,13 +457,13 @@ service ColorWheel {
 
 #||
 (proto:define-proto typed-list ()
-  (proto:define-message typed-list (:alias-for list)
+  (proto:define-message typed-list ()
     (string-car  :type (or null string)  :reader string-car)
     (symbol-car  :type (or null string)  :reader symbol-car)
     (integer-car :type (or null integer) :reader integer-car)
     (float-car   :type (or null single-float) :reader float-car)
     (list-car  :type (or null typed-list) :reader list-car)
-    (cdr       :type (or null typed-list) :reader list-cdr)))
+    (list-cdr  :type (or null typed-list) :reader list-cdr)))
 
 (defun string-car (x)
   (and (stringp (car x)) (car x)))
