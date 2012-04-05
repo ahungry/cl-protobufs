@@ -284,10 +284,30 @@
                           :output-type ',output-type
                           :output-name ',(or output-name (class-name->proto output-type))
                           :options (list ,@options)))
-          (let ((vcontroller (intern (symbol-name 'controller) (symbol-package function)))
-                (vcallback   (intern (symbol-name 'callback) (symbol-package function))))
-            ;;--- Is this really what the stub's signature should be?
-            (collect-form `(defgeneric ,function (,vcontroller ,input-type &optional ,vcallback)
+          ;;--- It's likely that all of the below belongs in CL-Stubby
+          (let ((client-fn function)
+                (server-fn (intern (format nil "~A-~A" 'do function) (symbol-package function)))
+                (vchannel  (intern (symbol-name 'channel) (symbol-package function)))
+                (vcallback (intern (symbol-name 'callback) (symbol-package function))))
+            ;; The client side stub, e.g., 'read-air-reservation'
+            ;; The expectation is that CL-Stubby will implement a method for
+            ;; this on each kind of channel (HTTP, TCP socket, IPC, etc),
+            ;; possibly on a client-side subclass of the input class
+            ;; This method (de)serializes the objects, does error checking, etc
+            (collect-form `(defgeneric ,client-fn (,vchannel ,input-type)
+                             (declare (values ,output-type))))
+            ;; The server side stub, e.g., 'do-read-air-reservation'
+            ;; The expectation is that the server-side program will implement
+            ;; a method with the business logic for this on each kind of channel
+            ;; (HTTP, TCP socket, IPC, etc), possibly on a server-side subclass
+            ;; of the input class
+            ;; The business logic is expected to perform the correct operations on
+            ;; the input object, which arrived via Protobufs, and produce an output
+            ;; of the given type, which will be serialized as a result
+            ;; The channel object hold client identity information, deadline info,
+            ;; etc, and can be side-effected to indicate success or failure
+            ;; CL-Stubby provides the channel classes and does (de)serialization
+            (collect-form `(defgeneric ,server-fn (,vchannel ,input-type &optional ,vcallback)
                              (declare (values ,output-type))))))))
     (let ((name (or name (class-name->proto type)))
           (options (loop for (key val) on options by #'cddr
