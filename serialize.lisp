@@ -176,18 +176,22 @@
                       ;; that should be stored in the slot
                       rslots)
                  (loop
-                   (when (>= index end)
-                     ;; Now set the repeated slots
-                     ;; If we do this element by element, we get killed by type checking
-                     ;; in the slot setters
-                     (when rslots
-                       (map:map #'(lambda (s v) (setf (slot-value object s) (nreverse v))) rslots))
-                     (return-from deserialize (values object index)))
-                   (multiple-value-bind (val idx)
-                       (decode-uint32 buffer index)
+                   (multiple-value-bind (tag idx)
+                       (if (i< index end) (decode-uint32 buffer index) (values 0 index))
+                     ;; We're done if we've gotten to the end index or
+                     ;; we see a null byte (there can never be null tags
+                     ;; because field indices start at 1)
+                     (when (i= tag 0)
+                       ;; Now set the repeated slots
+                       ;; If we do this element by element, we get killed by type checking
+                       ;; in the slot setters
+                       (when rslots
+                         (map:map #'(lambda (s v) (setf (slot-value object s) (nreverse v))) rslots))
+                       (return-from deserialize
+                         (values object index)))
                      (setq index idx)
-                     (let* ((wtype (ilogand val #x7))
-                            (fidx  (ilogand (iash val -3) #x1FFFFFFF))
+                     (let* ((wtype (ilogand tag #x7))
+                            (fidx  (ilogand (iash tag -3) #x1FFFFFFF))
                             (field (find fidx (proto-fields message) :key #'proto-index))
                             (type  (and field (if (eq (proto-class field) 'boolean) :bool (proto-class field))))
                             ;; It's OK for this to be null
@@ -200,7 +204,7 @@
                          ;; If there's no field descriptor for this index, just skip
                          ;; the next element in the buffer having the given wire type
                          (setq index (skip-element buffer index wtype))
-                         ;;--- Check for mismatched types, running past end of buffer, etc
+                         ;;--- Check for mismatched wire type, running past end of buffer, etc
                          (cond ((and field (eq (proto-required field) :repeated))
                                 (cond ((and (proto-packed field) (packed-type-p type))
                                        (multiple-value-bind (values idx)
@@ -351,6 +355,7 @@
 
 ;;; Compile-time generation of serializers
 
+;; Note well: keep this in sync with the main 'serialize-object' method above
 (defun generate-serializer (message)
   "Generate a 'serialize-object' method for the given message."
   (with-gensyms (vobj vbuf vidx vval vclass)
@@ -382,7 +387,7 @@
                              `(dolist (,vval ,reader)
                                 ;; Call 'object-size' and 'serialize-object' with the
                                 ;; name of the message class so that we preferentially
-                                ;; get any optimized version of the method
+                                ;; get any optimized version of the methods
                                 (let ((len (or (and visited (gethash ,vval visited))
                                                (object-size ,vval ',class visited))))
                                   (setq ,vidx (encode-uint32 ,tag ,vbuf ,vidx))
@@ -430,6 +435,7 @@
           ,@serializers
            (values ,vbuf ,vidx))))))
 
+;; Note well: keep this in sync with the main 'deserialize-object' method above
 (defun generate-deserializer (message)
   "Generate a 'deserialize-object' method for the given message."
   (with-gensyms (vclass vbuf vidx vlen vobj vval vmap)
@@ -461,7 +467,7 @@
                        ((typep msg 'protobuf-message)
                         (collect-deserializer
                          `((,(make-tag $wire-type-string index))
-                           ;; Call and 'serialize-object' with the name of the message
+                           ;; Call 'deserialize-object' with the name of the message
                            ;; class so that we preferentially get any optimized version
                            ;; of the method
                            (multiple-value-bind (len idx)
@@ -518,18 +524,20 @@
            (let ((,vobj (make-instance ',(or (proto-alias-for message) (proto-class message))))
                  ,vmap)
              (loop
-               (when (>= ,vidx ,vlen)
-                 (when ,vmap
-                   (map:map #'(lambda (s v) (setf (slot-value ,vobj s) (nreverse v))) ,vmap))
-                 (return-from deserialize-object (values ,vobj ,vidx)))
                (multiple-value-bind (tag idx)
-                   (decode-uint32 ,vbuf ,vidx)
+                   (if (i< ,vidx ,vlen) (decode-uint32 ,vbuf ,vidx) (values 0 ,vidx))
+                 (when (i= tag 0)
+                   (when ,vmap
+                     (map:map #'(lambda (s v) (setf (slot-value ,vobj s) (nreverse v))) ,vmap))
+                   (return-from deserialize
+                     (values ,vobj ,vidx)))
                  (setq ,vidx idx)
                  (case tag
                    ,@deserializers
                    (otherwise
                     (setq ,vidx (skip-element ,vbuf ,vidx (ilogand tag #x7))))))))))))))
 
+;; Note well: keep this in sync with the main 'object-size' method above
 (defun generate-object-size (message)
   "Generate an 'object-size' method for the given message."
   (with-gensyms (vobj vsize vval vclass)
@@ -559,7 +567,7 @@
                           (collect-sizer
                            (let ((tag (make-tag $wire-type-string index)))
                              `(dolist (,vval ,reader)
-                                ;; Call and 'serialize-object' with the name of the message
+                                ;; Call 'object-size' with the name of the message
                                 ;; class so that we preferentially get any optimized version
                                 ;; of the method
                                 (let ((len (or (and visited (gethash ,vval visited))

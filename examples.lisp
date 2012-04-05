@@ -456,29 +456,41 @@ service ColorWheel {
 ||#
 
 #||
-(proto:define-proto list ()
-  (proto:define-message list (:alias-for list)
-    (atom-car :type (or null string) :reader atom-car)
-    (list-car :type (or null list)   :reader list-car)
-    (cdr      :type (or null list)   :reader list-cdr)))
+(proto:define-proto typed-list ()
+  (proto:define-message typed-list (:alias-for list)
+    (string-car  :type (or null string)  :reader string-car)
+    (symbol-car  :type (or null string)  :reader symbol-car)
+    (integer-car :type (or null integer) :reader integer-car)
+    (float-car   :type (or null single-float) :reader float-car)
+    (list-car  :type (or null typed-list) :reader list-car)
+    (cdr       :type (or null typed-list) :reader list-cdr)))
 
-(defun atom-car (x)
-  (let ((car (car x)))
-    (etypecase car
-      (string car)
-      (list   nil))))
+(defun string-car (x)
+  (and (stringp (car x)) (car x)))
+
+(defun symbol-car (x)
+  (and (symbolp (car x)) (symbol-name (car x))))
+
+(defun integer-car (x)
+  (and (integerp (car x)) (car x)))
+
+(defun float-car (x)
+  (and (floatp (car x)) (car x)))
 
 (defun list-car (x)
-  (let ((car (car x)))
-    (etypecase car
-      (string nil)
-      (list   car))))
+  (etypecase (car x)
+    ((or string symbol integer float) nil)
+    (list (car x))))
 
 (defun list-cdr (x) 
-  (let ((cdr (cdr x)))
-    (assert (listp cdr) ())
-    cdr))
+  (assert (listp (cdr x)) ())
+  (cdr x))
 
-(proto:serialize-object-to-stream '("this" "is" "a" ("nested" "test")) 'list)
-(proto:print-text-format '("this" "is" "a" ("nested" "test")) 'list)
+(proto:serialize-object-to-stream '("this" "is" "a" ("nested" "test")) 'typed-list :stream nil)
+(proto:print-text-format '("this" "is" "a" ("nested" "test")) 'typed-list)
+(proto:print-text-format '("this" "is" "a" ("nested" "test")) 'typed-list :suppress-line-breaks t)
+
+(proto:serialize-object-to-stream '((1 one) (2 two) (3 three)) 'typed-list :stream nil)
+(proto:print-text-format '((1 one) (2 two) (3 three)) 'typed-list)
+(proto:print-text-format '((1 one) (2 two) (3 three)) 'typed-list :suppress-line-breaks t)
 ||#
