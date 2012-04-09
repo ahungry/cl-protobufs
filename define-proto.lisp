@@ -19,7 +19,9 @@
   "Define a schema named 'type', corresponding to a .proto file of that name.
    'name' can be used to override the defaultly generated Protobufs name.
    'syntax' and 'package' are as they would be in a .proto file.
-   'imports' is a list of pathname strings to be imported.
+   'import' is a list of pathname strings to be imported.
+   'optimize' can be either :space (the default) or :speed; if it is :speed, the
+   serialization code will be much faster, but much less compact.
    'options' is a property list, i.e., (\"key1\" \"val1\" \"key2\" \"val2\" ...).
 
    The body consists of 'define-enum', 'define-message' or 'define-service' forms."
@@ -91,11 +93,11 @@
 ;; Define an enum type named 'type' and a Lisp 'deftype'
 (defmacro define-enum (type (&key name conc-name alias-for options documentation)
                        &body values)
-  "Define an enum type named 'name' and a Lisp 'deftype'.
+  "Define a Protobufs enum type and a Lisp 'deftype' named 'type'.
    'name' can be used to override the defaultly generated Protobufs enum name.
    'conc-name' will be used as the prefix to the Lisp enum names, if it's supplied.
-   If 'alias-for' is given, no Lisp type is defined. Instead, the enum will be
-   used as an alias for an enum type that already exists in Lisp.
+   If 'alias-for' is given, no Lisp 'deftype' will be defined. Instead, the enum
+   will be used as an alias for an enum type that already exists in Lisp.
    'options' is a set of keyword/value pairs, both of which are strings.
 
    The body consists of the enum values in the form 'name' or (name index)."
@@ -146,7 +148,7 @@
    'conc-name' will be used as the prefix to the Lisp slot accessors, if it's supplied.
    If 'alias-for' is given, no Lisp class is defined. Instead, the message will be
    used as an alias for a class that already exists in Lisp. This feature is intended
-   to be used to defined messages that will be serialized from existing Lisp classes;
+   to be used to define messages that will be serialized from existing Lisp classes;
    unless you get the slot names or readers exactly right for each field, it will be
    the case that trying to (de)serialize into a Lisp object won't work.
    'options' is a set of keyword/value pairs, both of which are strings.

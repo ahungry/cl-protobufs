@@ -26,7 +26,7 @@
 
 (defgeneric write-protobuf-documentation (type docstring stream &key indentation)
   (:documentation
-   "Writes a the docstring as a \"block comment\" onto the given stream 'stream'
+   "Writes the docstring as a \"block comment\" onto the given stream 'stream'
     in the format given by 'type' (:proto, :text, etc)."))
 
 
