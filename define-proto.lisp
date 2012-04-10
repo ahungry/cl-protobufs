@@ -1,3 +1,4 @@
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;                                                                  ;;;
 ;;; Confidential and proprietary information of ITA Software, Inc.   ;;;
@@ -186,7 +187,7 @@
           (otherwise
            (when (i= index 18999)                       ;skip over the restricted range
              (setq index 19999))
-           (destructuring-bind (slot &key type (default nil default-p) reader name) fld
+           (destructuring-bind (slot &key type (default nil default-p) reader name documentation) fld
              (let* ((idx  (if (listp slot) (second slot) (iincf index)))
                     (slot (if (listp slot) (first slot) slot))
                     (reqd (clos-type-to-protobuf-required type))
@@ -217,14 +218,16 @@
                                    :reader ',reader
                                    :default ,(and default (format nil "~A" default))
                                    :packed  ,(and (eq reqd :repeated)
-                                                  (packed-type-p pclass)))))))))))
+                                                  (packed-type-p pclass))
+                                   :documentation ,documentation)))))))))
     (if alias-for
       ;; If we've got an alias, define a a type that is the subtype of
       ;; the Lisp class that typep and subtypep work
       (unless (or (eq type alias-for) (find-class type nil))
         (collect-form `(deftype ,type () ',alias-for)))
       ;; If no alias, define the class now
-      (collect-form `(defclass ,type () (,@slots))))
+      (collect-form `(defclass ,type () (,@slots)
+                       ,@(and documentation `((:documentation ,documentation))))))
     (let ((name (or name (class-name->proto type)))
           (options (loop for (key val) on options by #'cddr
                          collect `(make-instance 'protobuf-option
@@ -267,7 +270,7 @@
   (with-collectors ((rpcs collect-rpc)
                     (forms collect-form))
     (dolist (rpc rpc-specs)
-      (destructuring-bind (function (input-type output-type) &key name options) rpc
+      (destructuring-bind (function (input-type output-type) &key name options documentation) rpc
         (let* ((input-name (and (listp input-type)
                                 (getf (cdr input-type) :name)))
                (input-type (if (listp input-type) (car input-type) input-type))
@@ -285,7 +288,8 @@
                           :input-name  ',(or input-name (class-name->proto input-type))
                           :output-type ',output-type
                           :output-name ',(or output-name (class-name->proto output-type))
-                          :options (list ,@options)))
+                          :options (list ,@options)
+                          :documentation ,documentation))
           ;;--- It's likely that all of the below belongs in CL-Stubby
           (let ((client-fn function)
                 (server-fn (intern (format nil "~A-~A" 'do function) (symbol-package function)))
@@ -297,6 +301,7 @@
             ;; possibly on a client-side subclass of the input class
             ;; This method (de)serializes the objects, does error checking, etc
             (collect-form `(defgeneric ,client-fn (,vchannel ,input-type)
+                             ,@(and documentation `((:documentation ,documentation)))
                              (declare (values ,output-type))))
             ;; The server side stub, e.g., 'do-read-air-reservation'
             ;; The expectation is that the server-side program will implement
@@ -310,6 +315,7 @@
             ;; etc, and can be side-effected to indicate success or failure
             ;; CL-Stubby provides the channel classes and does (de)serialization
             (collect-form `(defgeneric ,server-fn (,vchannel ,input-type &optional ,vcallback)
+                             ,@(and documentation `((:documentation ,documentation)))
                              (declare (values ,output-type))))))))
     (let ((name (or name (class-name->proto type)))
           (options (loop for (key val) on options by #'cddr

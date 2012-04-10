@@ -18,8 +18,8 @@
 
 (defgeneric print-text-format (object &optional type &key stream suppress-line-breaks)
   (:documentation
-   "Prints the object 'object' of type 'type' using message(s) define in the
-    schema 'protobuf' onto the stream 'stream' using the textual format.
+   "Prints the object 'object' of type 'type' onto the stream 'stream' using the
+    textual format.
     If 'suppress-line-breaks' is true, all the output is put on a single line."))
 
 (defmethod print-text-format (object &optional (type (class-of object))

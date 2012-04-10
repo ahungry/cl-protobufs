@@ -15,7 +15,7 @@
 
 ;;; Serialization
 
-;; Serialize the object using the given protobuf "schema"
+;; Serialize the object using the given protobuf type
 (defun serialize-object-to-stream (object type &key (stream *standard-output*) visited)
   "Serializes the object 'object' of type 'type' onto the stream 'stream'
    using the wire format.
@@ -40,7 +40,7 @@
 ;; that may contain cycles, serialize the cyclic object using a "handle"
 (defgeneric serialize-object (object type buffer &optional start visited)
   (:documentation
-   "Serializes the object 'object' of type 'type' onto the stream 'stream'
+   "Serializes the object 'object' of type 'type' into the byte array 'buffer'
     using the wire format.
     'type' is the Lisp name of a Protobufs message (usually the name of a 
     Lisp class) or a 'protobuf-message'.
@@ -57,7 +57,7 @@
 
 ;; 'visited' is used to cache object sizes
 ;; If it's passed in explicitly, it is assumed to already have the sizes within it
-;; The default method uses meta-data from the protobuf "schema"
+;; The default method uses metadata from the protobuf "schema" for the message
 (defmethod serialize-object (object (message protobuf-message) buffer &optional start visited)
   (declare (type (simple-array (unsigned-byte 8)) buffer))
   (let ((visited (or visited (make-hash-table)))
@@ -153,7 +153,7 @@
     Lisp class) or a 'protobuf-message'.
     The encoded bytes are in the byte array given by 'buffer' starting at
     the fixnum index 'index' up to the length of the buffer, given by 'length'.
-    The return value is the object."))
+    The return values are the object and the index at which deserialization stopped.."))
 
 (defmethod deserialize-object ((type symbol) buffer &optional start end)
   (let ((message (find-message-for-class type)))
@@ -161,7 +161,7 @@
             "There is no Protobuf message having the type ~S" type)
     (deserialize-object message buffer start end)))
 
-;; The default method uses meta-data from the protobuf "schema"
+;; The default method uses metadata from the protobuf "schema" for the message
 (defmethod deserialize-object ((message protobuf-message) buffer &optional start end)
   (declare (type (simple-array (unsigned-byte 8)) buffer))
   (let ((index   (or start 0))
@@ -278,12 +278,12 @@
     (object-size object message visited)))
 
 ;; 'visited' is used to cache object sizes
-;; The default method uses meta-data from the protobuf "schema"
+;; The default method uses metadata from the protobuf "schema" for the message
 (defmethod object-size (object (message protobuf-message) &optional visited)
   (let ((size (and visited (gethash object visited))))
     (when size
       (return-from object-size size)))
-  (let ((size    0))
+  (let ((size 0))
     (declare (type fixnum size))
     (macrolet ((read-slot (object slot reader)
                  ;; Don't do a boundp check, we assume the object is fully populated
