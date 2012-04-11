@@ -16,6 +16,11 @@
 (defpackage protobufs
   (:nicknames :proto)
 
+  ;; For repeated slots
+  (:export
+   "LIST-OF")
+
+  ;; The Protobufs API
   (:export
    ;; Model classes
    "PROTOBUF"
@@ -70,6 +75,12 @@
 (defpackage protobufs-implementation
   (:nicknames :proto-impl)
   (:use :common-lisp #+quux :quux :protobufs)
+
+  #+quux
+  (:shadowing-import-from :protobufs
+   "LIST-OF")
+  #+quux
+  (:shadow "DECLARE-LIST-OF" "%DECLARE-LIST-OF")
 
   #-quux
   (:import-from :closer-mop

@@ -137,7 +137,7 @@
          (direct-slotd (some #'(lambda (c)
                                  (find slot-name (class-direct-slots c) :key #'slot-definition-name))
                              (class-precedence-list class))))
-    (or (and direct-slotd (slot-definition-type slotd))
+    (or (and direct-slotd (slot-definition-type direct-slotd))
         (slot-definition-type slotd))))
 
 ;; Given a class and a slot descriptor, find the name of a reader method for the slot
@@ -180,19 +180,22 @@
                (clos-type-to-protobuf-type (second tail))
                (clos-type-to-protobuf-type (first tail))))
             ((and)
-             (if (subtypep type '(list-of t))   ;special knowledge of Quux list-of
-               (let ((satisfies (find 'satisfies tail :key #'car)))
-                 (let* ((pred (second satisfies))
-                        (type (if (starts-with (string pred) "LIST-OF-")
-                                (intern (subseq (string pred) #.(length "LIST-OF-")) (symbol-package pred))
-                                pred)))
-                   (multiple-value-bind (type class)
-                       (type->protobuf-type type)
-                     (values type class (packed-type-p class)))))
-               (let ((new-tail (remove-if #'(lambda (x) (and (listp x) (eq (car x) 'satisfies))) tail)))
-                 (assert (= (length new-tail) 1) ()
-                         "Can't handle the complicated AND type ~S" type)
-                 (type->protobuf-type (first tail)))))
+             (cond #+quux
+                   ((subtypep type '(quux:list-of t))
+                    ;; Special knowledge of Quux 'list-of', which uses (and list (satisfies <t>))
+                    (let* ((satisfies (find 'satisfies tail :key #'car))
+                           (pred (second satisfies))
+                           (type (if (starts-with (string pred) "LIST-OF-")
+                                   (intern (subseq (string pred) #.(length "LIST-OF-")) (symbol-package pred))
+                                   pred)))
+                      (multiple-value-bind (type class)
+                          (type->protobuf-type type)
+                        (values type class (packed-type-p class)))))
+                   (t
+                    (let ((new-tail (remove-if #'(lambda (x) (and (listp x) (eq (car x) 'satisfies))) tail)))
+                      (assert (= (length new-tail) 1) ()
+                              "Can't handle the complicated AND type ~S" type)
+                      (type->protobuf-type (first tail))))))
             ((member)                           ;maybe generate an enum type
              (if (or (equal type '(member t nil))
                      (equal type '(member nil t)))
@@ -214,7 +217,7 @@
                                   type
                                   nil           ;don't pack enums
                                   (if enum-filter (funcall enum-filter values) values))))))))
-            ((list-of)                          ;special knowledge of Quux list-of
+            ((list-of #+quux quux:list-of)      ;special knowledge of 'list-of'
              (multiple-value-bind (type class)
                  (type->protobuf-type (first tail))
                (values type class (packed-type-p class))))
@@ -267,7 +270,8 @@
                :repeated
                (if optional :optional :required))))
           ((and)
-           (if (subtypep type '(list-of t))     ;special knowledge of Quux list-of
+           (if (or (subtypep type '(list-of t))
+                   #+quux (subtypep type '(quux:list-of t)))
              :repeated
              :required))
           ((member)
@@ -275,7 +279,7 @@
                    (equal type '(member nil t)))
              :required
              (if (member nil tail) :optional :required)))
-          (list-of
+          ((list-of #+quux quux:list-of)
            :repeated)
           (otherwise
            :required)))

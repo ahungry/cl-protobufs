@@ -389,11 +389,15 @@
 
 
 ;; Better type checking for these guys
-(declare-list-of protobuf-option)
-(declare-list-of protobuf-enum)
-(declare-list-of protobuf-enum-value)
-(declare-list-of protobuf-message)
-(declare-list-of protobuf-extension)
-(declare-list-of protobuf-field)
-(declare-list-of protobuf-service)
-(declare-list-of protobuf-rpc)
+#+quux (progn
+
+(quux:declare-list-of protobuf-option)
+(quux:declare-list-of protobuf-enum)
+(quux:declare-list-of protobuf-enum-value)
+(quux:declare-list-of protobuf-message)
+(quux:declare-list-of protobuf-extension)
+(quux:declare-list-of protobuf-field)
+(quux:declare-list-of protobuf-service)
+(quux:declare-list-of protobuf-rpc)
+
+)	;#+quux

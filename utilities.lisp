@@ -17,7 +17,7 @@
 (defun class-name->proto (x)
   "Given a Lisp class name, returns a Protobufs message or enum name."
   (remove-if-not #'alphanumericp
-                 (camel-case (format nil "~A" x) :separators '(#\- #\_ #\/ #\.))))
+                 (camel-case (format nil "~A" x) :separators '(#\- #\_ #\/ #\. #\space))))
 
 ;; "enum-value" -> "ENUM_VALUE"
 (defun enum-name->proto (x &optional prefix)
@@ -25,13 +25,13 @@
   (let* ((x (string-upcase (string x)))
          (x (if (and prefix (starts-with x prefix)) (subseq x (length prefix)) x)))
     (remove-if-not #'(lambda (x) (or (alphanumericp x) (eql x #\_)))
-                   (format nil "~{~A~^_~}" (split-string x :separators '(#\- #\_ #\/ #\.))))))
+                   (format nil "~{~A~^_~}" (split-string x :separators '(#\- #\_ #\/ #\. #\space))))))
 
 ;; "slot-name" -> "slotName"
 (defun slot-name->proto (x)
   "Given a Lisp slot name, returns a Protobufs field name."
   (remove-if-not #'alphanumericp
-                 (camel-case-but-one (format nil "~A" x) :separators '(#\- #\_ #\/ #\.))))
+                 (camel-case-but-one (format nil "~A" x) :separators '(#\- #\_ #\/ #\. #\space))))
 
 
 ;; "ClassName" -> "class-name"
@@ -83,41 +83,14 @@
 
 ;;; Other utilities
 
-#-quux
-(progn
-
-;;; Parameterized list types
-
+;; A parameterized list types for repeated fields (not type-checked!)
 (deftype list-of (type)
-  (cond ((eq type t)     'list)
-        ((eq type 'null) 'null)
-        (t
-         (let ((predicate (%declare-list-of type)))
-           `(and list (satisfies ,predicate))))))
+  (if (eq type 'null)
+    'null
+    'list))
 
-(defmacro declare-list-of (type)
-  `(eval-when (:compile-toplevel :load-toplevel :execute)
-     (%declare-list-of ',type)))
 
-(defun %declare-list-of (type)
-  (unless (or (eq type t)
-              (eq type 'null))
-    (let ((predicate (intern (format nil "~A-~A" 'list-of type) (symbol-package type))))
-      (unless (fboundp predicate)
-        (setf (symbol-function predicate)
-              #'(lambda (list)
-                  (and (listp list)
-                       (loop for elt in list
-                             always (typep elt type))))))
-      predicate)))
-
-(declare-list-of integer)
-(declare-list-of string)
-(declare-list-of keyword)
-(declare-list-of symbol)
-(declare-list-of single-float)
-(declare-list-of double-float)
-
+#-quux (progn
 
 ;;; Optimized fixnum arithmetic
 
@@ -210,6 +183,8 @@
                 `((declare (dynamic-extent ,@dynamic-extents))))
          ,@body))))
 
+
+;;; Function programming, please
 
 (defun curry (function &rest args)
   (if (and args (null (cdr args)))                      ;fast test for length = 1

@@ -34,10 +34,10 @@
 
 #||
 (defclass geodata ()
-  ((countries :type (list-of qres-core::country) :initform () :initarg :countries)
-   (regions :type (list-of qres-core::region) :initform () :initarg :regions)
-   (cities :type (list-of qres-core::city) :initform () :initarg :cities)
-   (airports :type (list-of qres-core::airport) :initform () :initarg :airports)))
+  ((countries :type (proto:list-of qres-core::country) :initform () :initarg :countries)
+   (regions :type (proto:list-of qres-core::region) :initform () :initarg :regions)
+   (cities :type (proto:list-of qres-core::city) :initform () :initarg :cities)
+   (airports :type (proto:list-of qres-core::airport) :initform () :initarg :airports)))
 
 (setq bdschema (proto:generate-protobuf-schema-for-classes
                 '(qres-core::country
@@ -81,8 +81,8 @@
     (eval (proto-impl:generate-serializer   message))
     (eval (proto-impl:generate-deserializer message))))
 
-(progn (setq gser (proto:serialize-object-to-stream geodata 'geodata :stream nil)) nil)
-(proto:deserialize-object 'geodata gser)
+(time (progn (setq gser (proto:serialize-object-to-stream geodata 'geodata :stream nil)) nil))
+(time (proto:deserialize-object 'geodata gser))
 
 (equalp gser (proto:serialize-object-to-stream
               (proto:deserialize-object 'geodata gser)
@@ -158,21 +158,21 @@
 (defclass proto-test5 ()
   ((color   :type (member :red :green :blue)
             :initarg :color)
-   (intvals :type (list-of integer)
+   (intvals :type (proto:list-of integer)
             :initform ()
             :initarg :intvals)
-   (strvals :type (list-of string)
+   (strvals :type (proto:list-of string)
             :initform ()
             :initarg :strvals)))
 
 (defclass proto-test6 ()
-  ((intvals :type (list-of integer)
+  ((intvals :type (proto:list-of integer)
             :initform ()
             :initarg :intvals)
-   (strvals :type (list-of string)
+   (strvals :type (proto:list-of string)
             :initform ()
             :initarg :strvals)
-   (recvals :type (list-of proto-test2)
+   (recvals :type (proto:list-of proto-test2)
             :initform ()
             :initarg :recvals)))
 
@@ -517,4 +517,47 @@ service ColorWheel {
 (proto:serialize-object-to-stream '((1 one) (2 two) (3 three)) 'typed-list :stream nil)
 (proto:print-text-format '((1 one) (2 two) (3 three)) 'typed-list)
 (proto:print-text-format '((1 one) (2 two) (3 three)) 'typed-list :suppress-line-breaks t)
+||#
+
+
+;;; Stubby examples
+
+#||
+(proto:define-proto color-wheel
+    (:package color-wheel
+     :documentation "Color wheel example")
+  (proto:define-message color-wheel
+      (:conc-name color-wheel-)
+    (name   :type string)
+    (colors :type (proto:list-of color) :default ()))
+  (proto:define-message color
+      (:conc-name color-
+       :documentation "A (named) color")
+    (name    :type (or string null))
+    (r-value :type integer)
+    (g-value :type integer)
+    (b-value :type integer))
+  (proto:define-message get-color-request ()
+    (wheel :type color-wheel)
+    (name  :type string))
+  (proto:define-message add-color-request ()
+    (wheel :type color-wheel)
+    (color :type color))
+  (proto:define-service color-wheel ()
+    (get-color (get-color-request color)
+      :options ("deadline" "1.0")
+      :documentation "Look up a color by name")
+    (add-color (add-color-request color)
+      :options ("deadline" "1.0")
+      :documentation "Add a new color to the wheel")))
+
+(proto:write-protobuf *color-wheel*)
+
+(progn ;with-rpc-channel (rpc)
+  (let* ((wheel (make-instance 'color-wheel :name "Colors"))
+         (color (make-instance 'color :r-value 100 :g-value 0 :b-value 100))
+         (request (make-instance 'add-color-request :wheel wheel :color color)))
+    #---ignore (print (proto:serialize-object-to-stream request 'add-color-request :stream nil))
+    #---ignore (proto:print-text-format request)
+    #+stubby (add-color request)))
 ||#
