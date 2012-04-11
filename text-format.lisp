@@ -26,7 +26,7 @@
                               &key (stream *standard-output*)
                                    (suppress-line-breaks *suppress-line-breaks*))
   (let* ((type    (or type (class-of object)))
-	 (message (find-message-for-class type)))
+         (message (find-message-for-class type)))
     (assert message ()
             "There is no Protobuf message having the type ~S" type)
     (macrolet ((read-slot (object slot reader)
@@ -167,14 +167,14 @@
              (let* ((message (find-message trace type))
                     (object  (and message
                                   (make-instance (or (proto-alias-for message) (proto-class message)))))
-                    rslots)
+                    (rslots ()))
                (expect-char stream #\{)
                (loop
                  (skip-whitespace stream)
                  (when (eql (peek-char nil stream nil) #\})
                    (read-char stream)
-                   (when rslots
-                     (map:map #'(lambda (s v) (setf (slot-value object s) (nreverse v))) rslots))
+                   (dolist (slot rslots)
+                     (setf (slot-value object slot) (nreverse (slot-value object slot))))
                    (return-from deserialize object))
                  (let* ((name  (prog1 (parse-token stream)
                                  (expect-char stream #\:)))
@@ -193,19 +193,22 @@
                                                 ((:bool)   (parse-token stream))
                                                 (otherwise (parse-int stream)))))
                                      (when slot
-                                       (push val (map:get slot (or rslots (setq rslots (map:make-map))))))))
+                                       (pushnew slot rslots)
+                                       (push val (slot-value object slot)))))
                                   ((typep (setq msg (and type (or (find-message trace type)
                                                                   (find-enum trace type))))
                                           'protobuf-message)
                                      (let ((obj (deserialize type msg)))
                                        (when slot
-                                         (push obj (map:get slot (or rslots (setq rslots (map:make-map))))))))
+                                         (pushnew slot rslots)
+                                         (push obj (slot-value object slot)))))
                                   ((typep msg 'protobuf-enum)
                                    (let* ((name (parse-token stream))
                                           (enum (find name (proto-values msg) :key #'proto-name :test #'string=))
                                           (val  (and enum (proto-value enum))))
                                      (when slot
-                                       (push val (map:get slot (or rslots (setq rslots (map:make-map))))))))))
+                                       (pushnew slot rslots)
+                                       (push val (slot-value object slot)))))))
                            (t
                             (cond ((keywordp type)
                                    (let ((val (case type
