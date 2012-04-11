@@ -154,7 +154,7 @@ Protobufs library), you can use ``proto:parse-protobuf-from-file`` to read the
 
 ::
 
-  proto:parse-protobuf-from-file (filename)                   [Function]
+  proto:parse-protobuf-from-file (filename)                     [Function]
 
 Parses the contents of the file given by *filename*, and returns the
 Protobufs model (a set object objects rooted at ``proto:protobuf``)
@@ -237,37 +237,69 @@ following macros. For example::
   (proto:define-proto color-wheel
       (:package color-wheel
        :documentation "Color wheel example")
-    (proto:define-message color-value
-        (:conc-name color-
-         :documentation "RGB value")
-      (r-value :type integer)
-      (g-value :type integer)
-      (b-value :type integer))
-    (proto:define-message color
-        (:conc-name color-
-         :documentation "A named color")
-      (name  :type string)
-      (value :type color-value))
     (proto:define-message color-wheel
         (:conc-name color-wheel-)
       (name   :type string)
-      (colors :type (list-of color) :default ()))
+      (colors :type (proto:list-of color) :default ()))
+    (proto:define-message color
+        (:conc-name color-
+         :documentation "A (named) color")
+      (name    :type (or string null))
+      (r-value :type integer)
+      (g-value :type integer)
+      (b-value :type integer))
     (proto:define-message get-color-request ()
-      (wheel-name :type string)
-      (color-name :type string))
+      (wheel :type color-wheel)
+      (name  :type string))
     (proto:define-message add-color-request ()
-      (wheel-name :type string)
-      (color-name :type string)
-      (value :type color-value))
+      (wheel :type color-wheel)
+      (color :type color))
     (proto:define-service color-wheel ()
       (get-color (get-color-request color)
         :options ("deadline" "1.0")
         :documentation "Look up a color by name")
       (add-color (add-color-request color)
+        :options ("deadline" "1.0")
         :documentation "Add a new color to the wheel")))
 
-This will create both the Protobufs model objects and Lisp classes and
-enum types that correspond to the model.
+This will create the Protobufs model objects, Lisp classes and enum
+types that correspond to the model. The .proto file of the same schema
+looks like this::
+
+  syntax = "proto2";
+
+  package color_wheel;
+
+  message ColorWheel {
+    required string name = 1;
+    repeated Color colors = 2;
+  }
+
+  message Color {
+    optional string name = 1;
+    required int64 rValue = 2;
+    required int64 gValue = 3;
+    required int64 bValue = 4;
+  }
+
+  message GetColorRequest {
+    required ColorWheel wheel = 1;
+    required string name = 2;
+  }
+
+  message AddColorRequest {
+    required ColorWheel wheel = 1;
+    required Color color = 2;
+  }
+
+  service ColorWheel {
+    rpc GetColor (GetColorRequest) returns (Color) {
+      option deadline = "1.0";
+    }
+    rpc AddColor (AddColorRequest) returns (Color) {
+      option deadline = "1.0";
+    }
+  }
 
 
 ::
