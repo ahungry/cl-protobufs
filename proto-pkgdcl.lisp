@@ -28,12 +28,10 @@
    "PROTOBUF-SERVICE"
    "PROTOBUF-RPC"
 
-   ;; Printing
-   "WRITE-PROTOBUF"
-
-   ;; Parsing
+   ;; .proto parsing and printing
    "PARSE-PROTOBUF-FROM-FILE"
    "PARSE-PROTOBUF-FROM-STREAM"
+   "WRITE-PROTOBUF"
 
    ;; Protobuf defining macros
    "DEFINE-PROTO"
@@ -49,14 +47,15 @@
    "WRITE-PROTOBUF-SCHEMA-FOR-CLASSES"
    "GENERATE-PROTOBUF-SCHEMA-FOR-CLASSES"
 
-   ;; Serialization
+   ;; Serialization and deserialization (wire format)
    "SERIALIZE-OBJECT-TO-STREAM"
    "SERIALIZE-OBJECT"
    "DESERIALIZE-OBJECT-FROM-STREAM"
    "DESERIALIZE-OBJECT"
    "OBJECT-SIZE"
 
-   ;; Text printing
+   ;; Serialization and deserialization (text format)
+   "PARSE-TEXT-FORMAT"
    "PRINT-TEXT-FORMAT")
 
   ;; The "compatibility" API, whose names are taken from the Python API

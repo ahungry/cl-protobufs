@@ -17,9 +17,10 @@
   (:documentation
    "Initialize all of the fields of 'object' to their default values.")
   (:method ((object standard-object))
-    (let ((message (find-message-for-class (class-of object))))
+    (let* ((class   (class-of object))
+           (message (find-message-for-class class)))
       (assert message ()
-              "There is no Protobufs message for the class ~S" (class-of object))
+              "There is no Protobufs message for the class ~S" class)
       ;;--- Do this
       message)))
 
@@ -27,9 +28,10 @@
   (:documentation
    "Returns true iff all of the fields of 'object' are initialized.")
   (:method ((object standard-object))
-    (let ((message (find-message-for-class (class-of object))))
+    (let* ((class   (class-of object))
+           (message (find-message-for-class class)))
       (assert message ()
-              "There is no Protobufs message for the class ~S" (class-of object))
+              "There is no Protobufs message for the class ~S" class)
       ;;--- Do this
       message)))
 
@@ -39,10 +41,11 @@
    "Returns the number of octets required to encode 'object' using the wire format.
     'object' is an object whose Lisp class corresponds to a Protobufs message.")
   (:method ((object standard-object))
-    (let* ((message (find-message-for-class (class-of object)))
+    (let* ((class   (class-of object))
+           (message (find-message-for-class class))
            (type    (and message (proto-class message))))
       (assert message ()
-              "There is no Protobufs message for the class ~S" (class-of object))
+              "There is no Protobufs message for the class ~S" class)
       (let ((visited (make-hash-table)))
         (object-size object type visited)))))
 
@@ -54,10 +57,11 @@
    corresponds to a Protobufs message.")
   (:method ((object standard-object) &optional buffer (start 0) end)
     (declare (ignore end))
-    (let* ((message (find-message-for-class (class-of object)))
+    (let* ((class   (class-of object))
+           (message (find-message-for-class class))
            (type    (and message (proto-class message))))
       (assert message ()
-              "There is no Protobufs message for the class ~S" (class-of object))
+              "There is no Protobufs message for the class ~S" class)
       (let* ((visited (make-hash-table))
              (size    (object-size object type visited))
              (start   (or start 0))
@@ -74,10 +78,11 @@
     'start' and ending at 'end'. 'object' is an object whose Lisp class corresponds
     to a Protobufs message.")
   (:method ((object standard-object) buffer &optional (start 0) (end (length buffer)))
-    (let* ((message (find-message-for-class (class-of object)))
+    (let* ((class   (class-of object))
+           (message (find-message-for-class class))
            (type    (and message (proto-class message))))
       (assert message ()
-              "There is no Protobufs message for the class ~S" (class-of object))
+              "There is no Protobufs message for the class ~S" class)
       (let* ((start  (or start 0))
              (end    (or end (length buffer))))
         (deserialize-object type buffer start end)))))
@@ -86,11 +91,12 @@
   (:documentation
    "")
   (:method ((object standard-object) (source-object standard-object))
-    (assert (eq (class-of object) (class-of source-object)) ()
-            "The objects ~S and ~S are of not of the same class" object source-object)
-    (let* ((message (find-message-for-class (class-of object)))
+    (let* ((class   (class-of object))
+           (message (find-message-for-class class))
            (type    (and message (proto-class message))))
+      (assert (eq class (class-of source-object)) ()
+              "The objects ~S and ~S are of not of the same class" object source-object)
       (assert message ()
-              "There is no Protobufs message for the class ~S" (class-of object))
+              "There is no Protobufs message for the class ~S" class)
       ;;--- Do this
       type)))

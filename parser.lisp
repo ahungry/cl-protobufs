@@ -124,6 +124,15 @@
                     (skip-whitespace stream)
                     (return (parse-integer (coerce token 'string)))))))
 
+(defun parse-float (stream)
+  "Parse the next token in the stream as a float, then skip the following whitespace.                                     The returned value is the float."
+  (when (let ((ch (peek-char nil stream nil)))
+            (or (digit-char-p ch) (eql ch #\-)))
+    (let ((token (parse-token stream)))
+      (when token
+        (skip-whitespace stream)
+        (coerce (read-from-string token) 'float)))))
+
 
 ;;; The parser itself
 
@@ -390,7 +399,7 @@
                 :class (proto->class-name name *protobuf-package*)
                 :name  name
                 :input-type  (proto->class-name in *protobuf-package*)
-                :input-name  in 
+                :input-name  in
                 :output-type (proto->class-name out *protobuf-package*)
                 :output-name out
                 :options opts)))

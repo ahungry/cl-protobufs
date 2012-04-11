@@ -237,21 +237,45 @@
 
 (proto:print-text-format test1)
 (proto:print-text-format (proto:deserialize-object 'proto-test1 tser1))
+(let ((text (with-output-to-string (s)
+              (proto:print-text-format test1 'proto-test1 :stream s))))
+  (with-input-from-string (s text)
+    (proto:parse-text-format 'proto-test1 :stream s)))
 
 (proto:print-text-format test2)
 (proto:print-text-format (proto:deserialize-object 'proto-test2 tser2))
+(let ((text (with-output-to-string (s)
+              (proto:print-text-format test2 'proto-test2 :stream s))))
+  (with-input-from-string (s text)
+    (proto:parse-text-format 'proto-test2 :stream s)))
 
 (proto:print-text-format test3)
 (proto:print-text-format (proto:deserialize-object 'proto-test3 tser3))
+(let ((text (with-output-to-string (s)
+              (proto:print-text-format test3 'proto-test3 :stream s))))
+  (with-input-from-string (s text)
+    (proto:parse-text-format 'proto-test3 :stream s)))
 
 (proto:print-text-format test4)
 (proto:print-text-format (proto:deserialize-object 'proto-test4 tser4))
+(let ((text (with-output-to-string (s)
+              (proto:print-text-format test4 'proto-test4 :stream s))))
+  (with-input-from-string (s text)
+    (proto:parse-text-format 'proto-test4 :stream s)))
 
 (proto:print-text-format test5)
 (proto:print-text-format (proto:deserialize-object 'proto-test5 tser5))
+(let ((text (with-output-to-string (s)
+              (proto:print-text-format test5 'proto-test5 :stream s))))
+  (with-input-from-string (s text)
+    (proto:parse-text-format 'proto-test5 :stream s)))
 
 (proto:print-text-format test6)
 (proto:print-text-format (proto:deserialize-object 'proto-test6 tser6))
+(let ((text (with-output-to-string (s)
+              (proto:print-text-format test6 'proto-test6 :stream s))))
+  (with-input-from-string (s text)
+    (proto:parse-text-format 'proto-test6 :stream s)))
 ||#
 
 #||
