@@ -148,13 +148,13 @@
 (defmethod protobuf-upgradable ((old protobuf-service) (new protobuf-service) &optional what)
   (declare (ignore what))
   ;; No need to check that the names are equal, our caller did that already
-  ;; Is every RPC in 'old' upgradable to an RPC in 'new'?
-  (loop for old-rpc in (proto-rpcs old)
-        as new-rpc = (find (proto-name old-rpc) (proto-rpcs new)
-                           :key #'proto-name :test #'string=)
-        always (and new-rpc (protobuf-upgradable old-rpc new-rpc old))))
+  ;; Is every method in 'old' upgradable to a method in 'new'?
+  (loop for old-method in (proto-methods old)
+        as new-method = (find (proto-name old-method) (proto-methods new)
+                              :key #'proto-name :test #'string=)
+        always (and new-method (protobuf-upgradable old-method new-method old))))
 
-(defmethod protobuf-upgradable ((old protobuf-rpc) (new protobuf-rpc) &optional service)
+(defmethod protobuf-upgradable ((old protobuf-method) (new protobuf-method) &optional service)
   ;; No need to check that the names are equal, our caller did that already
   (and
    ;; Are their inputs and outputs the same?

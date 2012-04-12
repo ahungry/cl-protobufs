@@ -46,7 +46,7 @@ Implementation notes
 The Protobufs library defines a set of model classes that describes a
 protobufs "schema". There is a class that describes one .proto file
 (i.e., one "schema"), options, enums and enum values, messages and
-fields, and services and RPCs.
+fields, and services and methods.
 
 The library provides the means to convert several kinds of inputs into
 the Protobufs models, including:
@@ -124,13 +124,13 @@ It has slots for the name, type, index and options.
   proto:protobuf-service                                        [Class]
 
 The class that represents a Protobufs service.
-It has slots for the name, options and RPCs.
+It has slots for the name, options and methods.
 
 ::
 
-  proto:protobuf-rpc                                            [Class]
+  proto:protobuf-method                                         [Class]
 
-The class that represents one RPC descriptions in a Protobufs service.
+The class that represents one method description in a Protobufs service.
 It has slots for the name, input type, output type and options.
 
 
@@ -418,10 +418,10 @@ Defines a field extension for the indexes from *from* to *to*.
 
   proto:define-service (type (&key name                         [Macro]
                                    options documentation)
-                        &body rpc-specs)
+                        &body method-specs)
 
 Defines a Protobufs service named *type* and corresponding Lisp
-defgenerics for all its RPCs. If *name* is not supplied, the Protobufs
+defgenerics for all its methods. If *name* is not supplied, the Protobufs
 name of the enum is the camel-cased rendition of *type*; otherwise the
 Protobufs name is the string *name*.
 
@@ -430,9 +430,9 @@ Protobufs name is the string *name*.
 *documentation* is a documentation string that is preserved as a comment
  in the .proto file.
 
-The body is a set of RPC specs of the form
+The body is a set of method specs of the form
 ``(name (input-type output-type) &key options documentation)``.
-*name* is a symbol naming the RPC function. *input-type* and
+*name* is a symbol naming the RPC method. *input-type* and
 *output-type* may either be symbols or a list of the form ``(type &key name)``.
 
 

@@ -94,7 +94,7 @@
                '(proto:protobuf proto:protobuf-option
                  proto:protobuf-enum proto:protobuf-enum-value
                  proto:protobuf-message proto:protobuf-field proto:protobuf-extension
-                 proto:protobuf-service proto:protobuf-rpc)))
+                 proto:protobuf-service proto:protobuf-method)))
 
 (proto:write-protobuf pschema)
 (proto:write-protobuf pschema :type :lisp)
@@ -113,7 +113,7 @@
                  proto:protobuf-field
                  proto:protobuf-extension
                  proto:protobuf-service
-                 proto:protobuf-rpc))
+                 proto:protobuf-method))
   (let ((message (proto-impl:find-message pschema class)))
     (eval (proto-impl:generate-object-size  message))
     (eval (proto-impl:generate-serializer   message))
@@ -316,19 +316,19 @@
                                       :required :optional
                                       :index 2
                                       :default "LOW")))))
-       (rpcs  (list (make-instance 'proto:protobuf-rpc
-                      :name "GetColor"
-                      :input-name "string"
-                      :output-name "Color")
-                    (make-instance 'proto:protobuf-rpc
-                      :name "SetColor"
-                      :input-name "Color"
-                      :output-name "Color"
-                      :options (list (make-instance 'proto:protobuf-option
-                                       :name "deadline" :value "1.0")))))
+       (methods  (list (make-instance 'proto:protobuf-method
+                         :name "GetColor"
+                         :input-name "string"
+                         :output-name "Color")
+                       (make-instance 'proto:protobuf-method
+                         :name "SetColor"
+                         :input-name "Color"
+                         :output-name "Color"
+                         :options (list (make-instance 'proto:protobuf-option
+                                          :name "deadline" :value "1.0")))))
        (svcs  (list (make-instance 'proto:protobuf-service
                       :name "ColorWheel"
-                      :rpcs rpcs)))
+                      :methods methods)))
        (proto (make-instance 'proto:protobuf
                 :package "ita.color"
                 :imports '("descriptor.proto")
@@ -420,19 +420,19 @@
          :SERVICES (LIST (MAKE-INSTANCE 'PROTOBUF-SERVICE
                            :NAME "ColorWheel"
                            :CLASS 'COLOR-WHEEL
-                           :RPCS (LIST (MAKE-INSTANCE 'PROTOBUF-RPC
-                                         :NAME "GetColor"
-                                         :CLASS 'GET-COLOR
-                                         :INPUT-NAME "string"
-                                         :OUTPUT-NAME "Color"
-                                         :OPTIONS (LIST))
-                                       (MAKE-INSTANCE 'PROTOBUF-RPC
-                                         :NAME "SetColor"
-                                         :CLASS 'SET-COLOR
-                                         :INPUT-NAME "Color"
-                                         :OUTPUT-NAME "Color"
-                                         :OPTIONS (LIST (MAKE-INSTANCE 'PROTOBUF-OPTION
-                                                          :NAME "deadline" :VALUE "1.0")))))))))
+                           :METHODS (LIST (MAKE-INSTANCE 'PROTOBUF-METHOD
+                                            :NAME "GetColor"
+                                            :CLASS 'GET-COLOR
+                                            :INPUT-NAME "string"
+                                            :OUTPUT-NAME "Color"
+                                            :OPTIONS (LIST))
+                                          (MAKE-INSTANCE 'PROTOBUF-METHOD
+                                            :NAME "SetColor"
+                                            :CLASS 'SET-COLOR
+                                            :INPUT-NAME "Color"
+                                            :OUTPUT-NAME "Color"
+                                            :OPTIONS (LIST (MAKE-INSTANCE 'PROTOBUF-OPTION
+                                                             :NAME "deadline" :VALUE "1.0")))))))))
 
 ;; The output should be example the same as the output of 'write-protobuf' above
 (proto:write-protobuf *color-wheel*)

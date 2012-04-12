@@ -265,19 +265,19 @@
      ()))
 
 ;; Define a service named 'type' with generic functions declared for
-;; each of the RPCs within the service
+;; each of the methods within the service
 (defmacro define-service (type (&key name options documentation)
-                          &body rpc-specs)
-  "Define a service named 'type' and Lisp 'defgeneric' for all its RPCs.
+                          &body method-specs)
+  "Define a service named 'type' and Lisp 'defgeneric' for all its methods.
    'name' can be used to override the defaultly generated Protobufs service name.
    'options' is a set of keyword/value pairs, both of which are strings.
 
-   The body is a set of RPC specs of the form (name (input-type output-type) &key options).
+   The body is a set of method specs of the form (name (input-type output-type) &key options).
    'input-type' and 'output-type' may also be of the form (type &key name)."
-  (with-collectors ((rpcs collect-rpc)
+  (with-collectors ((methods collect-method)
                     (forms collect-form))
-    (dolist (rpc rpc-specs)
-      (destructuring-bind (function (input-type output-type) &key name options documentation) rpc
+    (dolist (method method-specs)
+      (destructuring-bind (function (input-type output-type) &key name options documentation) method
         (let* ((input-name (and (listp input-type)
                                 (getf (cdr input-type) :name)))
                (input-type (if (listp input-type) (car input-type) input-type))
@@ -288,41 +288,45 @@
                               collect `(make-instance 'protobuf-option
                                          :name ,key
                                          :value ,val))))
-          (collect-rpc `(make-instance 'protobuf-rpc
-                          :class ',function
-                          :name  ',(or name (class-name->proto function))
-                          :input-type  ',input-type
-                          :input-name  ',(or input-name (class-name->proto input-type))
-                          :output-type ',output-type
-                          :output-name ',(or output-name (class-name->proto output-type))
-                          :options (list ,@options)
-                          :documentation ,documentation))
+          (collect-method `(make-instance 'protobuf-method
+                             :class ',function
+                             :name  ',(or name (class-name->proto function))
+                             :input-type  ',input-type
+                             :input-name  ',(or input-name (class-name->proto input-type))
+                             :output-type ',output-type
+                             :output-name ',(or output-name (class-name->proto output-type))
+                             :options (list ,@options)
+                             :documentation ,documentation))
           ;; The following are the hooks to CL-Stubby
           (let ((client-fn function)
                 (server-fn (intern (format nil "~A-~A" 'do function) (symbol-package function)))
                 (vchannel  (intern (symbol-name 'channel) (symbol-package function)))
                 (vcallback (intern (symbol-name 'callback) (symbol-package function))))
-            ;; The client side stub, e.g., 'read-air-reservation'
+            ;; The client side stub, e.g., 'read-air-reservation'.
             ;; The expectation is that CL-Stubby will provide macrology to make it
             ;; easy to implement a method for this on each kind of channel (HTTP, TCP socket,
             ;; IPC, etc). Unlike C++/Java/Python, we don't need a client-side subclass,
             ;; because we can just use multi-methods.
-            ;; The method (de)serializes the objects, does error checking, etc
-            (collect-form `(defgeneric ,client-fn (,vchannel ,input-type)
+            ;; The CL-Stubby macros take care of serializing the input, transmitting the
+            ;; request over the wire, waiting for input (or not if it's asynchronous),
+            ;; filling in the output, and calling the callback (if it's synchronous).
+            ;; It's not very Lispy to side-effect an output object, but it makes
+            ;; asynchronous calls simpler.
+            (collect-form `(defgeneric ,client-fn (,vchannel ,input-type ,output-type &key ,vcallback)
                              ,@(and documentation `((:documentation ,documentation)))
                              (declare (values ,output-type))))
-            ;; The server side stub, e.g., 'do-read-air-reservation'
+            ;; The server side stub, e.g., 'do-read-air-reservation'.
             ;; The expectation is that the server-side program will implement
             ;; a method with the business logic for this on each kind of channel
             ;; (HTTP, TCP socket, IPC, etc), possibly on a server-side subclass
             ;; of the input class
             ;; The business logic is expected to perform the correct operations on
             ;; the input object, which arrived via Protobufs, and produce an output
-            ;; of the given type, which will be serialized as a result
+            ;; of the given type, which will be serialized as a result.
             ;; The channel objects hold client identity information, deadline info,
             ;; etc, and can be side-effected to indicate success or failure
             ;; CL-Stubby provides the channel classes and does (de)serialization, etc
-            (collect-form `(defgeneric ,server-fn (,vchannel ,input-type &optional ,vcallback)
+            (collect-form `(defgeneric ,server-fn (,vchannel ,input-type ,output-type &key ,vcallback)
                              ,@(and documentation `((:documentation ,documentation)))
                              (declare (values ,output-type))))))))
     (let ((name (or name (class-name->proto type)))
@@ -336,7 +340,7 @@
            :class ',type
            :name  ',name
            :options  (list ,@options)
-           :rpcs (list ,@rpcs)
+           :methods (list ,@methods)
            :documentation ,documentation)
          ,forms))))
 
@@ -380,13 +384,13 @@
   (ensure-type trace message field (proto-class field)))
 
 (defmethod ensure-service (trace (service protobuf-service))
-  (map () (curry #'ensure-rpc trace service) (proto-rpcs service)))
+  (map () (curry #'ensure-method trace service) (proto-methods service)))
 
-(defmethod ensure-rpc (trace service (rpc protobuf-rpc))
-  (ensure-type trace service rpc (proto-input-type rpc))
-  (ensure-type trace service rpc (proto-output-type rpc)))
+(defmethod ensure-method (trace service (method protobuf-method))
+  (ensure-type trace service method (proto-input-type method))
+  (ensure-type trace service method (proto-output-type method)))
 
-;; 'message' and 'field' can be a message and a field or a service and an RPC
+;; 'message' and 'field' can be a message and a field or a service and a method
 (defun ensure-type (trace message field type)
   (unless (keywordp type)
     (let ((msg (loop for p in trace

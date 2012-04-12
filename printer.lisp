@@ -155,14 +155,14 @@
       (write-protobuf-documentation type documentation stream :indentation indentation))
     (format stream "~&~@[~VT~]service ~A {~%"
             (and (not (zerop indentation)) indentation) name)
-    (dolist (rpc (proto-rpcs service))
-      (write-protobuf-as type rpc stream :indentation (+ indentation 2)))
+    (dolist (method (proto-methods service))
+      (write-protobuf-as type method stream :indentation (+ indentation 2)))
     (format stream "~&~@[~VT~]}~%"
             (and (not (zerop indentation)) indentation))))
 
-(defmethod write-protobuf-as ((type (eql :proto)) (rpc protobuf-rpc) stream
+(defmethod write-protobuf-as ((type (eql :proto)) (method protobuf-method) stream
                               &key (indentation 0))
-  (with-prefixed-accessors (name documentation input-name output-name options) (proto- rpc)
+  (with-prefixed-accessors (name documentation input-name output-name options) (proto- method)
     (when documentation
       (write-protobuf-documentation type documentation stream :indentation indentation))
     (format stream "~&~@[~VT~]rpc ~A (~@[~A~])~@[ returns (~A)~]"
@@ -184,46 +184,48 @@
 (defmethod write-protobuf-as ((type (eql :lisp)) (protobuf protobuf) stream
                               &key (indentation 0))
   (with-prefixed-accessors (name class documentation package lisp-package imports optimize options) (proto- protobuf)
-    (when package
-      (format stream "~&(in-package \"~A\")~%~%" (or lisp-package package)))
-    (when documentation
-      (write-protobuf-documentation type documentation stream :indentation indentation))
-    (format stream "~&(proto:define-proto ~(~A~)" (or class name))
-    (if (or package lisp-package imports optimize options documentation)
-      (format stream "~%    (")
-      (format stream " ("))
-    (let ((spaces ""))
-      (when package
-        (format stream "~A:package ~A" spaces package)
-        (when (or lisp-package imports optimize options documentation)
-          (terpri stream))
-        (setq spaces "     "))
-      (when lisp-package
-        (format stream "~A:lisp-package ~A" spaces lisp-package)
-        (when (or imports optimize options documentation)
-          (terpri stream))
-        (setq spaces "     "))
-      (when imports
-        (cond ((= (length imports) 1)
-               (format stream "~A:import \"~A\"" spaces (car imports)))
-              (t
-               (format stream "~A:import (~{\"~A\"~^ ~})" spaces imports)))
-        (when (or optimize options documentation)
-          (terpri stream))
-        (setq spaces "     "))
-      (when optimize
-        (format stream "~A:optimize ~(~S~)" spaces optimize)
-        (when (or options documentation)
-          (terpri stream))
-        (setq spaces "     "))
-      (when options
-        (format stream "~A:options (~{~@/protobuf-option/~^ ~})" spaces options)
-        (when documentation
-          (terpri stream))
-        (setq spaces "     "))
+    (let ((lisp-pkg (and lisp-package
+                         (or (null package) (not (string-equal lisp-package package))))))
+      (when (or lisp-pkg package)
+        (format stream "~&(in-package \"~A\")~%~%" (or lisp-pkg package)))
       (when documentation
-        (format stream "~A:documentation ~S" spaces documentation)))
-    (format stream ")")
+        (write-protobuf-documentation type documentation stream :indentation indentation))
+      (format stream "~&(proto:define-proto ~(~A~)" (or class name))
+      (if (or package lisp-pkg imports optimize options documentation)
+        (format stream "~%    (")
+        (format stream " ("))
+      (let ((spaces ""))
+        (when package
+          (format stream "~A:package ~A" spaces package)
+          (when (or lisp-pkg imports optimize options documentation)
+            (terpri stream))
+          (setq spaces "     "))
+        (when lisp-pkg
+          (format stream "~A:lisp-package ~A" spaces lisp-pkg)
+          (when (or imports optimize options documentation)
+            (terpri stream))
+          (setq spaces "     "))
+        (when imports
+          (cond ((= (length imports) 1)
+                 (format stream "~A:import \"~A\"" spaces (car imports)))
+                (t
+                 (format stream "~A:import (~{\"~A\"~^ ~})" spaces imports)))
+          (when (or optimize options documentation)
+            (terpri stream))
+          (setq spaces "     "))
+        (when optimize
+          (format stream "~A:optimize ~(~S~)" spaces optimize)
+          (when (or options documentation)
+            (terpri stream))
+          (setq spaces "     "))
+        (when options
+          (format stream "~A:options (~{~@/protobuf-option/~^ ~})" spaces options)
+          (when documentation
+            (terpri stream))
+          (setq spaces "     "))
+        (when documentation
+          (format stream "~A:documentation ~S" spaces documentation)))
+      (format stream ")"))
     (dolist (enum (proto-enums protobuf))
       (write-protobuf-as type enum stream :indentation 2))
     (dolist (msg (proto-messages protobuf))
@@ -358,16 +360,16 @@
                    (+ indentation 4) documentation))
           (t
            (format stream " ()")))
-    (loop for (rpc . more) on (proto-rpcs service) doing
-      (write-protobuf-as type rpc stream :indentation (+ indentation 2))
+    (loop for (method . more) on (proto-methods service) doing
+      (write-protobuf-as type method stream :indentation (+ indentation 2))
       (when more
         (terpri stream)))
     (format stream ")")))
 
-(defmethod write-protobuf-as ((type (eql :lisp)) (rpc protobuf-rpc) stream
+(defmethod write-protobuf-as ((type (eql :lisp)) (method protobuf-method) stream
                               &key (indentation 0))
   (with-prefixed-accessors
-      (function documentation input-type output-type options) (proto- rpc)
+      (function documentation input-type output-type options) (proto- method)
     (when documentation
       (write-protobuf-documentation type documentation stream :indentation indentation))
     (format stream "~&~@[~VT~](~(~S~) (~(~S~) ~(~S~))"

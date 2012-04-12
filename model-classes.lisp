@@ -342,10 +342,10 @@
 
 ;; A protobuf service
 (defclass protobuf-service (base-protobuf)
-  ((rpcs :type (list-of protobuf-rpc)           ;the RPCs in the service
-         :accessor proto-rpcs
-         :initarg :rpcs
-         :initform ()))
+  ((methods :type (list-of protobuf-method)     ;the methods in the service
+            :accessor proto-methods
+            :initarg :methods
+            :initform ()))
   (:documentation
    "The model class that represents a Protobufs service."))
 
@@ -355,8 +355,8 @@
             (proto-name s))))
 
 
-;; A protobuf RPC within a service
-(defclass protobuf-rpc (base-protobuf)
+;; A protobuf method within a service
+(defclass protobuf-method (base-protobuf)
   ((itype :type (or null symbol)                ;the Lisp type name of the input
            :accessor proto-input-type
            :initarg :input-type
@@ -374,20 +374,20 @@
           :initarg :output-name
           :initform nil))
   (:documentation
-   "The model class that represents one RPC with a Protobufs service."))
+   "The model class that represents one method with a Protobufs service."))
 
-(defmethod print-object ((r protobuf-rpc) stream)
+(defmethod print-object ((r protobuf-method) stream)
   (print-unreadable-object (r stream :type t :identity t)
     (format stream "~S (~S) => (~S)"
             (proto-function r) (proto-input-type r) (proto-output-type r))))
 
 ;; The 'class' slot really holds the name of the function,
 ;; so let's give it a better name
-(defmethod proto-function ((rpc protobuf-rpc))
-  (proto-class rpc))
+(defmethod proto-function ((method protobuf-method))
+  (proto-class method))
 
-(defmethod (setf proto-function) (function (rpc protobuf-rpc))
-  (setf (proto-function rpc) function))
+(defmethod (setf proto-function) (function (method protobuf-method))
+  (setf (proto-function method) function))
 
 
 ;; Better type checking for these guys
@@ -400,6 +400,6 @@
 (quux:declare-list-of protobuf-extension)
 (quux:declare-list-of protobuf-field)
 (quux:declare-list-of protobuf-service)
-(quux:declare-list-of protobuf-rpc)
+(quux:declare-list-of protobuf-method)
 
 )       ;#+quux

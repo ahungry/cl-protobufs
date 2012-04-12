@@ -230,7 +230,7 @@
 
 (defun parse-proto-option (stream protobuf &optional (terminator #\;))
   "Parse a Protobufs option from 'stream'.
-   Updates the 'protobuf' (or message, service, RPC) to have the option."
+   Updates the 'protobuf' (or message, service, method) to have the option."
   (let* ((key (prog1 (parse-token stream)
                 (expect-char stream #\= "option")))
          (val (prog1 (if (eql (peek-char nil stream nil) #\")
@@ -405,15 +405,15 @@
         (cond ((string= token "option")
                (parse-proto-option stream service #\;))
               ((string= token "rpc")
-               (parse-proto-rpc stream service token))
+               (parse-proto-method stream service token))
               (t
                (error "Unrecognized token ~A at position ~D"
                       token (file-position stream))))))))
 
-(defun parse-proto-rpc (stream service rpc)
+(defun parse-proto-method (stream service method)
   "Parse a Protobufs enum vvalue from 'stream'.
    Updates the 'protobuf-enum' object to have the enum value."
-  (declare (ignore rpc))
+  (declare (ignore method))
   (let* ((name (parse-token stream))
          (in   (prog2 (expect-char stream #\( "service")
                    (parse-token stream)
@@ -422,28 +422,28 @@
          (out  (prog2 (expect-char stream #\( "service")
                    (parse-token stream)
                  (expect-char stream #\) "service")))
-         (opts (let ((opts (parse-proto-rpc-options stream)))
+         (opts (let ((opts (parse-proto-method-options stream)))
                  (when (or (null opts) (eql (peek-char nil stream nil) #\;))
                    (expect-char stream #\; "service"))
                  (maybe-skip-comments stream)
                  opts))
-         (rpc (make-instance 'protobuf-rpc
-                :class (proto->class-name name *protobuf-package*)
-                :name  name
-                :input-type  (proto->class-name in *protobuf-package*)
-                :input-name  in
-                :output-type (proto->class-name out *protobuf-package*)
-                :output-name out
-                :options opts)))
-    (let ((name (find-option rpc "lisp_name")))
+         (method (make-instance 'protobuf-method
+                   :class (proto->class-name name *protobuf-package*)
+                   :name  name
+                   :input-type  (proto->class-name in *protobuf-package*)
+                   :input-name  in
+                   :output-type (proto->class-name out *protobuf-package*)
+                   :output-name out
+                   :options opts)))
+    (let ((name (find-option method "lisp_name")))
       (when name
-        (setf (proto-function rpc) (make-lisp-symbol name))))
+        (setf (proto-function method) (make-lisp-symbol name))))
     (assert (string= ret "returns") ()
             "Syntax error in 'message' at position ~D" (file-position stream))
-    (setf (proto-rpcs service) (nconc (proto-rpcs service) (list rpc)))))
+    (setf (proto-methods service) (nconc (proto-methods service) (list method)))))
 
-(defun parse-proto-rpc-options (stream)
-  "Parse any options in a Protobufs RPC from 'stream'.
+(defun parse-proto-method-options (stream)
+  "Parse any options in a Protobufs method from 'stream'.
    Returns a list of 'protobuf-option' objects."
   (when (eql (peek-char nil stream nil) #\{)
     (expect-char stream #\{ "service")
