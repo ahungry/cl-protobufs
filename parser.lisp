@@ -81,8 +81,8 @@
   "Expect to see 'ch' as the next character in the stream; signal an error if it's not there.
    Then skip all of the following whitespace."
   (if (if (listp ch)
-        (member (peek-char nil stream) ch)
-        (eql (peek-char nil stream) ch))
+        (member (peek-char nil stream nil) ch)
+        (eql (peek-char nil stream nil) ch))
     (read-char stream)
     (error "No '~C' found~@[ within '~A'~] at position ~D"
            ch within (file-position stream)))
@@ -172,9 +172,23 @@
                        ((string= token "import")
                         (parse-proto-import stream protobuf))
                        ((string= token "option")
-                        (parse-proto-option stream protobuf))
+                        (let* ((option (parse-proto-option stream protobuf))
+                               (name   (and option (proto-name option)))
+                               (value  (and option (proto-value option))))
+                          (when option
+                            (cond ((string= name "optimize_for")
+                                   (let ((value (cond ((string= value "SPEED") :speed)
+                                                      ((string= value "CODE_SIZE") :space)
+                                                      (t nil))))
+                                     (setf (proto-optimize protobuf) value)))
+                                  ((string= name "lisp_package")
+                                   (let ((package (or (find-package value)
+                                                      (find-package (string-upcase value)))))
+                                     (setf (proto-lisp-package protobuf) value)
+                                     (setq *protobuf-package* package)))))))
                        ((string= token "enum")
                         (parse-proto-enum stream protobuf))
+                       ;;---*** Handle "extends" here
                        ((string= token "message")
                         (parse-proto-message stream protobuf))
                        ((string= token "service")
@@ -193,13 +207,17 @@
 (defun parse-proto-package (stream protobuf &optional (terminator #\;))
   "Parse a Protobufs package line from 'stream'.
    Updates the 'protobuf' object to use the package."
-  (let* ((package  (prog1 (substitute #\- #\_ (parse-token stream))
+  (let* ((package  (prog1 (parse-token stream)
                      (expect-char stream terminator "package")
                      (maybe-skip-comments stream)))
-         (lisp-pkg (or (find-package package)
-                       (find-package (string-upcase package)))))
-    (setq *protobuf-package* lisp-pkg)
-    (setf (proto-package protobuf) package)))
+         (lisp-pkg (or (proto-lisp-package protobuf)
+                       (substitute #\- #\_ package))))
+    (setf (proto-package protobuf) package)
+    (unless (proto-lisp-package protobuf)
+      (setf (proto-lisp-package protobuf) lisp-pkg))
+    (let ((package (or (find-package lisp-pkg)
+                       (find-package (string-upcase lisp-pkg)))))
+      (setq *protobuf-package* package))))
 
 (defun parse-proto-import (stream protobuf &optional (terminator #\;))
   "Parse a Protobufs import line from 'stream'.
@@ -207,6 +225,7 @@
   (let ((import (prog1 (parse-string stream)
                   (expect-char stream terminator "package")
                   (maybe-skip-comments stream))))
+    ;;---*** This needs to parse the imported file(s)
     (setf (proto-imports protobuf) (nconc (proto-imports protobuf) (list import)))))
 
 (defun parse-proto-option (stream protobuf &optional (terminator #\;))
@@ -224,12 +243,7 @@
                    :value val)))
     (cond (protobuf
            (setf (proto-options protobuf) (nconc (proto-options protobuf) (list option)))
-           (when (and (string= key "optimize_for")
-                      (typep protobuf 'protobuf))
-             (let ((value (cond ((string= val "SPEED") :speed)
-                                ((string= val "CODE_SIZE") :space)
-                                (t nil))))
-               (setf (proto-optimize protobuf) value))))
+           option)
           (t
            ;; If nothing to graft the option into, just return it as the value
            option))))
@@ -299,12 +313,15 @@
           (return-from parse-proto-message))
         (cond ((string= token "enum")
                (parse-proto-enum stream message))
+              ;;---*** Handle "extends" here
               ((string= token "message")
                (parse-proto-message stream message))
-              ((string= token "option")
-               (parse-proto-option stream message #\;))
               ((member token '("required" "optional" "repeated") :test #'string=)
                (parse-proto-field stream message token))
+              ((string= token "option")
+               (parse-proto-option stream message #\;))
+              ((string= token "extensions")
+               (parse-proto-extension stream message))
               (t
                (error "Unrecognized token ~A at position ~D"
                       token (file-position stream))))))))
@@ -347,11 +364,26 @@
    Returns a list of 'protobuf-option' objects."
   (with-collectors ((options collect-option))
     (loop
-      (unless (eql (peek-char nil stream) #\[)
+      (unless (eql (peek-char nil stream nil) #\[)
         (return-from parse-proto-field-options options))
       (expect-char stream #\[ "message")
       (collect-option (parse-proto-option stream nil #\])))
     options))
+
+(defun parse-proto-extension (stream message)
+  (let* ((from  (parse-int stream))
+         (token (parse-token stream))
+         (to    (if (digit-char-p (peek-char nil stream nil))
+                  (parse-int stream)
+                  (parse-token stream))))
+    (expect-char stream #\; "message")
+    (assert (string= token "to") ()
+            "Expected 'to' in 'extensions' at position ~D" (file-position stream))
+    (assert (or (integerp to) (string= to "max")) ()
+            "Extension value is not an integer or 'max' as position ~D" (file-position stream))
+    (push (make-instance 'protobuf-extension
+            :from from
+            :to   (if (integerp to) to #.(ash 1 29))) (proto-extensions message))))
 
 
 (defun parse-proto-service (stream protobuf)
@@ -391,7 +423,7 @@
                    (parse-token stream)
                  (expect-char stream #\) "service")))
          (opts (let ((opts (parse-proto-rpc-options stream)))
-                 (when (or (null opts) (eql (peek-char nil stream) #\;))
+                 (when (or (null opts) (eql (peek-char nil stream nil) #\;))
                    (expect-char stream #\; "service"))
                  (maybe-skip-comments stream)
                  opts))
@@ -413,12 +445,12 @@
 (defun parse-proto-rpc-options (stream)
   "Parse any options in a Protobufs RPC from 'stream'.
    Returns a list of 'protobuf-option' objects."
-  (when (eql (peek-char nil stream) #\{)
+  (when (eql (peek-char nil stream nil) #\{)
     (expect-char stream #\{ "service")
     (maybe-skip-comments stream)
     (with-collectors ((options collect-option))
       (loop
-        (when (eql (peek-char nil stream) #\})
+        (when (eql (peek-char nil stream nil) #\})
           (return))
         (assert (string= (parse-token stream) "option") ()
                 "Syntax error in 'message' at position ~D" (file-position stream))

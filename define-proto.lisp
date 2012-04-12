@@ -1,4 +1,3 @@
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;                                                                  ;;;
 ;;; Confidential and proprietary information of ITA Software, Inc.   ;;;
@@ -15,11 +14,13 @@
 ;;; Protocol buffer defining macros
 
 ;; Define a schema named 'type', corresponding to a .proto file of that name
-(defmacro define-proto (type (&key name syntax package import optimize options documentation)
+(defmacro define-proto (type (&key name syntax package lisp-package import optimize options documentation)
                         &body messages &environment env)
   "Define a schema named 'type', corresponding to a .proto file of that name.
    'name' can be used to override the defaultly generated Protobufs name.
    'syntax' and 'package' are as they would be in a .proto file.
+   'lisp-package' can be used to specify a Lisp package if it is different from
+   the Protobufs package given by 'package'.
    'import' is a list of pathname strings to be imported.
    'optimize' can be either :space (the default) or :speed; if it is :speed, the
    serialization code will be much faster, but much less compact.
@@ -48,6 +49,7 @@
         (ecase type
           ((define-enum)
            (collect-enum model))
+          ;;---** Handle 'define-extends' here
           ((define-message)
            (collect-msg model))
           ((define-service)
@@ -61,19 +63,23 @@
       `(progn
          ,@forms
          (defvar ,var nil)
-         (let ((old ,var)
-               (protobuf (make-instance 'protobuf
-                           :class    ',type
-                           :name     ',name
-                           :syntax   ,(or syntax "proto2")
-                           :package  ,(if (stringp package) package (string-downcase (string package)))
-                           :imports  ',(if (listp import) import (list import))
-                           :options  (list ,@options)
-                           :optimize ,optimize
-                           :enums    (list ,@enums)
-                           :messages (list ,@msgs)
-                           :services (list ,@svcs)
-                           :documentation ,documentation)))
+         (let* ((old ,var)
+                (package  ',(and package (if (stringp package) package (string-downcase (string package)))))
+                (lisp-pkg ',(and lisp-package (if (stringp lisp-package) lisp-package (string lisp-package))))
+                (protobuf (make-instance 'protobuf
+                            :class    ',type
+                            :name     ',name
+                            :syntax   ,(or syntax "proto2")
+                            :package  package
+                            :lisp-package (or lisp-pkg package)
+                            ;;---*** This needs to parse the imported file(s)
+                            :imports  ',(if (listp import) import (list import))
+                            :options  (list ,@options)
+                            :optimize ,optimize
+                            :enums    (list ,@enums)
+                            :messages (list ,@msgs)
+                            :services (list ,@svcs)
+                            :documentation ,documentation)))
            (when old
              (multiple-value-bind (upgradable warnings)
                  (protobuf-upgradable old protobuf)
@@ -180,6 +186,7 @@
              (ecase type
                ((define-enum)
                 (collect-enum model))
+               ;;---** Handle 'define-extends' here
                ((define-message)
                 (collect-msg model))
                ((define-extension)
@@ -290,16 +297,17 @@
                           :output-name ',(or output-name (class-name->proto output-type))
                           :options (list ,@options)
                           :documentation ,documentation))
-          ;;--- It's likely that all of the below belongs in CL-Stubby
+          ;; The following are the hooks to CL-Stubby
           (let ((client-fn function)
                 (server-fn (intern (format nil "~A-~A" 'do function) (symbol-package function)))
                 (vchannel  (intern (symbol-name 'channel) (symbol-package function)))
                 (vcallback (intern (symbol-name 'callback) (symbol-package function))))
             ;; The client side stub, e.g., 'read-air-reservation'
-            ;; The expectation is that CL-Stubby will implement a method for
-            ;; this on each kind of channel (HTTP, TCP socket, IPC, etc),
-            ;; possibly on a client-side subclass of the input class
-            ;; This method (de)serializes the objects, does error checking, etc
+            ;; The expectation is that CL-Stubby will provide macrology to make it
+            ;; easy to implement a method for this on each kind of channel (HTTP, TCP socket,
+            ;; IPC, etc). Unlike C++/Java/Python, we don't need a client-side subclass,
+            ;; because we can just use multi-methods.
+            ;; The method (de)serializes the objects, does error checking, etc
             (collect-form `(defgeneric ,client-fn (,vchannel ,input-type)
                              ,@(and documentation `((:documentation ,documentation)))
                              (declare (values ,output-type))))
@@ -311,9 +319,9 @@
             ;; The business logic is expected to perform the correct operations on
             ;; the input object, which arrived via Protobufs, and produce an output
             ;; of the given type, which will be serialized as a result
-            ;; The channel object hold client identity information, deadline info,
+            ;; The channel objects hold client identity information, deadline info,
             ;; etc, and can be side-effected to indicate success or failure
-            ;; CL-Stubby provides the channel classes and does (de)serialization
+            ;; CL-Stubby provides the channel classes and does (de)serialization, etc
             (collect-form `(defgeneric ,server-fn (,vchannel ,input-type &optional ,vcallback)
                              ,@(and documentation `((:documentation ,documentation)))
                              (declare (values ,output-type))))))))

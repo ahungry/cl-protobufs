@@ -552,12 +552,13 @@ service ColorWheel {
       :documentation "Add a new color to the wheel")))
 
 (proto:write-protobuf *color-wheel*)
+(proto:write-protobuf *color-wheel* :type :lisp)
 
 (progn ;with-rpc-channel (rpc)
   (let* ((wheel (make-instance 'color-wheel :name "Colors"))
          (color (make-instance 'color :r-value 100 :g-value 0 :b-value 100))
          (request (make-instance 'add-color-request :wheel wheel :color color)))
-    #---ignore (print (proto:serialize-object-to-stream request 'add-color-request :stream nil))
-    #---ignore (proto:print-text-format request)
+    #-ignore (print (proto:serialize-object-to-stream request 'add-color-request :stream nil))
+    #-ignore (proto:print-text-format request)
     #+stubby (add-color request)))
 ||#

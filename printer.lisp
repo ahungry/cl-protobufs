@@ -183,18 +183,23 @@
 
 (defmethod write-protobuf-as ((type (eql :lisp)) (protobuf protobuf) stream
                               &key (indentation 0))
-  (with-prefixed-accessors (name class documentation package imports optimize options) (proto- protobuf)
+  (with-prefixed-accessors (name class documentation package lisp-package imports optimize options) (proto- protobuf)
     (when package
-      (format stream "~&(in-package \"~A\")~%~%" package))
+      (format stream "~&(in-package \"~A\")~%~%" (or lisp-package package)))
     (when documentation
       (write-protobuf-documentation type documentation stream :indentation indentation))
     (format stream "~&(proto:define-proto ~(~A~)" (or class name))
-    (if (or package imports optimize options documentation)
+    (if (or package lisp-package imports optimize options documentation)
       (format stream "~%    (")
       (format stream " ("))
     (let ((spaces ""))
       (when package
         (format stream "~A:package ~A" spaces package)
+        (when (or lisp-package imports optimize options documentation)
+          (terpri stream))
+        (setq spaces "     "))
+      (when lisp-package
+        (format stream "~A:lisp-package ~A" spaces lisp-package)
         (when (or imports optimize options documentation)
           (terpri stream))
         (setq spaces "     "))

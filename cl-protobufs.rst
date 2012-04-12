@@ -195,19 +195,21 @@ classes as well) until you have a good Protobufs schema definition.
 ::
 
   proto:generate-protobuf-schema-for-classes (classes           [Function]
-                                              &key name package)
+                                              &key name package lisp-package)
 
 Given a list of class names *classes*, this generates a Protobufs schema
 for the classes, generating any necessary enum types that correspond to
 Lisp ``member`` types.
 
 *name* and *package* can be supplied to give the Protobufs name and package.
+*lisp-package* can be supplied to give the name of the Lisp package, if it
+is different from *package*.
 
 
 ::
 
   proto:write-protobuf-schema-for-classes (classes              [Function]
-                                           &key stream type name package)
+                                           &key stream type name package lisp-package)
 
 Given a list of class names *classes*, this generates a Protobufs schema
 for the classes, generating enum types as necessary, and then
@@ -215,6 +217,8 @@ pretty-prints the result onto *stream*. *type* can be either ``:proto``
 (the default) or ``:lisp``.
 
 *name* and *package* can be supplied to give the Protobufs name and package.
+*lisp-package* can be supplied to give the name of the Lisp package, if it
+is different from *package*.
 
 
 Using .proto files directly
@@ -304,7 +308,8 @@ looks like this::
 
 ::
 
-  proto:define-proto (type (&key name syntax package import     [Macro]
+  proto:define-proto (type (&key name syntax import             [Macro]
+                                 package lisp-package
                                  optimize options documentation)
                       &body messages)
 
@@ -314,8 +319,11 @@ the Protobufs name of the schema is the camel-cased rendition of *type*
 (e.g., ``color-wheel`` becomes ``ColorWheel``); otherwise the Protobufs
 name is the string *name*.
 
-*syntax* and package* are strings that give the Protobufs syntax and
-*package name. *imports* is a list of pathname strings to be imported.
+*imports* is a list of pathname strings to be imported.
+
+*syntax* and *package* are strings that give the Protobufs syntax and
+*package name. lisp-package* can be supplied to give the name of the
+*Lisp package, if it is different from *package*.
 
 *optimize* can be either ``:space`` (the default) or ``:speed``. When it
  is ``:space`` the serialization methods generated for each message are
@@ -402,6 +410,8 @@ existing class.
   proto:define-extension (from to)                              [Macro]
 
 Defines a field extension for the indexes from *from* to *to*.
+*from* and *to* are positive integers ranging from 1 to 2^29.
+*to* can also be the token ``max``.
 
 
 ::

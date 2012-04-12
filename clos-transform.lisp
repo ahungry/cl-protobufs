@@ -17,13 +17,16 @@
 ;;  - How do we decide if there's an ownership hierarchy that should produce embedded messages?
 ;;  - How do we decide if there are volatile slots that should not be included in the message?
 (defun write-protobuf-schema-for-classes (classes
-                                          &key (stream *standard-output*) (type :proto) name package
+                                          &key (stream *standard-output*) (type :proto)
+                                               name package lisp-package
                                                slot-filter type-filter enum-filter value-filter)
   "Given a set of CLOS classes, generates a Protobufs schema for the classes
    and pretty prints the schema to the stream.
    The return value is the schema."
   (let ((protobuf (generate-protobuf-schema-for-classes classes
-                                                        :name name :package package
+                                                        :name name
+                                                        :package package
+                                                        :lisp-package (or lisp-package package)
                                                         :slot-filter slot-filter
                                                         :type-filter type-filter
                                                         :enum-filter enum-filter
@@ -34,7 +37,7 @@
     protobuf))
 
 (defun generate-protobuf-schema-for-classes (classes
-                                             &key name package
+                                             &key name package lisp-package
                                                   slot-filter type-filter enum-filter value-filter)
   "Given a set of CLOS classes, generates a Protobufs schema for the classes.
    The return value is the schema."
@@ -44,9 +47,12 @@
                                                             :enum-filter enum-filter
                                                             :value-filter value-filter))
                            classes))
+         (package  (and package (if (stringp package) package (string-downcase (string package)))))
+         (lisp-pkg (or lisp-package package))
          (protobuf (make-instance 'protobuf
                      :name name
-                     :package (and package (if (stringp package) package (string-downcase (string package))))
+                     :package package
+                     :lisp-package lisp-pkg
                      :messages messages)))
     protobuf))
 
@@ -137,8 +143,12 @@
          (direct-slotd (some #'(lambda (c)
                                  (find slot-name (class-direct-slots c) :key #'slot-definition-name))
                              (class-precedence-list class))))
-    (or (and direct-slotd (slot-definition-type direct-slotd))
-        (slot-definition-type slotd))))
+    (if direct-slotd
+      (let ((type (slot-definition-type direct-slotd)))
+        (if (and (listp type) (member (car type) '(list-of #+quux quux:list-of)))
+          type
+          (slot-definition-type slotd)))
+      (slot-definition-type slotd))))
 
 ;; Given a class and a slot descriptor, find the name of a reader method for the slot
 (defun find-slot-definition-reader (class slotd)

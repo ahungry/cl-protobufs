@@ -21,7 +21,7 @@
            (message (find-message-for-class class)))
       (assert message ()
               "There is no Protobufs message for the class ~S" class)
-      ;;--- Do this
+      ;;--- Do this: set everything either to the default value or "unbound"
       message)))
 
 (defgeneric is-initialized (object)
@@ -32,7 +32,7 @@
            (message (find-message-for-class class)))
       (assert message ()
               "There is no Protobufs message for the class ~S" class)
-      ;;--- Do this
+      ;;--- Do this: check that there are no "unbound" slots
       message)))
 
 ;; This is simpler than 'object-size', but doesn't fully support aliasing

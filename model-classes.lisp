@@ -66,11 +66,14 @@
            :accessor proto-syntax
            :initarg :syntax
            :initform "proto2")
-   (package :type (or null string)              ;the package
+   (package :type (or null string)              ;the Protobufs package
             :accessor proto-package
             :initarg :package
             :initform nil)
-   ;;---*** We need to support 'import' properly
+   (lisp-pkg :type (or null string)              ;the Lisp package, from 'option lisp_package = ...'
+             :accessor proto-lisp-package
+             :initarg :lisp-package
+             :initform nil)
    (imports :type (list-of string)              ;any imports
             :accessor proto-imports
             :initarg :imports
@@ -278,7 +281,7 @@
 
 
 ;; A protobuf field within a message
-;;--- Support the 'deprecated' option (should serialization ignore such fields?)
+;;---*** Support the 'deprecated' option (should serialization ignore such fields?)
 (defclass protobuf-field (base-protobuf)
   ((type :type string                           ;the name of the Protobuf type for the field
          :accessor proto-type
@@ -321,7 +324,6 @@
 
 
 ;; An extension within a message
-;;---*** We need to support 'extends', which depends on supporting 'import'
 (defclass protobuf-extension (abstract-protobuf)
   ((from :type (integer 1 #.(1- (ash 1 29)))    ;the index number for this field
          :accessor proto-extension-from
@@ -400,4 +402,4 @@
 (quux:declare-list-of protobuf-service)
 (quux:declare-list-of protobuf-rpc)
 
-)	;#+quux
+)       ;#+quux
