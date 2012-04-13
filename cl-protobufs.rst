@@ -319,23 +319,27 @@ the Protobufs name of the schema is the camel-cased rendition of *type*
 (e.g., ``color-wheel`` becomes ``ColorWheel``); otherwise the Protobufs
 name is the string *name*.
 
-*imports* is a list of pathname strings to be imported.
+*imports* is a list of pathname strings to be imported. This corresponds
+to ``import`` in a .proto file.
 
 *syntax* and *package* are strings that give the Protobufs syntax and
-*package name. lisp-package* can be supplied to give the name of the
-*Lisp package, if it is different from *package*.
+package name. *lisp-package* can be supplied to give the name of the
+Lisp package, if it is different from *package*. *package* corresponds
+to ``package`` in a .proto file. If you want to specify a Lisp package
+in a .proto file, you can use ``option lisp_package``.
 
 *optimize* can be either ``:space`` (the default) or ``:speed``. When it
- is ``:space`` the serialization methods generated for each message are
- compact, but slower; when it is ``:speed``, the serialization methods
- will be much faster, but will take more space.
+is ``:space`` the serialization methods generated for each message are
+compact, but slower; when it is ``:speed``, the serialization methods
+will be much faster, but will take more space. This corresponds to
+``option optimize_for CODE_SIZE|SPEED`` in a .proto file.
 
 *options* is a property list whose keys and values are both strings,
 for example, ``:option ("java_package" "com.yoyodyne.overthruster")``.
-The are used unchanged in the .proto file.
+The are passed along unchanged to a generated .proto file.
 
 *documentation* is a documentation string that is preserved as a comment
- in the .proto file.
+in the .proto file.
 
 *body* consists of any number of calls to ``proto:define-enum``,
 ``proto:define-message`` or ``proto:define-service``.
@@ -351,17 +355,21 @@ Defines a Protobufs enum type and a corresponding Lisp deftype whose name
 is given by the symbol *type*. If *name* is not supplied, the Protobufs
 name of the enum is the camel-cased rendition of *type*; otherwise the
 Protobufs name is the string *name*. If *conc-name* is given, it will
-be used as the prefix for all of the enum value names.
+be used as the prefix for all of the enum value names. In a .proto file,
+you can use ``option lisp_name`` to override the default name for the
+enum type in Lisp.
 
 If *alias-for* is given, no Lisp deftype is defined. Instead, the enum
 will be used as an alias for an enum type that already exists in Lisp.
+You can use ``option lisp_alias`` in a .proto file to give the Lisp
+alias for an enum type.
 
 *options*  is a property list whose keys and values are both strings.
 
 *documentation* is a documentation string that is preserved as a comment
- in the .proto file.
+in the .proto file.
 
-``body`` consists of the enum values, each of which is either a symbol
+*body* consists of the enum values, each of which is either a symbol
 or a list of the form ``(name index)``. By default, the indexes start at
 0 and are incremented by 1 for each new enum value.
 
@@ -374,9 +382,11 @@ or a list of the form ``(name index)``. By default, the indexes start at
 
 Defines a Protobuf message and a corresponding Lisp defclass whose name
 is given by the symbol *type*. If *name* is not supplied, the Protobufs
-name of the enum is the camel-cased rendition of *type*; otherwise the
+name of the class is the camel-cased rendition of *type*; otherwise the
 Protobufs name is the string *name*. If *conc-name* is given, it will
-be used as the prefix for all of the slot accessor names.
+be used as the prefix for all of the slot accessor names. In a .proto
+file, you can use ``option lisp_name`` to override the default name
+for the class in Lisp.
 
 If *alias-for* is given, no Lisp defclass is defined. Instead, the
 message will be used as an alias for a class that already exists in
@@ -384,13 +394,15 @@ Lisp. This feature is intended to be used to define messages that will
 be serialized from existing Lisp classes; unless you get the slot names
 or readers exactly right for each field, it will be the case that trying
 to (de)serialize into a Lisp object won't work.
+You can use ``option lisp_alias`` in a .proto file to give the Lisp
+alias for the class corresponding to a message.
 
 *options*  is a property list whose keys and values are both strings.
 
 *documentation* is a documentation string that is preserved as a comment
- in the .proto file.
+in the .proto file.
 
-The body consists of fields, or ``proto:define-enum``,
+The body *fields* consists of fields, ``proto:define-enum``,
 ``proto:define-message`` or ``proto:define-extension`` forms.
 
 Fields take the form ``(slot &key type name default reader)``. *slot*
@@ -410,8 +422,8 @@ existing class.
   proto:define-extension (from to)                              [Macro]
 
 Defines a field extension for the indexes from *from* to *to*.
-*from* and *to* are positive integers ranging from 1 to 2^29.
-*to* can also be the token ``max``.
+*from* and *to* are positive integers ranging from 1 to 2^29 - 1.
+*to* can also be the token ``max``, i.e., 2^29 - 1.
 
 
 ::
@@ -428,7 +440,7 @@ Protobufs name is the string *name*.
 *options*  is a property list whose keys and values are both strings.
 
 *documentation* is a documentation string that is preserved as a comment
- in the .proto file.
+in the .proto file.
 
 The body is a set of method specs of the form
 ``(name (input-type output-type) &key options documentation)``.
@@ -478,7 +490,7 @@ object. *type* defaults to the class of *object*. The buffer is assumed
 to be large enough to hold the serialized object; if it is not, an
 out-of-bounds condition may be signalled.
 
-The object is serialized into the byte array given by *buffer* starting
+The object is serialized into the byte array given by *buffer*, starting
 at the fixnum index *start* using the wire format.
 
 *visited* is a hash table used to cache object sizes.
