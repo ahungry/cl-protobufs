@@ -381,9 +381,11 @@
             "Expected 'to' in 'extensions' at position ~D" (file-position stream))
     (assert (or (integerp to) (string= to "max")) ()
             "Extension value is not an integer or 'max' as position ~D" (file-position stream))
-    (push (make-instance 'protobuf-extension
-            :from from
-            :to   (if (integerp to) to #.(1- (ash 1 29)))) (proto-extensions message))))
+    (setf (proto-extensions message)
+          (nconc (proto-extensions message)
+                 (list (make-instance 'protobuf-extension
+                         :from from
+                         :to   (if (integerp to) to #.(1- (ash 1 29)))))))))
 
 
 (defun parse-proto-service (stream protobuf)

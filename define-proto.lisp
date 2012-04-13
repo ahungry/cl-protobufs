@@ -172,6 +172,7 @@
                     (msgs  collect-msg)
                     (flds  collect-field)
                     (slots collect-slot)
+                    (exts  collect-extension)
                     (forms collect-form))
     (let ((index 0))
       (declare (type fixnum index))
@@ -190,7 +191,7 @@
                ((define-message)
                 (collect-msg model))
                ((define-extension)
-                (collect-msg model)))))
+                (collect-extension model)))))
           (otherwise
            (when (i= index 18999)                       ;skip over the restricted range
              (setq index 19999))
@@ -235,6 +236,11 @@
       ;; If no alias, define the class now
       (collect-form `(defclass ,type () (,@slots)
                        ,@(and documentation `((:documentation ,documentation))))))
+    (when exts
+      ;; If there are extensions in this message, we'll need a slot in the
+      ;; class to hold any extension field values
+      (collect-slot `(extensions :reader proto-extensions
+                                 :initform (make-hash-table))))
     (let ((name (or name (class-name->proto type)))
           (options (loop for (key val) on options by #'cddr
                          collect `(make-instance 'protobuf-option
@@ -251,6 +257,7 @@
            :enums    (list ,@enums)
            :messages (list ,@msgs)
            :fields   (list ,@flds)
+           :extensions (list ,@exts)
            :documentation ,documentation)
          ,forms))))
 
