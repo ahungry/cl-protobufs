@@ -383,7 +383,7 @@
             "Extension value is not an integer or 'max' as position ~D" (file-position stream))
     (push (make-instance 'protobuf-extension
             :from from
-            :to   (if (integerp to) to #.(ash 1 29))) (proto-extensions message))))
+            :to   (if (integerp to) to #.(1- (ash 1 29)))) (proto-extensions message))))
 
 
 (defun parse-proto-service (stream protobuf)
