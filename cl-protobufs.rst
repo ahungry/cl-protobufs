@@ -342,7 +342,7 @@ The are passed along unchanged to a generated .proto file.
 in the .proto file.
 
 *body* consists of any number of calls to ``proto:define-enum``,
-``proto:define-message`` or ``proto:define-service``.
+``proto:define-message``, ``proto:define-extends`` or ``proto:define-service``.
 
 
 ::
@@ -405,16 +405,40 @@ in the .proto file.
 The body *fields* consists of fields, ``proto:define-enum``,
 ``proto:define-message`` or ``proto:define-extension`` forms.
 
-Fields take the form ``(slot &key type name default reader)``. *slot*
-can be either a symbol giving the slot name or a list of the form
-``(slot index)``. By default, the field indexes start at 1 and are
-incremented by 1 for each new field value.  *type* is the type of the
-slot. *name* can be used to override the defaultly generated Protobufs
-field name (for example, ``color-name`` becomes ``colorName``).
-*default* is the default value for the slot. *reader* is a Lisp slot
-reader function to use to get the value during serialization, as opposed
-to using ``slot-value``; this is meant to be used when aliasing an
-existing class.
+Fields take the form ``(slot &key type name default reader writer)``.
+*slot* can be either a symbol giving the slot name or a list of the
+form ``(slot index)``. By default, the field indexes start at 1 and
+are incremented by 1 for each new field value.  *type* is the type of
+the slot. *name* can be used to override the defaultly generated
+Protobufs field name (for example, ``color-name`` becomes
+``colorName``).  *default* is the default value for the slot. *reader*
+is a Lisp slot reader function to use to get the value during
+serialization, as opposed to using ``slot-value``; this is meant to be
+used when aliasing an existing class. *writer* can be similarly used
+to give a Lisp slot writer function.
+
+
+::
+
+  proto:define-extends (type (&key name                         [Macro]
+                                   options documentation)
+                        &body fields)
+
+Defines a Protobuf "extends", that is, an extension to an existing
+message and Lisp class that has additional fields that were reserved
+by ``proto:define-extension``. *type* and *name* are as for
+``proto:define-message``. Note that no new Lisp class is defined; the
+additional slots are implemented as getter and setter methods with a
+closed-over variable. The other options, such as *conc-name* and
+*alias-for* are take from the extended message.
+
+*options*  is a property list whose keys and values are both strings.
+
+*documentation* is a documentation string that is preserved as a comment
+in the .proto file.
+
+The body *fields* consists only of fields, which take the same form as
+they do for ``proto:define-message``.
 
 
 ::

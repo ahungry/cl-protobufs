@@ -49,8 +49,7 @@
         (ecase type
           ((define-enum)
            (collect-enum model))
-          ;;---** Handle 'define-extends' here
-          ((define-message)
+          ((define-message define-extends)
            (collect-msg model))
           ((define-service)
            (collect-svc model)))))
@@ -167,7 +166,8 @@
    'name' can be used to override the defaultly generated Protobufs field name.
    'default' is the default value for the slot.
    'reader' is a Lisp slot reader function to use to get the value, instead of
-   using 'slot-value'; this is often used when aliasing an existing class."
+   using 'slot-value'; this is often used when aliasing an existing class.
+   'writer' is a Lisp slot writer function to use to set the value."
   (with-collectors ((enums collect-enum)
                     (msgs  collect-msg)
                     (flds  collect-field)
@@ -187,15 +187,14 @@
              (ecase type
                ((define-enum)
                 (collect-enum model))
-               ;;---** Handle 'define-extends' here
-               ((define-message)
+               ((define-message define-extends)
                 (collect-msg model))
                ((define-extension)
                 (collect-extension model)))))
           (otherwise
            (when (i= index 18999)                       ;skip over the restricted range
              (setq index 19999))
-           (destructuring-bind (slot &key type (default nil default-p) reader name documentation) fld
+           (destructuring-bind (slot &key type (default nil default-p) reader writer name documentation) fld
              (let* ((idx  (if (listp slot) (second slot) (iincf index)))
                     (slot (if (listp slot) (first slot) slot))
                     (reqd (clos-type-to-protobuf-required type))
@@ -208,7 +207,11 @@
                  (unless alias-for
                    (collect-slot `(,slot :type ,type
                                          ,@(and reader
-                                                `(:accessor ,reader))
+                                                (if writer
+                                                  `(:reader ,reader)
+                                                  `(:accessor ,reader)))
+                                         ,@(and writer
+                                                `(:writer ,writer))
                                          :initarg ,(kintern (symbol-name slot))
                                          ,@(cond ((and (not default-p) (eq reqd :repeated))
                                                   `(:initform ()))
@@ -224,6 +227,7 @@
                                    :index  ,idx
                                    :value  ',slot
                                    :reader ',reader
+                                   :writer ',writer
                                    :default ,(and default (format nil "~A" default))
                                    :packed  ,(and (eq reqd :repeated)
                                                   (packed-type-p pclass))
@@ -236,11 +240,6 @@
       ;; If no alias, define the class now
       (collect-form `(defclass ,type () (,@slots)
                        ,@(and documentation `((:documentation ,documentation))))))
-    (when exts
-      ;; If there are extensions in this message, we'll need a slot in the
-      ;; class to hold any extension field values
-      (collect-slot `(extensions :reader proto-extensions
-                                 :initform (make-hash-table))))
     (let ((name (or name (class-name->proto type)))
           (options (loop for (key val) on options by #'cddr
                          collect `(make-instance 'protobuf-option
@@ -260,6 +259,13 @@
            :extensions (list ,@exts)
            :documentation ,documentation)
          ,forms))))
+
+(defmacro define-extends (type (&key name options documentation)
+                          &body fields &environment env)
+  ;;---*** Handle 'define-extends' here (factor out field "parsing" from above)
+  ;;---*** Note that it handles only fields, not nested message or enums
+  type name options documentation fields env
+  `(progn define-extends nil nil))
 
 (defmacro define-extension (from to)
   "Define an extension range within a message.

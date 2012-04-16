@@ -240,7 +240,11 @@
    (extensions :type (list-of protobuf-extension) ;any extensions
                :accessor proto-extensions
                :initarg :extensions
-               :initform ()))
+               :initform ())
+   (extension-p :type (member t nil)            ;true iff this message extends another message
+                :accessor proto-extension-p
+                :initarg :extension-p
+                :initform nil))
     (:documentation
    "The model class that represents a Protobufs message."))
 
@@ -300,6 +304,10 @@
            :accessor proto-reader               ;if it's supplied, it's used instead of 'value'
            :initarg :reader
            :initform nil)
+   (writer :type (or null symbol)               ;a writer that is used to set the value
+           :accessor proto-writer
+           :initarg :writer
+           :initform nil)
    (default :type (or null string)              ;default value, pulled out of the options
             :accessor proto-default
             :initarg :default
@@ -307,7 +315,11 @@
    (packed :type (member t nil)                 ;packed, pulled out of the options
            :accessor proto-packed
            :initarg :packed
-           :initform nil))
+           :initform nil)
+   (extension-p :type (member t nil)            ;true iff this field is an extension
+                :accessor proto-extension-p
+                :initarg :extension-p
+                :initform nil))
   (:documentation
    "The model class that represents one field within a Protobufs message."))
 
