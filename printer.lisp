@@ -139,14 +139,19 @@
     (dolist (option options)
       (format stream "~&~VToption ~:/protobuf-option/;~%"
               (+ indentation 2) option))
-    (dolist (enum (proto-enums message))
-      (write-protobuf-as type enum stream :indentation (+ indentation 2)))
-    (dolist (msg (proto-messages message))
-      (write-protobuf-as type msg stream :indentation (+ indentation 2)))
-    (dolist (field (proto-fields message))
-      (write-protobuf-as type field stream :indentation (+ indentation 2)))
-    (dolist (extension (proto-extensions message))
-      (write-protobuf-as type extension stream :indentation (+ indentation 2)))
+    (cond (extension-p
+           (dolist (field (proto-fields message))
+             (when (proto-extension-p field)
+               (write-protobuf-as type field stream :indentation (+ indentation 2)))))
+          (t
+           (dolist (enum (proto-enums message))
+             (write-protobuf-as type enum stream :indentation (+ indentation 2)))
+           (dolist (msg (proto-messages message))
+             (write-protobuf-as type msg stream :indentation (+ indentation 2)))
+           (dolist (field (proto-fields message))
+             (write-protobuf-as type field stream :indentation (+ indentation 2)))
+           (dolist (extension (proto-extensions message))
+             (write-protobuf-as type extension stream :indentation (+ indentation 2)))))
     (format stream "~&~@[~VT~]}~%"
             (and (not (zerop indentation)) indentation))))
 
@@ -167,7 +172,7 @@
   (with-prefixed-accessors (from to) (proto-extension- extension)
     (format stream "~&~@[~VT~]extensions ~D to ~D;~%"
             (and (not (zerop indentation)) indentation)
-            from to)))
+            from (if (eql to #.(1- (ash 1 29))) "max" to))))
 
 
 (defmethod write-protobuf-as ((type (eql :proto)) (service protobuf-service) stream
@@ -308,7 +313,9 @@
             (and (not (zerop indentation)) indentation)
             (if extension-p "extends" "message") class)
     (let ((other (and name (not (string= name (class-name->proto class))) name)))
-      (cond ((or alias-for conc-name documentation)
+      (cond (extension-p
+             (format stream " ()"))
+            ((or alias-for conc-name documentation)
              (format stream "~%~@[~VT~](~:[~*~*~;:name ~(~S~)~@[~%~VT~]~]~
                                         ~:[~*~*~;:alias-for ~(~S~)~@[~%~VT~]~]~
                                         ~:[~*~*~;:conc-name ~(~S~)~@[~%~VT~]~]~
@@ -320,22 +327,29 @@
                      documentation documentation))
             (t
              (format stream " ()"))))
-    (loop for (enum . more) on (proto-enums message) doing
-      (write-protobuf-as type enum stream :indentation (+ indentation 2))
-      (when more
-        (terpri stream)))
-    (loop for (msg . more) on (proto-messages message) doing
-      (write-protobuf-as type msg stream :indentation (+ indentation 2))
-      (when more
-        (terpri stream)))
-    (loop for (field . more) on (proto-fields message) doing
-      (write-protobuf-as type field stream :indentation (+ indentation 2))
-      (when more
-        (terpri stream)))
-    (loop for (extension . more) on (proto-extensions message) doing
-      (write-protobuf-as type extension stream :indentation (+ indentation 2))
-      (when more
-        (terpri stream)))
+    (cond (extension-p
+           (loop for (field . more) on (proto-fields message) doing
+             (when (proto-extension-p field)
+               (write-protobuf-as type field stream :indentation (+ indentation 2))
+               (when more
+                 (terpri stream)))))
+          (t
+           (loop for (enum . more) on (proto-enums message) doing
+             (write-protobuf-as type enum stream :indentation (+ indentation 2))
+             (when more
+               (terpri stream)))
+           (loop for (msg . more) on (proto-messages message) doing
+             (write-protobuf-as type msg stream :indentation (+ indentation 2))
+             (when more
+               (terpri stream)))
+           (loop for (field . more) on (proto-fields message) doing
+             (write-protobuf-as type field stream :indentation (+ indentation 2))
+             (when more
+               (terpri stream)))
+           (loop for (extension . more) on (proto-extensions message) doing
+             (write-protobuf-as type extension stream :indentation (+ indentation 2))
+             (when more
+               (terpri stream)))))
     (format stream ")")))
 
 (defparameter *protobuf-slot-comment-column* 56)
@@ -373,7 +387,7 @@
   (with-prefixed-accessors (from to) (proto-extension- extension)
     (format stream "~&~@[~VT~](define-extension ~D ~D)"
             (and (not (zerop indentation)) indentation)
-            from to)))
+            from (if (eql to #.(1- (ash 1 29))) "max" to))))
 
 
 (defmethod write-protobuf-as ((type (eql :lisp)) (service protobuf-service) stream

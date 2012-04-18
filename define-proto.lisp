@@ -46,7 +46,8 @@
                      :optimize optimize
                      :documentation documentation))
          (*protobuf* protobuf)
-         (*protobuf-package* nil))
+         (*protobuf-package* (or (find-package lisp-pkg)
+                                 (find-package (string-upcase lisp-pkg)))))
     (with-collectors ((forms collect-form))
       (dolist (msg messages)
         (assert (and (listp msg)
@@ -68,7 +69,9 @@
              (setf (proto-enums protobuf) (nconc (proto-messages protobuf) (list model))))
             ((define-message define-extends)
              (setf (proto-parent model) protobuf)
-             (setf (proto-messages protobuf) (nconc (proto-messages protobuf) (list model))))
+             (setf (proto-messages protobuf) (nconc (proto-messages protobuf) (list model)))
+             (when (proto-extension-p model)
+               (setf (proto-extenders protobuf) (nconc (proto-extenders protobuf) (list model)))))
             ((define-service)
              (setf (proto-services protobuf) (nconc (proto-services protobuf) (list model)))))))
       (let ((var (fintern "*~A*" type)))
@@ -117,7 +120,6 @@
                   :alias-for alias-for
                   :options options
                   :documentation documentation)))
-    (declare (type fixnum index))
     (with-collectors ((vals  collect-val)
                       (forms collect-form))
       (dolist (val values)
@@ -178,68 +180,38 @@
                     :alias-for alias-for
                     :conc-name (and conc-name (string conc-name))
                     :options  options
-                    :documentation documentation)))
-    (declare (type fixnum index))
+                    :documentation documentation))
+         (*protobuf* message))
     (with-collectors ((slots collect-slot)
                       (forms collect-form))
-      (dolist (fld fields)
-        (case (car fld)
+      (dolist (field fields)
+        (case (car field)
           ((define-enum define-message define-extends define-extension)
            (destructuring-bind (&optional progn type model definers)
-               (macroexpand-1 fld env)
+               (macroexpand-1 field env)
              (assert (eq progn 'progn) ()
-                     "The macroexpansion for ~S failed" fld)
+                     "The macroexpansion for ~S failed" field)
              (map () #'collect-form definers)
              (ecase type
                ((define-enum)
                 (setf (proto-enums message) (nconc (proto-messages message) (list model))))
                ((define-message define-extends)
                 (setf (proto-parent model) message)
-                (setf (proto-messages message) (nconc (proto-messages message) (list model))))
+                (setf (proto-messages message) (nconc (proto-messages message) (list model)))
+                (when (proto-extension-p model)
+                  (setf (proto-extenders message) (nconc (proto-extenders message) (list model)))))
                ((define-extension)
                 (setf (proto-extensions message) (nconc (proto-extensions message) (list model)))))))
           (otherwise
-           (when (i= index 18999)                       ;skip over the restricted range
-             (setq index 19999))
-           (destructuring-bind (slot &key type (default nil default-p) reader writer name documentation) fld
-             (let* ((idx  (if (listp slot) (second slot) (iincf index)))
-                    (slot (if (listp slot) (first slot) slot))
-                    (reqd (clos-type-to-protobuf-required type))
-                    (reader (if (eq reader 't)
-                              (intern (if conc-name (format nil "~A~A" conc-name slot) (symbol-name slot))
-                                      (symbol-package slot))
-                              reader)))
-               (multiple-value-bind (ptype pclass)
-                   (clos-type-to-protobuf-type type)
-                 (unless alias-for
-                   (collect-slot `(,slot :type ,type
-                                         ,@(and reader
-                                                (if writer
-                                                  `(:reader ,reader)
-                                                  `(:accessor ,reader)))
-                                         ,@(and writer
-                                                `(:writer ,writer))
-                                         :initarg ,(kintern (symbol-name slot))
-                                         ,@(cond ((and (not default-p) (eq reqd :repeated))
-                                                  `(:initform ()))
-                                                 ((and (not default-p) (eq reqd :optional))
-                                                  `(:initform nil))
-                                                 (default-p
-                                                   `(:initform ,default))))))
-                 (let ((field (make-instance 'protobuf-field
-                                :name  (or name (slot-name->proto slot))
-                                :type  ptype
-                                :class pclass
-                                :required reqd
-                                :index  idx
-                                :value  slot
-                                :reader reader
-                                :writer writer
-                                :default (and default (format nil "~A" default))
-                                :packed  (and (eq reqd :repeated)
-                                              (packed-type-p pclass))
-                                :documentation documentation)))
-                   (setf (proto-fields message) (nconc (proto-fields message) (list field))))))))))
+           (multiple-value-bind (field slot idx)
+               (process-field field index :conc-name conc-name :alias-for alias-for)
+             (assert (not (find (proto-index field) (proto-fields message) :key #'proto-index)) ()
+                     "The field ~S overlaps with another field in ~S"
+                     (proto-value field) (proto-class message))
+             (when slot
+               (collect-slot slot))
+             (setf (proto-fields message) (nconc (proto-fields message) (list field)))
+             (setq index idx)))))
       (if alias-for
         ;; If we've got an alias, define a a type that is the subtype of
         ;; the Lisp class that typep and subtypep work
@@ -255,10 +227,131 @@
 
 (defmacro define-extends (type (&key name options documentation)
                           &body fields &environment env)
-  ;;---*** Handle 'define-extends' here (factor out field "parsing" from above)
-  ;;---*** Note that it handles only fields, not nested message or enums
-  type name options documentation fields env
-  `(progn define-extends nil nil))
+  "Define an extension to the message named 'type'.
+   'name' can be used to override the defaultly generated Protobufs message name.
+   The body consists only  of fields.
+   'options' is a set of keyword/value pairs, both of which are strings.
+
+   Fields take the form (slot &key type name default reader)
+   'slot' can be either a symbol giving the field name, or a list whose
+   first element is the slot name and whose second element is the index.
+   'type' is the type of the slot.
+   'name' can be used to override the defaultly generated Protobufs field name.
+   'default' is the default value for the slot.
+   'reader' is a Lisp slot reader function to use to get the value, instead of
+   using 'slot-value'; this is often used when aliasing an existing class.
+   'writer' is a Lisp slot writer function to use to set the value."
+  (declare (ignore env))
+  (let* ((name    (or name (class-name->proto type)))
+         (options (loop for (key val) on options by #'cddr
+                        collect (make-instance 'protobuf-option
+                                  :name  key
+                                  :value val)))
+         (index   0)
+         (message   (find-message *protobuf* name))
+         (conc-name (and message (proto-conc-name message)))
+         (alias-for (and message (proto-alias-for message)))
+         (extends (and message
+                       (make-instance 'protobuf-message
+                         :class  type
+                         :name   name
+                         :parent (proto-parent message)
+                         :conc-name conc-name
+                         :alias-for alias-for
+                         :enums    (copy-list (proto-enums message))
+                         :messages (copy-list (proto-messages message))
+                         :fields   (copy-list (proto-fields message))
+                         :options  (or options (copy-list (proto-options message)))
+                         :extension-p t                 ;this message is an extension
+                         :documentation documentation))))
+    (assert message ()
+            "There is no message named ~A to extend" name)
+    (assert (eq type (proto-class message)) ()
+            "The type ~S doesn't match the type of the message being extended ~S"
+            type message)
+    (with-collectors ((forms collect-form))
+      (dolist (field fields)
+        (assert (not (member (car field)
+                             '(define-enum define-message define-extends define-extension))) ()
+                "The body of ~S can only contain field definitions" 'define-extends)
+        (multiple-value-bind (field slot idx)
+            (process-field field index :conc-name conc-name :alias-for alias-for)
+          ;;--- Make sure extension field's index is allowable within 'proto-extensions'
+          (assert (not (find (proto-index field) (proto-fields extends) :key #'proto-index)) ()
+                  "The field ~S overlaps with another field in ~S"
+                  (proto-value field) (proto-class extends))
+          (when slot
+            (let* ((inits (cdr slot))
+                   (sname (car slot))
+                   (stype (getf inits :type))
+                   (reader (or (getf inits :accessor)
+                               (getf inits :reader)
+                               (intern (if conc-name (format nil "~A~A" conc-name sname) (symbol-name sname))
+                                       (symbol-package sname))))
+                   (writer (or (getf inits :writer) `(setf ,reader)))
+                   (default (getf inits :initform)))
+              ;;--- Can we avoid having to use a hash table?
+              (collect-form `(let ((,sname (make-hash-table :test #'eq :weak t)))
+                               (defmethod ,reader ((object ,type))
+                                 (gethash object ,sname ,default))
+                               (defmethod ,writer (value (object ,type))
+                                 (declare (type ,stype value))
+                                 (setf (gethash object ,sname) value))))
+              ;; This so that (de)serialization works
+              (setf (proto-reader field) reader
+                    (proto-writer field) writer)))
+          (setf (proto-extension-p field) t)            ;this field is an extension
+          (setf (proto-fields extends) (nconc (proto-fields extends) (list field)))
+          (setq index idx)))
+      `(progn
+         define-extends
+         ,extends
+         ,forms))))
+
+(defun process-field (field index &key conc-name alias-for)
+  "Process one field descriptor within 'define-message' or 'define-extends'.
+   Returns a 'proto-field' object, a CLOS slot form and the incremented field index."
+  (when (i= index 18999)                                ;skip over the restricted range
+    (setq index 19999))
+  (destructuring-bind (slot &key type (default nil default-p) reader writer name documentation) field
+    (let* ((idx  (if (listp slot) (second slot) (iincf index)))
+           (slot (if (listp slot) (first slot) slot))
+           (reqd (clos-type-to-protobuf-required type))
+           (reader (if (eq reader 't)
+                     (intern (if conc-name (format nil "~A~A" conc-name slot) (symbol-name slot))
+                             (symbol-package slot))
+                     reader)))
+      (multiple-value-bind (ptype pclass)
+          (clos-type-to-protobuf-type type)
+        (let ((slot (unless alias-for
+                      `(,slot :type ,type
+                              ,@(and reader
+                                     (if writer
+                                       `(:reader ,reader)
+                                       `(:accessor ,reader)))
+                              ,@(and writer
+                                     `(:writer ,writer))
+                              :initarg ,(kintern (symbol-name slot))
+                              ,@(cond ((and (not default-p) (eq reqd :repeated))
+                                       `(:initform ()))
+                                      ((and (not default-p) (eq reqd :optional))
+                                       `(:initform nil))
+                                      (default-p
+                                        `(:initform ,default))))))
+              (field (make-instance 'protobuf-field
+                       :name  (or name (slot-name->proto slot))
+                       :type  ptype
+                       :class pclass
+                       :required reqd
+                       :index  idx
+                       :value  slot
+                       :reader reader
+                       :writer writer
+                       :default (and default (format nil "~A" default))
+                       :packed  (and (eq reqd :repeated)
+                                     (packed-type-p pclass))
+                       :documentation documentation)))
+          (values field slot index))))))
 
 (defmacro define-extension (from to)
   "Define an extension range within a message.
@@ -267,7 +360,7 @@
      define-extension
      ,(make-instance 'protobuf-extension
         :from from
-        :to   to)
+        :to   (if (eql to 'max) #.(1- (ash 1 29)) to))
      ()))
 
 ;; Define a service named 'type' with generic functions declared for

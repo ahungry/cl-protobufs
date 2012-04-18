@@ -90,6 +90,10 @@
              :accessor proto-messages
              :initarg :messages
              :initform ())
+   (extenders :type (list-of protobuf-message)  ;the set of extended messages
+              :accessor proto-extenders
+              :initarg :extenders
+              :initform ())
    (services :type (list-of protobuf-service)
              :accessor proto-services
              :initarg :services
@@ -101,8 +105,10 @@
   (declare (ignore initargs))
   ;; Record this schema under both its Lisp and its Protobufs name
   (with-slots (class name) protobuf
-    (setf (gethash class *all-protobufs*) protobuf)
-    (setf (gethash name *all-protobufs*) protobuf)))
+    (when class
+      (setf (gethash class *all-protobufs*) protobuf))
+    (when name
+      (setf (gethash name *all-protobufs*) protobuf))))
 
 (defmethod make-load-form ((p protobuf) &optional environment)
   (make-load-form-saving-slots p :environment environment))
@@ -118,13 +124,16 @@
     returns the protobuf message corresponding to the type."))
 
 (defmethod find-message ((protobuf protobuf) (type symbol))
-  (find type (proto-messages protobuf) :key #'proto-class))
+  ;; Extended messages "shadow" non-extended ones
+  (or (find type (proto-extenders protobuf) :key #'proto-class)
+      (find type (proto-messages protobuf) :key #'proto-class)))
 
 (defmethod find-message ((protobuf protobuf) (type class))
   (find-message protobuf (class-name type)))
 
 (defmethod find-message ((protobuf protobuf) (type string))
-  (find type (proto-messages protobuf) :key #'proto-name :test #'string=))
+  (or (find type (proto-extenders protobuf) :key #'proto-name :test #'string=)
+      (find type (proto-messages protobuf) :key #'proto-name :test #'string=)))
 
 (defgeneric find-enum (protobuf type)
   (:documentation
@@ -231,6 +240,10 @@
              :accessor proto-messages
              :initarg :messages
              :initform ())
+   (extenders :type (list-of protobuf-message)  ;the set of extended messages
+              :accessor proto-extenders
+              :initarg :extenders
+              :initform ())
    (fields :type (list-of protobuf-field)       ;the fields
            :accessor proto-fields
            :initarg :fields
@@ -249,8 +262,9 @@
 (defmethod initialize-instance :after ((message protobuf-message) &rest initargs)
   (declare (ignore initargs))
   ;; Record this message under just its Lisp class name
-  (with-slots (class) message
-    (setf (gethash class *all-messages*) message)))
+  (with-slots (class extension-p) message
+    (when (and class (not extension-p))
+      (setf (gethash class *all-messages*) message))))
 
 (defmethod make-load-form ((m protobuf-message) &optional environment)
   (make-load-form-saving-slots m :environment environment))
@@ -261,14 +275,17 @@
             (proto-class m) (proto-alias-for m))))
 
 (defmethod find-message ((message protobuf-message) (type symbol))
-  (or (find type (proto-messages message) :key #'proto-class)
+  ;; Extended messages "shadow" non-extended ones
+  (or (find type (proto-extenders message) :key #'proto-class)
+      (find type (proto-messages message) :key #'proto-class)
       (find-message (proto-parent message) type)))
 
 (defmethod find-message ((message protobuf-message) (type class))
   (find-message message (class-name type)))
 
 (defmethod find-message ((message protobuf-message) (type string))
-  (or (find type (proto-messages message) :key #'proto-name :test #'string=)
+  (or (find type (proto-extenders message) :key #'proto-name :test #'string=)
+      (find type (proto-messages message) :key #'proto-name :test #'string=)
       (find-message (proto-parent message) type)))
 
 (defmethod find-enum ((message protobuf-message) type)
@@ -300,8 +317,8 @@
            :accessor proto-reader               ;if it's supplied, it's used instead of 'value'
            :initarg :reader
            :initform nil)
-   (writer :type (or null symbol)               ;a writer that is used to set the value
-           :accessor proto-writer
+   (writer :type (or null symbol list)          ;a writer that is used to set the value
+           :accessor proto-writer               ;when it's a list, it's something like '(setf title)'
            :initarg :writer
            :initform nil)
    (default :type (or null string)              ;default value, pulled out of the options

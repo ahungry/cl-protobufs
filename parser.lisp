@@ -206,7 +206,8 @@
                                      (setq *protobuf-package* package)))))))
                        ((string= token "enum")
                         (parse-proto-enum stream protobuf))
-                       ;;---*** Handle "extends" here
+                       ((string= token "extends")
+                        (parse-proto-extends stream protobuf))
                        ((string= token "message")
                         (parse-proto-message stream protobuf))
                        ((string= token "service")
@@ -249,7 +250,7 @@
     (setf (proto-imports protobuf) (nconc (proto-imports protobuf) (list import)))))
 
 (defun parse-proto-option (stream protobuf &optional (terminator #\;))
-  "Parse a Protobufs option from 'stream'.
+  "Parse a Protobufs option line from 'stream'.
    Updates the 'protobuf' (or message, service, method) to have the option."
   (check-type protobuf (or null base-protobuf))
   (let* ((key (prog1 (parse-parenthesized-token stream)
@@ -271,7 +272,7 @@
 
 
 (defun parse-proto-enum (stream protobuf)
-  "Parse a Protobufs enum from 'stream'.
+  "Parse a Protobufs 'enum' from 'stream'.
    Updates the 'protobuf' or 'protobuf-message' object to have the enum."
   (check-type protobuf (or protobuf protobuf-message))
   (let* ((name (prog1 (parse-token stream)
@@ -298,7 +299,7 @@
           (parse-proto-enum-value stream enum name))))))
 
 (defun parse-proto-enum-value (stream enum name)
-  "Parse a Protobufs enum vvalue from 'stream'.
+  "Parse a Protobufs enum value from 'stream'.
    Updates the 'protobuf-enum' object to have the enum value."
   (check-type enum protobuf-enum)
   (expect-char stream #\= "enum")
@@ -313,7 +314,7 @@
 
 
 (defun parse-proto-message (stream protobuf)
-  "Parse a Protobufs message from 'stream'.
+  "Parse a Protobufs 'message' from 'stream'.
    Updates the 'protobuf' or 'protobuf-message' object to have the message."
   (check-type protobuf (or protobuf protobuf-message))
   (let* ((name (prog1 (parse-token stream)
@@ -322,7 +323,8 @@
          (message (make-instance 'protobuf-message
                     :class (proto->class-name name *protobuf-package*)
                     :name name
-                    :parent protobuf)))
+                    :parent protobuf))
+         (*protobuf* message))
     (loop
       (let ((token (parse-token stream)))
         (when (null token)
@@ -338,7 +340,8 @@
           (return-from parse-proto-message))
         (cond ((string= token "enum")
                (parse-proto-enum stream message))
-              ;;---*** Handle "extends" here
+              ((string= token "extends")
+               (parse-proto-extends stream message))
               ((string= token "message")
                (parse-proto-message stream message))
               ((member token '("required" "optional" "repeated") :test #'string=)
@@ -347,6 +350,47 @@
                (parse-proto-option stream message #\;))
               ((string= token "extensions")
                (parse-proto-extension stream message))
+              (t
+               (error "Unrecognized token ~A at position ~D"
+                      token (file-position stream))))))))
+
+(defun parse-proto-extends (stream protobuf)
+  "Parse a Protobufs 'extends' from 'stream'.
+   Updates the 'protobuf' or 'protobuf-message' object to have the message."
+  (check-type protobuf (or protobuf protobuf-message))
+  (let* ((name (prog1 (parse-token stream)
+                 (expect-char stream #\{ "extends")
+                 (maybe-skip-comments stream)))
+         (message (find-message *protobuf* name))
+         (extends (and message
+                       (make-instance 'protobuf-message
+                         :class  (proto->class-name name *protobuf-package*)
+                         :name   name
+                         :parent (proto-parent message)
+                         :conc-name (proto-conc-name message)
+                         :alias-for (proto-alias-for message)
+                         :enums    (copy-list (proto-enums message))
+                         :messages (copy-list (proto-messages message))
+                         :fields   (copy-list (proto-fields message))
+                         :extension-p t))))             ;this message is an extension
+    (loop
+      (let ((token (parse-token stream)))
+        (when (null token)
+          (expect-char stream #\} "extends")
+          (maybe-skip-comments stream)
+          (setf (proto-messages protobuf) (nconc (proto-messages protobuf) (list extends)))
+          (setf (proto-extenders protobuf) (nconc (proto-extenders protobuf) (list extends)))
+          (let ((type (find-option extends "lisp_name")))
+            (when type
+              (setf (proto-class extends) (make-lisp-symbol type))))
+          (let ((alias (find-option extends "lisp_alias")))
+            (when alias
+              (setf (proto-alias-for extends) (make-lisp-symbol alias))))
+          (return-from parse-proto-extends))
+        (cond ((member token '("required" "optional" "repeated") :test #'string=)
+               (parse-proto-field stream extends token))
+              ((string= token "option")
+               (parse-proto-option stream extends #\;))
               (t
                (error "Unrecognized token ~A at position ~D"
                       token (file-position stream))))))))
@@ -379,7 +423,9 @@
                    :required (kintern required)
                    :index idx
                    :default dflt
-                   :packed  (and packed (string= packed "true")))))
+                   :packed  (and packed (string= packed "true"))
+                   :extension-p (proto-extension-p message))))
+    ;;--- Make sure extension field's index is allowable within 'proto-extensions'
     (let ((slot (find-option opts "lisp_name")))
       (when slot
         (setf (proto-value field) (make-lisp-symbol type))))
@@ -416,7 +462,7 @@
 
 
 (defun parse-proto-service (stream protobuf)
-  "Parse a Protobufs service from 'stream'.
+  "Parse a Protobufs 'service' from 'stream'.
    Updates the 'protobuf-protobuf' object to have the service."
   (check-type protobuf protobuf)
   (let* ((name (prog1 (parse-token stream)
@@ -441,7 +487,7 @@
                       token (file-position stream))))))))
 
 (defun parse-proto-method (stream service)
-  "Parse a Protobufs enum vvalue from 'stream'.
+  "Parse a Protobufs method from 'stream'.
    Updates the 'protobuf-service' object to have the method."
   (check-type service protobuf-service)
   (let* ((name (parse-token stream))

@@ -239,19 +239,20 @@ You can define a Protobufs schema entirely within Lisp by using the
 following macros. For example::
 
   (proto:define-proto color-wheel
-      (:package color-wheel
-       :documentation "Color wheel example")
+      (:package color-wheel)
     (proto:define-message color-wheel
         (:conc-name color-wheel-)
       (name   :type string)
       (colors :type (proto:list-of color) :default ()))
     (proto:define-message color
-        (:conc-name color-
-         :documentation "A (named) color")
+        (:conc-name color-)
       (name    :type (or string null))
       (r-value :type integer)
       (g-value :type integer)
-      (b-value :type integer))
+      (b-value :type integer)
+      (proto:define-extension 1000 max))
+    (proto:define-extends color ()
+      ((opacity 1000) :type (or null integer)))
     (proto:define-message get-color-request ()
       (wheel :type color-wheel)
       (name  :type string))
@@ -260,11 +261,9 @@ following macros. For example::
       (color :type color))
     (proto:define-service color-wheel ()
       (get-color (get-color-request color)
-        :options ("deadline" "1.0")
-        :documentation "Look up a color by name")
+        :options ("deadline" "1.0"))
       (add-color (add-color-request color)
-        :options ("deadline" "1.0")
-        :documentation "Add a new color to the wheel")))
+        :options ("deadline" "1.0"))))
 
 This will create the Protobufs model objects, Lisp classes and enum
 types that correspond to the model. The .proto file of the same schema
@@ -273,6 +272,14 @@ looks like this::
   syntax = "proto2";
 
   package color_wheel;
+
+  import "net/proto2/proto/descriptor.proto"
+
+  extend proto2.MessageOptions {
+    optional string lisp_package = 195801;
+    optional string lisp_name = 195802;
+    optional string lisp_alias = 195803;
+  }
 
   message ColorWheel {
     required string name = 1;
@@ -284,6 +291,11 @@ looks like this::
     required int64 rValue = 2;
     required int64 gValue = 3;
     required int64 bValue = 4;
+    extensions 1000 to max;
+  }
+
+  extends Color {
+    optional int64 opacity = 1000;
   }
 
   message GetColorRequest {
