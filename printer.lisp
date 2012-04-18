@@ -45,6 +45,7 @@
       (dolist (import imports)
         (format stream "~&import \"~A\";~%" import))
       (terpri stream))
+    (write-protobuf-header type stream)
     (when optimize
       (format stream "~&option optimize_for ~A;~%~%"
               (if (eq optimize :space) "CODE_SIZE" "SPEED")))
@@ -69,6 +70,26 @@
       (format stream "~&~@[~VT~]// ~A~%"
               (and (not (zerop indentation)) indentation) line))))
 
+(defvar *lisp-options* '(("lisp_package" "string" 195801)
+                         ("lisp_name"    "string" 195802)
+                         ("lisp_alias"   "string" 195803)))
+
+(defmethod write-protobuf-header ((type (eql :proto)) stream)
+  (format stream "~&import \"net/proto2/proto/descriptor.proto\"~%~%")
+  (format stream "~&extend proto2.MessageOptions {~%")
+  (loop for (option type index) in *lisp-options* doing
+    (format stream "~&  optional ~A ~A = ~D;~%" type option index))
+  (format stream "~&}~%~%"))
+
+(defun cl-user::protobuf-option (stream option colon-p atsign-p)
+  (cond (colon-p                                ;~:/protobuf-option/ -- .proto format
+         (if (find (proto-name option) *lisp-options* :key #'first :test #'string=)
+           (format stream "(~A)~@[ = ~S~]" (proto-name option) (proto-value option))
+           (format stream "~A~@[ = ~S~]" (proto-name option) (proto-value option))))
+        (atsign-p                               ;~@/protobuf-option/ -- .lisp format
+         (format stream "~S ~S" (proto-name option) (proto-value option)))
+        (t                                      ;~/protobuf-option/  -- keyword/value format
+         (format stream "~(:~A~) ~S" (proto-name option) (proto-value option)))))
 
 (defmethod write-protobuf-as ((type (eql :proto)) (enum protobuf-enum) stream
                               &key (indentation 0))
@@ -79,10 +100,10 @@
             (and (not (zerop indentation)) indentation) name)
     (let ((other (and class (not (string= name (class-name->proto class))) class)))
       (when other
-        (format stream "~&~VToption lisp_name = \"~A:~A\";~%"
+        (format stream "~&~VToption (lisp_name) = \"~A:~A\";~%"
                 (+ indentation 2) (package-name (symbol-package class)) (symbol-name class))))
     (when alias-for
-      (format stream "~&~VToption lisp_alias = \"~A:~A\";~%"
+      (format stream "~&~VToption (lisp_alias) = \"~A:~A\";~%"
               (+ indentation 2) (package-name (symbol-package alias-for)) (symbol-name alias-for)))
     (dolist (option options)
       (format stream "~&option ~:/protobuf-option/;~%" option))
@@ -110,10 +131,10 @@
             (if extension-p "extends" "message") name)
     (let ((other (and class (not (string= name (class-name->proto class))) class)))
       (when other
-        (format stream "~&~VToption lisp_name = \"~A:~A\";~%"
+        (format stream "~&~VToption (lisp_name) = \"~A:~A\";~%"
                 (+ indentation 2) (package-name (symbol-package class)) (symbol-name class))))
     (when alias-for
-      (format stream "~&~VToption lisp_alias = \"~A:~A\";~%"
+      (format stream "~&~VToption (lisp_alias) = \"~A:~A\";~%"
               (+ indentation 2) (package-name (symbol-package alias-for)) (symbol-name alias-for)))
     (dolist (option options)
       (format stream "~&~VToption ~:/protobuf-option/;~%"
@@ -242,6 +263,9 @@
       (format stream "~&~@[~VT~];; ~A~%"
               (and (not (zerop indentation)) indentation) line))))
 
+(defmethod write-protobuf-header ((type (eql :lisp)) stream)
+  (declare (ignorable type stream))
+  nil)
 
 (defmethod write-protobuf-as ((type (eql :lisp)) (enum protobuf-enum) stream
                               &key (indentation 0))

@@ -104,6 +104,9 @@
     (setf (gethash class *all-protobufs*) protobuf)
     (setf (gethash name *all-protobufs*) protobuf)))
 
+(defmethod make-load-form ((p protobuf) &optional environment)
+  (make-load-form-saving-slots p :environment environment))
+
 (defmethod print-object ((p protobuf) stream)
   (print-unreadable-object (p stream :type t :identity t)
     (format stream "~@[~S~]~@[ (package ~A)~]"
@@ -148,17 +151,12 @@
   (:documentation
    "The model class that represents a Protobufs options, i.e., a keyword/value pair."))
 
+(defmethod make-load-form ((o protobuf-option) &optional environment)
+  (make-load-form-saving-slots o :environment environment))
+
 (defmethod print-object ((o protobuf-option) stream)
   (print-unreadable-object (o stream :type t :identity t)
     (format stream "~A~@[ = ~S~]" (proto-name o) (proto-value o))))
-
-(defun cl-user::protobuf-option (stream option colon-p atsign-p)
-  (cond (colon-p                                ;~:/protobuf-option/ -- .proto format
-         (format stream "~A~@[ = ~S~]" (proto-name option) (proto-value option)))
-        (atsign-p                               ;~@/protobuf-option/ -- .lisp format
-         (format stream "~S ~S" (proto-name option) (proto-value option)))
-        (t                                      ;~/protobuf-option/  -- keyword/value format
-         (format stream "~(:~A~) ~S" (proto-name option) (proto-value option)))))
 
 (defmethod find-option ((protobuf base-protobuf) (name string))
   (let ((option (find name (proto-options protobuf) :key #'proto-name :test #'string=)))
@@ -182,6 +180,9 @@
   (:documentation
    "The model class that represents a Protobufs enumeration type."))
 
+(defmethod make-load-form ((e protobuf-enum) &optional environment)
+  (make-load-form-saving-slots e :environment environment))
+
 (defmethod print-object ((e protobuf-enum) stream)
   (print-unreadable-object (e stream :type t :identity t)
     (format stream "~S~@[ (alias for ~S)~]"
@@ -199,6 +200,9 @@
           :initform nil))
   (:documentation
    "The model class that represents a Protobufs enumeration value."))
+
+(defmethod make-load-form ((v protobuf-enum-value) &optional environment)
+  (make-load-form-saving-slots v :environment environment))
 
 (defmethod print-object ((v protobuf-enum-value) stream)
   (print-unreadable-object (v stream :type t :identity t)
@@ -247,6 +251,9 @@
   ;; Record this message under just its Lisp class name
   (with-slots (class) message
     (setf (gethash class *all-messages*) message)))
+
+(defmethod make-load-form ((m protobuf-message) &optional environment)
+  (make-load-form-saving-slots m :environment environment))
 
 (defmethod print-object ((m protobuf-message) stream)
   (print-unreadable-object (m stream :type t :identity t)
@@ -318,6 +325,9 @@
     (assert (not (<= 19000 (proto-index field) 19999)) ()
             "Protobuf field indexes between 19000 and 19999 are not allowed")))
 
+(defmethod make-load-form ((f protobuf-field) &optional environment)
+  (make-load-form-saving-slots f :environment environment))
+
 (defmethod print-object ((f protobuf-field) stream)
   (print-unreadable-object (f stream :type t :identity t)
     (format stream "~S :: ~S = ~D"
@@ -335,6 +345,9 @@
   (:documentation
    "The model class that represents an extension with a Protobufs message."))
 
+(defmethod make-load-form ((e protobuf-extension) &optional environment)
+  (make-load-form-saving-slots e :environment environment))
+
 (defmethod print-object ((e protobuf-extension) stream)
   (print-unreadable-object (e stream :type t :identity t)
     (format stream "~D - ~D"
@@ -349,6 +362,9 @@
             :initform ()))
   (:documentation
    "The model class that represents a Protobufs service."))
+
+(defmethod make-load-form ((s protobuf-service) &optional environment)
+  (make-load-form-saving-slots s :environment environment))
 
 (defmethod print-object ((s protobuf-service) stream)
   (print-unreadable-object (s stream :type t :identity t)
@@ -377,10 +393,13 @@
   (:documentation
    "The model class that represents one method with a Protobufs service."))
 
-(defmethod print-object ((r protobuf-method) stream)
-  (print-unreadable-object (r stream :type t :identity t)
+(defmethod make-load-form ((m protobuf-method) &optional environment)
+  (make-load-form-saving-slots m :environment environment))
+
+(defmethod print-object ((m protobuf-method) stream)
+  (print-unreadable-object (m stream :type t :identity t)
     (format stream "~S (~S) => (~S)"
-            (proto-function r) (proto-input-type r) (proto-output-type r))))
+            (proto-function m) (proto-input-type m) (proto-output-type m))))
 
 ;; The 'class' slot really holds the name of the function,
 ;; so let's give it a better name

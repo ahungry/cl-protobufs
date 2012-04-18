@@ -101,6 +101,24 @@
                     (skip-whitespace stream)
                     (return (coerce token 'string))))))
 
+(defun parse-parenthesized-token (stream)
+  "Parse the next token in the stream, then skip the following whitespace.
+   The token might be surrounded by parentheses.
+   The returned value is the token."
+  (let ((left (peek-char nil stream nil)))
+    (when (eq left #\()
+      (read-char stream))
+    (when (proto-token-char-p (peek-char nil stream nil))
+      (loop for ch = (read-char stream nil)
+            for ch1 = (peek-char nil stream nil)
+            collect ch into token
+            until (or (null ch1) (not (proto-token-char-p ch1)))
+            finally (progn
+                      (skip-whitespace stream)
+                      (when (eq left #\()
+                        (expect-char stream #\) "option"))
+                      (return (coerce token 'string)))))))
+
 (defun parse-string (stream)
   "Parse the next quoted string in the stream, then skip the following whitespace.
    The returned value is the string, without the quotation marks."
@@ -234,7 +252,7 @@
   "Parse a Protobufs option from 'stream'.
    Updates the 'protobuf' (or message, service, method) to have the option."
   (check-type protobuf (or null base-protobuf))
-  (let* ((key (prog1 (parse-token stream)
+  (let* ((key (prog1 (parse-parenthesized-token stream)
                 (expect-char stream #\= "option")))
          (val (prog1 (if (eql (peek-char nil stream nil) #\")
                        (parse-string stream)
