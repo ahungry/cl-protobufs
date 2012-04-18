@@ -55,30 +55,30 @@
            (collect-svc model)))))
     (let ((var  (fintern "*~A*" type))
           (name (or name (class-name->proto type)))
+          (package  (and package (if (stringp package) package (string-downcase (string package)))))
+          (lisp-pkg (and lisp-package (if (stringp lisp-package) lisp-package (string lisp-package))))
           (options (loop for (key val) on options by #'cddr
-                         collect `(make-instance 'protobuf-option
-                                    :name ,key
-                                    :value ,val))))
+                         collect (make-instance 'protobuf-option
+                                   :name  key
+                                   :value val))))
       `(progn
          ,@forms
          (defvar ,var nil)
          (let* ((old ,var)
-                (package  ',(and package (if (stringp package) package (string-downcase (string package)))))
-                (lisp-pkg ',(and lisp-package (if (stringp lisp-package) lisp-package (string lisp-package))))
-                (protobuf (make-instance 'protobuf
-                            :class    ',type
-                            :name     ',name
-                            :syntax   ,(or syntax "proto2")
-                            :package  package
-                            :lisp-package (or lisp-pkg package)
-                            ;;---*** This needs to parse the imported file(s)
-                            :imports  ',(if (listp import) import (list import))
-                            :options  (list ,@options)
-                            :optimize ,optimize
-                            :enums    (list ,@enums)
-                            :messages (list ,@msgs)
-                            :services (list ,@svcs)
-                            :documentation ,documentation)))
+                (protobuf ,(make-instance 'protobuf
+                             :class    type
+                             :name     name
+                             :syntax   (or syntax "proto2")
+                             :package  package
+                             :lisp-package (or lisp-pkg package)
+                             ;;---*** This needs to parse the imported file(s)
+                             :imports  (if (listp import) import (list import))
+                             :options  options
+                             :optimize optimize
+                             :enums    enums
+                             :messages msgs
+                             :services svcs
+                             :documentation documentation)))
            (when old
              (multiple-value-bind (upgradable warnings)
                  (protobuf-upgradable old protobuf)
@@ -117,10 +117,10 @@
                (val-name  (kintern (if conc-name (format nil "~A~A" conc-name name) (symbol-name name))))
                (enum-name (if conc-name (format nil "~A~A" conc-name name) (symbol-name name))))
           (collect-val val-name)
-          (collect-eval `(make-instance 'protobuf-enum-value
-                           :name  ,(enum-name->proto enum-name)
-                           :index ,idx
-                           :value ,val-name)))))
+          (collect-eval (make-instance 'protobuf-enum-value
+                          :name  (enum-name->proto enum-name)
+                          :index idx
+                          :value val-name)))))
 
     (if alias-for
       ;; If we've got an alias, define a a type that is the subtype of
@@ -131,18 +131,18 @@
       (collect-form `(deftype ,type () '(member ,@vals))))
     (let ((name (or name (class-name->proto type)))
           (options (loop for (key val) on options by #'cddr
-                         collect `(make-instance 'protobuf-option
-                                    :name ,key
-                                    :value ,val))))
+                         collect (make-instance 'protobuf-option
+                                   :name  key
+                                   :value val))))
       `(progn
          define-enum
-         (make-instance 'protobuf-enum
-           :class  ',type
-           :name   ',name
-           :alias-for ',alias-for
-           :options (list ,@options)
-           :values  (list ,@evals)
-           :documentation ,documentation)
+         ,(make-instance 'protobuf-enum
+            :class  type
+            :name   name
+            :alias-for alias-for
+            :options options
+            :values  evals
+            :documentation documentation)
          ,forms))))
 
 ;; Define a message named 'name' and a Lisp 'defclass'
@@ -219,19 +219,19 @@
                                                   `(:initform nil))
                                                  (default-p
                                                    `(:initform ,default))))))
-                 (collect-field `(make-instance 'protobuf-field
-                                   :name  ,(or name (slot-name->proto slot))
-                                   :type  ,ptype
-                                   :class ',pclass
-                                   :required ,reqd
-                                   :index  ,idx
-                                   :value  ',slot
-                                   :reader ',reader
-                                   :writer ',writer
-                                   :default ,(and default (format nil "~A" default))
-                                   :packed  ,(and (eq reqd :repeated)
-                                                  (packed-type-p pclass))
-                                   :documentation ,documentation)))))))))
+                 (collect-field (make-instance 'protobuf-field
+                                  :name  (or name (slot-name->proto slot))
+                                  :type  ptype
+                                  :class pclass
+                                  :required reqd
+                                  :index  idx
+                                  :value  slot
+                                  :reader reader
+                                  :writer writer
+                                  :default (and default (format nil "~A" default))
+                                  :packed  (and (eq reqd :repeated)
+                                                (packed-type-p pclass))
+                                  :documentation documentation)))))))))
     (if alias-for
       ;; If we've got an alias, define a a type that is the subtype of
       ;; the Lisp class that typep and subtypep work
@@ -242,22 +242,22 @@
                        ,@(and documentation `((:documentation ,documentation))))))
     (let ((name (or name (class-name->proto type)))
           (options (loop for (key val) on options by #'cddr
-                         collect `(make-instance 'protobuf-option
-                                    :name ,key
-                                    :value ,val))))
+                         collect (make-instance 'protobuf-option
+                                   :name  key
+                                   :value val))))
       `(progn
          define-message
-         (make-instance 'protobuf-message
-           :class ',type
-           :name  ',name
-           :alias-for ',alias-for
-           :conc-name ,(and conc-name (string conc-name))
-           :options  (list ,@options)
-           :enums    (list ,@enums)
-           :messages (list ,@msgs)
-           :fields   (list ,@flds)
-           :extensions (list ,@exts)
-           :documentation ,documentation)
+         ,(make-instance 'protobuf-message
+            :class type
+            :name  name
+            :alias-for alias-for
+            :conc-name (and conc-name (string conc-name))
+            :options  options
+            :enums    enums
+            :messages msgs
+            :fields   flds
+            :extensions exts
+            :documentation documentation)
          ,forms))))
 
 (defmacro define-extends (type (&key name options documentation)
@@ -272,9 +272,9 @@
    The \"body\" is the start and end of the range, both inclusive."
   `(progn
      define-extension
-     (make-instance 'protobuf-extension
-       :from ,from
-       :to   ,to)
+     ,(make-instance 'protobuf-extension
+        :from from
+        :to   to)
      ()))
 
 ;; Define a service named 'type' with generic functions declared for
@@ -298,18 +298,18 @@
                                  (getf (cdr output-type) :name)))
                (output-type (if (listp output-type) (car output-type) output-type))
                (options (loop for (key val) on options by #'cddr
-                              collect `(make-instance 'protobuf-option
-                                         :name ,key
-                                         :value ,val))))
-          (collect-method `(make-instance 'protobuf-method
-                             :class ',function
-                             :name  ',(or name (class-name->proto function))
-                             :input-type  ',input-type
-                             :input-name  ',(or input-name (class-name->proto input-type))
-                             :output-type ',output-type
-                             :output-name ',(or output-name (class-name->proto output-type))
-                             :options (list ,@options)
-                             :documentation ,documentation))
+                              collect (make-instance 'protobuf-option
+                                        :name  key
+                                        :value val))))
+          (collect-method (make-instance 'protobuf-method
+                            :class function
+                            :name  (or name (class-name->proto function))
+                            :input-type  input-type
+                            :input-name  (or input-name (class-name->proto input-type))
+                            :output-type output-type
+                            :output-name (or output-name (class-name->proto output-type))
+                            :options options
+                            :documentation documentation))
           ;; The following are the hooks to CL-Stubby
           (let ((client-fn function)
                 (server-fn (intern (format nil "~A-~A" 'do function) (symbol-package function)))
@@ -344,17 +344,17 @@
                              (declare (values ,output-type))))))))
     (let ((name (or name (class-name->proto type)))
           (options (loop for (key val) on options by #'cddr
-                         collect `(make-instance 'protobuf-option
-                                    :name ,key
-                                    :value ,val))))
+                         collect (make-instance 'protobuf-option
+                                   :name  key
+                                   :value val))))
       `(progn
          define-service
-         (make-instance 'protobuf-service
-           :class ',type
-           :name  ',name
-           :options  (list ,@options)
-           :methods (list ,@methods)
-           :documentation ,documentation)
+         ,(make-instance 'protobuf-service
+            :class type
+            :name  name
+            :options options
+            :methods methods
+            :documentation documentation)
          ,forms))))
 
 
