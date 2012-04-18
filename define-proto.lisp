@@ -27,74 +27,72 @@
    'options' is a property list, i.e., (\"key1\" \"val1\" \"key2\" \"val2\" ...).
 
    The body consists of 'define-enum', 'define-message' or 'define-service' forms."
-  (with-collectors ((enums collect-enum)
-                    (msgs  collect-msg)
-                    (svcs  collect-svc)
-                    (forms collect-form))
-    (dolist (msg messages)
-      (assert (and (listp msg)
-                   (member (car msg) '(define-enum define-message define-service))) ()
-              "The body of ~S must be one of ~{~S~^ or ~}"
-              'define-proto '(define-enum define-message define-service))
-      ;; The macro-expander will return a form that consists
-      ;; of 'progn' followed by a symbol naming what we've expanded
-      ;; (define-enum, define-message, define-service), followed by
-      ;; by a (optional) Lisp defining form (deftype, defclass),
-      ;; followed by a form that creates the model object
-      (destructuring-bind (&optional progn type model definers)
-          (macroexpand-1 msg env)
-        (assert (eq progn 'progn) ()
-                "The macroexpansion for ~S failed" msg)
-        (map () #'collect-form definers)
-        (ecase type
-          ((define-enum)
-           (collect-enum model))
-          ((define-message define-extends)
-           (collect-msg model))
-          ((define-service)
-           (collect-svc model)))))
-    (let ((var  (fintern "*~A*" type))
-          (name (or name (class-name->proto type)))
-          (package  (and package (if (stringp package) package (string-downcase (string package)))))
-          (lisp-pkg (and lisp-package (if (stringp lisp-package) lisp-package (string lisp-package))))
-          (options (loop for (key val) on options by #'cddr
+  (let* ((name     (or name (class-name->proto type)))
+         (package  (and package (if (stringp package) package (string-downcase (string package)))))
+         (lisp-pkg (and lisp-package (if (stringp lisp-package) lisp-package (string lisp-package))))
+         (options  (loop for (key val) on options by #'cddr
                          collect (make-instance 'protobuf-option
                                    :name  key
-                                   :value val))))
-      `(progn
-         ,@forms
-         (defvar ,var nil)
-         (let* ((old ,var)
-                (protobuf ,(make-instance 'protobuf
-                             :class    type
-                             :name     name
-                             :syntax   (or syntax "proto2")
-                             :package  package
-                             :lisp-package (or lisp-pkg package)
-                             ;;---*** This needs to parse the imported file(s)
-                             :imports  (if (listp import) import (list import))
-                             :options  options
-                             :optimize optimize
-                             :enums    enums
-                             :messages msgs
-                             :services svcs
-                             :documentation documentation)))
-           (when old
-             (multiple-value-bind (upgradable warnings)
-                 (protobuf-upgradable old protobuf)
-               (unless upgradable
-                 (protobufs-warn "The old schema for ~S (~A) can't be safely upgraded; proceeding anyway"
-                                 ',type ',name)
-                 (map () #'protobufs-warn warnings))))
-           (setq ,var protobuf)
-           #+++ignore (
-           ,@(when (eq optimize :speed)
-               (mapcar #'generate-object-size (proto-messages protobuf)))
-           ,@(when (eq optimize :speed)
-               (mapcar #'generate-serializer (proto-messages protobuf)))
-           ,@(when (eq optimize :speed)
-               (mapcar #'generate-deserializer (proto-messages protobuf))) )
-           protobuf)))))
+                                   :value val)))
+         (protobuf (make-instance 'protobuf
+                     :class    type
+                     :name     name
+                     :syntax   (or syntax "proto2")
+                     :package  package
+                     :lisp-package (or lisp-pkg package)
+                     ;;---*** This needs to parse the imported file(s)
+                     :imports  (if (listp import) import (list import))
+                     :options  options
+                     :optimize optimize
+                     :documentation documentation))
+         (*protobuf* protobuf)
+         (*protobuf-package* nil))
+    (with-collectors ((forms collect-form))
+      (dolist (msg messages)
+        (assert (and (listp msg)
+                     (member (car msg) '(define-enum define-message define-extends define-service))) ()
+                "The body of ~S must be one of ~{~S~^ or ~}"
+                'define-proto '(define-enum define-message define-extends define-service))
+        ;; The macro-expander will return a form that consists
+        ;; of 'progn' followed by a symbol naming what we've expanded
+        ;; (define-enum, define-message, define-extends, define-service),
+        ;; followed by the Lisp model object created by the defining form,
+        ;; followed by other defining forms (e.g., deftype, defclass)
+        (destructuring-bind (&optional progn type model definers)
+            (macroexpand-1 msg env)
+          (assert (eq progn 'progn) ()
+                  "The macroexpansion for ~S failed" msg)
+          (map () #'collect-form definers)
+          (ecase type
+            ((define-enum)
+             (setf (proto-enums protobuf) (nconc (proto-messages protobuf) (list model))))
+            ((define-message define-extends)
+             (setf (proto-parent model) protobuf)
+             (setf (proto-messages protobuf) (nconc (proto-messages protobuf) (list model))))
+            ((define-service)
+             (setf (proto-services protobuf) (nconc (proto-services protobuf) (list model)))))))
+      (let ((var (fintern "*~A*" type)))
+        `(progn
+           ,@forms
+           (defvar ,var nil)
+           (let* ((old-proto ,var)
+                  (new-proto ,protobuf))
+             (when old-proto
+               (multiple-value-bind (upgradable warnings)
+                   (protobuf-upgradable old-proto new-proto)
+                 (unless upgradable
+                   (protobufs-warn "The old schema for ~S (~A) can't be safely upgraded; proceeding anyway"
+                                   ',type ',name)
+                   (map () #'protobufs-warn warnings))))
+             (setq ,var new-proto)
+             #+++ignore (
+             ,@(when (eq optimize :speed)
+                 (mapcar #'generate-object-size (proto-messages protobuf)))
+             ,@(when (eq optimize :speed)
+                 (mapcar #'generate-serializer (proto-messages protobuf)))
+             ,@(when (eq optimize :speed)
+                 (mapcar #'generate-deserializer (proto-messages protobuf))) )
+             new-proto))))))
 
 ;; Define an enum type named 'type' and a Lisp 'deftype'
 (defmacro define-enum (type (&key name conc-name alias-for options documentation)
@@ -107,42 +105,42 @@
    'options' is a set of keyword/value pairs, both of which are strings.
 
    The body consists of the enum values in the form 'name' or (name index)."
-  (with-collectors ((vals  collect-val)
-                    (evals collect-eval)
-                    (forms collect-form))
-    (let ((index 0))
+  (let* ((name    (or name (class-name->proto type)))
+         (options (loop for (key val) on options by #'cddr
+                        collect (make-instance 'protobuf-option
+                                  :name  key
+                                  :value val)))
+         (index 0)
+         (enum  (make-instance 'protobuf-enum
+                  :class  type
+                  :name   name
+                  :alias-for alias-for
+                  :options options
+                  :documentation documentation)))
+    (declare (type fixnum index))
+    (with-collectors ((vals  collect-val)
+                      (forms collect-form))
       (dolist (val values)
         (let* ((idx  (if (listp val) (second val) (incf index)))
                (name (if (listp val) (first val)  val))
                (val-name  (kintern (if conc-name (format nil "~A~A" conc-name name) (symbol-name name))))
-               (enum-name (if conc-name (format nil "~A~A" conc-name name) (symbol-name name))))
+               (enum-name (if conc-name (format nil "~A~A" conc-name name) (symbol-name name)))
+               (enum-val  (make-instance 'protobuf-enum-value
+                            :name  (enum-name->proto enum-name)
+                            :index idx
+                            :value val-name)))
           (collect-val val-name)
-          (collect-eval (make-instance 'protobuf-enum-value
-                          :name  (enum-name->proto enum-name)
-                          :index idx
-                          :value val-name)))))
-
-    (if alias-for
-      ;; If we've got an alias, define a a type that is the subtype of
-      ;; the Lisp enum so that typep and subtypep work
-      (unless (eq type alias-for)
-        (collect-form `(deftype ,type () ',alias-for)))
-      ;; If no alias, define the Lisp enum type now
-      (collect-form `(deftype ,type () '(member ,@vals))))
-    (let ((name (or name (class-name->proto type)))
-          (options (loop for (key val) on options by #'cddr
-                         collect (make-instance 'protobuf-option
-                                   :name  key
-                                   :value val))))
+          (setf (proto-values enum) (nconc (proto-values enum) (list enum-val)))))
+      (if alias-for
+        ;; If we've got an alias, define a a type that is the subtype of
+        ;; the Lisp enum so that typep and subtypep work
+        (unless (eq type alias-for)
+          (collect-form `(deftype ,type () ',alias-for)))
+        ;; If no alias, define the Lisp enum type now
+        (collect-form `(deftype ,type () '(member ,@vals))))
       `(progn
          define-enum
-         ,(make-instance 'protobuf-enum
-            :class  type
-            :name   name
-            :alias-for alias-for
-            :options options
-            :values  evals
-            :documentation documentation)
+         ,enum
          ,forms))))
 
 ;; Define a message named 'name' and a Lisp 'defclass'
@@ -168,17 +166,25 @@
    'reader' is a Lisp slot reader function to use to get the value, instead of
    using 'slot-value'; this is often used when aliasing an existing class.
    'writer' is a Lisp slot writer function to use to set the value."
-  (with-collectors ((enums collect-enum)
-                    (msgs  collect-msg)
-                    (flds  collect-field)
-                    (slots collect-slot)
-                    (exts  collect-extension)
-                    (forms collect-form))
-    (let ((index 0))
-      (declare (type fixnum index))
+  (let* ((name    (or name (class-name->proto type)))
+         (options (loop for (key val) on options by #'cddr
+                        collect (make-instance 'protobuf-option
+                                  :name  key
+                                  :value val)))
+         (index   0)
+         (message (make-instance 'protobuf-message
+                    :class type
+                    :name  name
+                    :alias-for alias-for
+                    :conc-name (and conc-name (string conc-name))
+                    :options  options
+                    :documentation documentation)))
+    (declare (type fixnum index))
+    (with-collectors ((slots collect-slot)
+                      (forms collect-form))
       (dolist (fld fields)
         (case (car fld)
-          ((define-enum define-message define-extension)
+          ((define-enum define-message define-extends define-extension)
            (destructuring-bind (&optional progn type model definers)
                (macroexpand-1 fld env)
              (assert (eq progn 'progn) ()
@@ -186,11 +192,12 @@
              (map () #'collect-form definers)
              (ecase type
                ((define-enum)
-                (collect-enum model))
+                (setf (proto-enums message) (nconc (proto-messages message) (list model))))
                ((define-message define-extends)
-                (collect-msg model))
+                (setf (proto-parent model) message)
+                (setf (proto-messages message) (nconc (proto-messages message) (list model))))
                ((define-extension)
-                (collect-extension model)))))
+                (setf (proto-extensions message) (nconc (proto-extensions message) (list model)))))))
           (otherwise
            (when (i= index 18999)                       ;skip over the restricted range
              (setq index 19999))
@@ -219,45 +226,31 @@
                                                   `(:initform nil))
                                                  (default-p
                                                    `(:initform ,default))))))
-                 (collect-field (make-instance 'protobuf-field
-                                  :name  (or name (slot-name->proto slot))
-                                  :type  ptype
-                                  :class pclass
-                                  :required reqd
-                                  :index  idx
-                                  :value  slot
-                                  :reader reader
-                                  :writer writer
-                                  :default (and default (format nil "~A" default))
-                                  :packed  (and (eq reqd :repeated)
-                                                (packed-type-p pclass))
-                                  :documentation documentation)))))))))
-    (if alias-for
-      ;; If we've got an alias, define a a type that is the subtype of
-      ;; the Lisp class that typep and subtypep work
-      (unless (or (eq type alias-for) (find-class type nil))
-        (collect-form `(deftype ,type () ',alias-for)))
-      ;; If no alias, define the class now
-      (collect-form `(defclass ,type () (,@slots)
-                       ,@(and documentation `((:documentation ,documentation))))))
-    (let ((name (or name (class-name->proto type)))
-          (options (loop for (key val) on options by #'cddr
-                         collect (make-instance 'protobuf-option
-                                   :name  key
-                                   :value val))))
+                 (let ((field (make-instance 'protobuf-field
+                                :name  (or name (slot-name->proto slot))
+                                :type  ptype
+                                :class pclass
+                                :required reqd
+                                :index  idx
+                                :value  slot
+                                :reader reader
+                                :writer writer
+                                :default (and default (format nil "~A" default))
+                                :packed  (and (eq reqd :repeated)
+                                              (packed-type-p pclass))
+                                :documentation documentation)))
+                   (setf (proto-fields message) (nconc (proto-fields message) (list field))))))))))
+      (if alias-for
+        ;; If we've got an alias, define a a type that is the subtype of
+        ;; the Lisp class that typep and subtypep work
+        (unless (or (eq type alias-for) (find-class type nil))
+          (collect-form `(deftype ,type () ',alias-for)))
+        ;; If no alias, define the class now
+        (collect-form `(defclass ,type () (,@slots)
+                         ,@(and documentation `((:documentation ,documentation))))))
       `(progn
          define-message
-         ,(make-instance 'protobuf-message
-            :class type
-            :name  name
-            :alias-for alias-for
-            :conc-name (and conc-name (string conc-name))
-            :options  options
-            :enums    enums
-            :messages msgs
-            :fields   flds
-            :extensions exts
-            :documentation documentation)
+         ,message
          ,forms))))
 
 (defmacro define-extends (type (&key name options documentation)
@@ -287,21 +280,30 @@
 
    The body is a set of method specs of the form (name (input-type output-type) &key options).
    'input-type' and 'output-type' may also be of the form (type &key name)."
-  (with-collectors ((methods collect-method)
-                    (forms collect-form))
-    (dolist (method method-specs)
-      (destructuring-bind (function (input-type output-type) &key name options documentation) method
-        (let* ((input-name (and (listp input-type)
-                                (getf (cdr input-type) :name)))
-               (input-type (if (listp input-type) (car input-type) input-type))
-               (output-name (and (listp output-type)
-                                 (getf (cdr output-type) :name)))
-               (output-type (if (listp output-type) (car output-type) output-type))
-               (options (loop for (key val) on options by #'cddr
-                              collect (make-instance 'protobuf-option
-                                        :name  key
-                                        :value val))))
-          (collect-method (make-instance 'protobuf-method
+  (let* ((name    (or name (class-name->proto type)))
+         (options (loop for (key val) on options by #'cddr
+                        collect (make-instance 'protobuf-option
+                                  :name  key
+                                  :value val)))
+         (service (make-instance 'protobuf-service
+                    :class type
+                    :name  name
+                    :options options
+                    :documentation documentation)))
+    (with-collectors ((forms collect-form))
+      (dolist (method method-specs)
+        (destructuring-bind (function (input-type output-type) &key name options documentation) method
+          (let* ((input-name (and (listp input-type)
+                                  (getf (cdr input-type) :name)))
+                 (input-type (if (listp input-type) (car input-type) input-type))
+                 (output-name (and (listp output-type)
+                                   (getf (cdr output-type) :name)))
+                 (output-type (if (listp output-type) (car output-type) output-type))
+                 (options (loop for (key val) on options by #'cddr
+                                collect (make-instance 'protobuf-option
+                                          :name  key
+                                          :value val)))
+                 (method  (make-instance 'protobuf-method
                             :class function
                             :name  (or name (class-name->proto function))
                             :input-type  input-type
@@ -309,52 +311,46 @@
                             :output-type output-type
                             :output-name (or output-name (class-name->proto output-type))
                             :options options
-                            :documentation documentation))
-          ;; The following are the hooks to CL-Stubby
-          (let ((client-fn function)
-                (server-fn (intern (format nil "~A-~A" 'do function) (symbol-package function)))
-                (vchannel  (intern (symbol-name 'channel) (symbol-package function)))
-                (vcallback (intern (symbol-name 'callback) (symbol-package function))))
-            ;; The client side stub, e.g., 'read-air-reservation'.
-            ;; The expectation is that CL-Stubby will provide macrology to make it
-            ;; easy to implement a method for this on each kind of channel (HTTP, TCP socket,
-            ;; IPC, etc). Unlike C++/Java/Python, we don't need a client-side subclass,
-            ;; because we can just use multi-methods.
-            ;; The CL-Stubby macros take care of serializing the input, transmitting the
-            ;; request over the wire, waiting for input (or not if it's asynchronous),
-            ;; filling in the output, and calling the callback (if it's synchronous).
-            ;; It's not very Lispy to side-effect an output object, but it makes
-            ;; asynchronous calls simpler.
-            (collect-form `(defgeneric ,client-fn (,vchannel ,input-type ,output-type &key ,vcallback)
-                             ,@(and documentation `((:documentation ,documentation)))
-                             (declare (values ,output-type))))
-            ;; The server side stub, e.g., 'do-read-air-reservation'.
-            ;; The expectation is that the server-side program will implement
-            ;; a method with the business logic for this on each kind of channel
-            ;; (HTTP, TCP socket, IPC, etc), possibly on a server-side subclass
-            ;; of the input class
-            ;; The business logic is expected to perform the correct operations on
-            ;; the input object, which arrived via Protobufs, and produce an output
-            ;; of the given type, which will be serialized as a result.
-            ;; The channel objects hold client identity information, deadline info,
-            ;; etc, and can be side-effected to indicate success or failure
-            ;; CL-Stubby provides the channel classes and does (de)serialization, etc
-            (collect-form `(defgeneric ,server-fn (,vchannel ,input-type ,output-type &key ,vcallback)
-                             ,@(and documentation `((:documentation ,documentation)))
-                             (declare (values ,output-type))))))))
-    (let ((name (or name (class-name->proto type)))
-          (options (loop for (key val) on options by #'cddr
-                         collect (make-instance 'protobuf-option
-                                   :name  key
-                                   :value val))))
+                            :documentation documentation)))
+            (setf (proto-methods service) (nconc (proto-methods service) (list method)))
+            ;; The following are the hooks to CL-Stubby
+            (let* ((package   (symbol-package function))
+                   (client-fn function)
+                   (server-fn (intern (format nil "~A-~A" 'do function) package))
+                   (vinput    (intern (format nil "~A-~A" (symbol-name input-type) 'in) package))
+                   (voutput   (intern (format nil "~A-~A" (symbol-name output-type) 'out) package))
+                   (vchannel  (intern (symbol-name 'channel) package))
+                   (vcallback (intern (symbol-name 'callback) package)))
+              ;; The client side stub, e.g., 'read-air-reservation'.
+              ;; The expectation is that CL-Stubby will provide macrology to make it
+              ;; easy to implement a method for this on each kind of channel (HTTP, TCP socket,
+              ;; IPC, etc). Unlike C++/Java/Python, we don't need a client-side subclass,
+              ;; because we can just use multi-methods.
+              ;; The CL-Stubby macros take care of serializing the input, transmitting the
+              ;; request over the wire, waiting for input (or not if it's asynchronous),
+              ;; filling in the output, and calling the callback (if it's synchronous).
+              ;; It's not very Lispy to side-effect an output object, but it makes
+              ;; asynchronous calls simpler.
+              (collect-form `(defgeneric ,client-fn (,vchannel ,vinput ,voutput &key ,vcallback)
+                               ,@(and documentation `((:documentation ,documentation)))
+                               (declare (values ,output-type))))
+              ;; The server side stub, e.g., 'do-read-air-reservation'.
+              ;; The expectation is that the server-side program will implement
+              ;; a method with the business logic for this on each kind of channel
+              ;; (HTTP, TCP socket, IPC, etc), possibly on a server-side subclass
+              ;; of the input class
+              ;; The business logic is expected to perform the correct operations on
+              ;; the input object, which arrived via Protobufs, and produce an output
+              ;; of the given type, which will be serialized as a result.
+              ;; The channel objects hold client identity information, deadline info,
+              ;; etc, and can be side-effected to indicate success or failure
+              ;; CL-Stubby provides the channel classes and does (de)serialization, etc
+              (collect-form `(defgeneric ,server-fn (,vchannel ,vinput ,voutput &key ,vcallback)
+                               ,@(and documentation `((:documentation ,documentation)))
+                               (declare (values ,output-type))))))))
       `(progn
          define-service
-         ,(make-instance 'protobuf-service
-            :class type
-            :name  name
-            :options options
-            :methods methods
-            :documentation documentation)
+         ,service
          ,forms))))
 
 

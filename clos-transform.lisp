@@ -24,13 +24,13 @@
    and pretty prints the schema to the stream.
    The return value is the schema."
   (let ((protobuf (generate-protobuf-schema-for-classes classes
-                                                        :name name
-                                                        :package package
-                                                        :lisp-package (or lisp-package package)
-                                                        :slot-filter slot-filter
-                                                        :type-filter type-filter
-                                                        :enum-filter enum-filter
-                                                        :value-filter value-filter)))
+                    :name name
+                    :package package
+                    :lisp-package (or lisp-package package)
+                    :slot-filter slot-filter
+                    :type-filter type-filter
+                    :enum-filter enum-filter
+                    :value-filter value-filter)))
     (fresh-line stream)
     (write-protobuf protobuf :stream stream :type type)
     (terpri stream)
@@ -41,19 +41,21 @@
                                                   slot-filter type-filter enum-filter value-filter)
   "Given a set of CLOS classes, generates a Protobufs schema for the classes.
    The return value is the schema."
-  (let* ((messages (mapcar #'(lambda (c)
-                               (class-to-protobuf-message c :slot-filter slot-filter
-                                                            :type-filter type-filter
-                                                            :enum-filter enum-filter
-                                                            :value-filter value-filter))
-                           classes))
-         (package  (and package (if (stringp package) package (string-downcase (string package)))))
+  (let* ((package  (and package (if (stringp package) package (string-downcase (string package)))))
          (lisp-pkg (or lisp-package package))
          (protobuf (make-instance 'protobuf
                      :name name
                      :package package
                      :lisp-package lisp-pkg
-                     :messages messages)))
+                     :syntax "proto2"))
+         (messages (mapcar #'(lambda (c)
+                               (class-to-protobuf-message c protobuf
+                                :slot-filter slot-filter
+                                :type-filter type-filter
+                                :enum-filter enum-filter
+                                :value-filter value-filter))
+                           classes)))
+    (setf (proto-messages protobuf) messages)
     protobuf))
 
 
@@ -62,7 +64,7 @@
 ;; a Lisp world that includes that classes from which the code was generated
 (defvar *alias-existing-classes* nil)
 
-(defun class-to-protobuf-message (class
+(defun class-to-protobuf-message (class protobuf
                                   &key slot-filter type-filter enum-filter value-filter)
   (let* ((class (find-class class))
          (slots (class-slots class)))
@@ -73,10 +75,10 @@
             for s in slots doing
         (multiple-value-bind (field msg enum)
             (slot-to-protobuf-field class s index slots
-                                    :slot-filter slot-filter
-                                    :type-filter type-filter
-                                    :enum-filter enum-filter
-                                    :value-filter value-filter)
+              :slot-filter slot-filter
+              :type-filter type-filter
+              :enum-filter enum-filter
+              :value-filter value-filter)
           (when enum
             (collect-enum enum))
           (when msg
@@ -87,10 +89,11 @@
       (make-instance 'protobuf-message
         :class (class-name class)
         :name  (class-name->proto (class-name class))
+        :parent protobuf
         :alias-for (and *alias-existing-classes* (class-name class))
-        :enums (delete-duplicates enums :key #'proto-name :test #'string=)
+        :enums    (delete-duplicates enums :key #'proto-name :test #'string=)
         :messages (delete-duplicates msgs :key #'proto-name :test #'string=)
-        :fields fields))))
+        :fields   fields))))
 
 ;; Returns a field, (optionally) an inner message, and (optionally) an inner enum
 (defun slot-to-protobuf-field (class slot index slots

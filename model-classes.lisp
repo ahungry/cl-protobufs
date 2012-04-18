@@ -100,15 +100,9 @@
 (defmethod initialize-instance :after ((protobuf protobuf) &rest initargs)
   (declare (ignore initargs))
   ;; Record this schema under both its Lisp and its Protobufs name
-  (with-slots (class name messages) protobuf
+  (with-slots (class name) protobuf
     (setf (gethash class *all-protobufs*) protobuf)
-    (setf (gethash name *all-protobufs*) protobuf)
-    (dolist (msg messages)
-      (setf (proto-parent msg) protobuf))))
-
-(defmethod (setf proto-messages) :after (messages (protobuf protobuf))
-  (dolist (msg messages)
-    (setf (proto-parent msg) protobuf)))
+    (setf (gethash name *all-protobufs*) protobuf)))
 
 (defmethod print-object ((p protobuf) stream)
   (print-unreadable-object (p stream :type t :identity t)
@@ -250,14 +244,9 @@
 
 (defmethod initialize-instance :after ((message protobuf-message) &rest initargs)
   (declare (ignore initargs))
-  (with-slots (class messages) message
-    (setf (gethash class *all-messages*) message)
-    (dolist (msg messages)
-      (setf (proto-parent msg) message))))
-
-(defmethod (setf proto-messages) :after (messages (message protobuf-message))
-  (dolist (msg messages)
-    (setf (proto-parent msg) message)))
+  ;; Record this message under just its Lisp class name
+  (with-slots (class) message
+    (setf (gethash class *all-messages*) message)))
 
 (defmethod print-object ((m protobuf-message) stream)
   (print-unreadable-object (m stream :type t :identity t)
