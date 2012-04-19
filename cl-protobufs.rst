@@ -251,7 +251,7 @@ following macros. For example::
       (g-value :type integer)
       (b-value :type integer)
       (proto:define-extension 1000 max))
-    (proto:define-extends color ()
+    (proto:define-extend color ()
       ((opacity 1000) :type (or null integer)))
     (proto:define-message get-color-request ()
       (wheel :type color-wheel)
@@ -294,7 +294,7 @@ looks like this::
     extensions 1000 to max;
   }
 
-  extends Color {
+  extend Color {
     optional int64 opacity = 1000;
   }
 
@@ -354,7 +354,7 @@ The are passed along unchanged to a generated .proto file.
 in the .proto file.
 
 *body* consists of any number of calls to ``proto:define-enum``,
-``proto:define-message``, ``proto:define-extends`` or ``proto:define-service``.
+``proto:define-message``, ``proto:define-extend`` or ``proto:define-service``.
 
 
 ::
@@ -432,11 +432,11 @@ to give a Lisp slot writer function.
 
 ::
 
-  proto:define-extends (type (&key name                         [Macro]
-                                   options documentation)
-                        &body fields)
+  proto:define-extend (type (&key name                          [Macro]
+                                  options documentation)
+                       &body fields)
 
-Defines a Protobuf "extends", that is, an extension to an existing
+Defines a Protobuf "extend", that is, an extension to an existing
 message and Lisp class that has additional fields that were reserved
 by ``proto:define-extension``. *type* and *name* are as for
 ``proto:define-message``. Note that no new Lisp class is defined; the

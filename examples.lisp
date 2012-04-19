@@ -538,7 +538,7 @@ service ColorWheel {
     (g-value :type integer)
     (b-value :type integer)
     (proto:define-extension 1000 max))
-  (proto:define-extends color ()
+  (proto:define-extend color ()
     ((opacity 1000) :type (or null integer)))
   (proto:define-message get-color-request ()
     (wheel :type color-wheel)

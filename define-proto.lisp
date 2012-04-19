@@ -51,12 +51,12 @@
     (with-collectors ((forms collect-form))
       (dolist (msg messages)
         (assert (and (listp msg)
-                     (member (car msg) '(define-enum define-message define-extends define-service))) ()
+                     (member (car msg) '(define-enum define-message define-extend define-service))) ()
                 "The body of ~S must be one of ~{~S~^ or ~}"
-                'define-proto '(define-enum define-message define-extends define-service))
+                'define-proto '(define-enum define-message define-extend define-service))
         ;; The macro-expander will return a form that consists
         ;; of 'progn' followed by a symbol naming what we've expanded
-        ;; (define-enum, define-message, define-extends, define-service),
+        ;; (define-enum, define-message, define-extend, define-service),
         ;; followed by the Lisp model object created by the defining form,
         ;; followed by other defining forms (e.g., deftype, defclass)
         (destructuring-bind (&optional progn type model definers)
@@ -67,7 +67,7 @@
           (ecase type
             ((define-enum)
              (setf (proto-enums protobuf) (nconc (proto-messages protobuf) (list model))))
-            ((define-message define-extends)
+            ((define-message define-extend)
              (setf (proto-parent model) protobuf)
              (setf (proto-messages protobuf) (nconc (proto-messages protobuf) (list model)))
              (when (proto-extension-p model)
@@ -186,7 +186,7 @@
                       (forms collect-form))
       (dolist (field fields)
         (case (car field)
-          ((define-enum define-message define-extends define-extension)
+          ((define-enum define-message define-extend define-extension)
            (destructuring-bind (&optional progn type model definers)
                (macroexpand-1 field env)
              (assert (eq progn 'progn) ()
@@ -195,7 +195,7 @@
              (ecase type
                ((define-enum)
                 (setf (proto-enums message) (nconc (proto-messages message) (list model))))
-               ((define-message define-extends)
+               ((define-message define-extend)
                 (setf (proto-parent model) message)
                 (setf (proto-messages message) (nconc (proto-messages message) (list model)))
                 (when (proto-extension-p model)
@@ -225,7 +225,7 @@
          ,message
          ,forms))))
 
-(defmacro define-extends (type (&key name options documentation)
+(defmacro define-extend (type (&key name options documentation)
                           &body fields &environment env)
   "Define an extension to the message named 'type'.
    'name' can be used to override the defaultly generated Protobufs message name.
@@ -272,8 +272,8 @@
     (with-collectors ((forms collect-form))
       (dolist (field fields)
         (assert (not (member (car field)
-                             '(define-enum define-message define-extends define-extension))) ()
-                "The body of ~S can only contain field definitions" 'define-extends)
+                             '(define-enum define-message define-extend define-extension))) ()
+                "The body of ~S can only contain field definitions" 'define-extend)
         (multiple-value-bind (field slot idx)
             (process-field field index :conc-name conc-name :alias-for alias-for)
           ;;--- Make sure extension field's index is allowable within 'proto-extensions'
@@ -308,12 +308,12 @@
           (setf (proto-fields extends) (nconc (proto-fields extends) (list field)))
           (setq index idx)))
       `(progn
-         define-extends
+         define-extend
          ,extends
          ,forms))))
 
 (defun process-field (field index &key conc-name alias-for)
-  "Process one field descriptor within 'define-message' or 'define-extends'.
+  "Process one field descriptor within 'define-message' or 'define-extend'.
    Returns a 'proto-field' object, a CLOS slot form and the incremented field index."
   (when (i= index 18999)                                ;skip over the restricted range
     (setq index 19999))

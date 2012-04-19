@@ -206,8 +206,8 @@
                                      (setq *protobuf-package* package)))))))
                        ((string= token "enum")
                         (parse-proto-enum stream protobuf))
-                       ((string= token "extends")
-                        (parse-proto-extends stream protobuf))
+                       ((string= token "extend")
+                        (parse-proto-extend stream protobuf))
                        ((string= token "message")
                         (parse-proto-message stream protobuf))
                        ((string= token "service")
@@ -340,8 +340,8 @@
           (return-from parse-proto-message))
         (cond ((string= token "enum")
                (parse-proto-enum stream message))
-              ((string= token "extends")
-               (parse-proto-extends stream message))
+              ((string= token "extend")
+               (parse-proto-extend stream message))
               ((string= token "message")
                (parse-proto-message stream message))
               ((member token '("required" "optional" "repeated") :test #'string=)
@@ -354,12 +354,12 @@
                (error "Unrecognized token ~A at position ~D"
                       token (file-position stream))))))))
 
-(defun parse-proto-extends (stream protobuf)
-  "Parse a Protobufs 'extends' from 'stream'.
+(defun parse-proto-extend (stream protobuf)
+  "Parse a Protobufs 'extend' from 'stream'.
    Updates the 'protobuf' or 'protobuf-message' object to have the message."
   (check-type protobuf (or protobuf protobuf-message))
   (let* ((name (prog1 (parse-token stream)
-                 (expect-char stream #\{ "extends")
+                 (expect-char stream #\{ "extend")
                  (maybe-skip-comments stream)))
          (message (find-message *protobuf* name))
          (extends (and message
@@ -376,7 +376,7 @@
     (loop
       (let ((token (parse-token stream)))
         (when (null token)
-          (expect-char stream #\} "extends")
+          (expect-char stream #\} "extend")
           (maybe-skip-comments stream)
           (setf (proto-messages protobuf) (nconc (proto-messages protobuf) (list extends)))
           (setf (proto-extenders protobuf) (nconc (proto-extenders protobuf) (list extends)))
@@ -386,7 +386,7 @@
           (let ((alias (find-option extends "lisp_alias")))
             (when alias
               (setf (proto-alias-for extends) (make-lisp-symbol alias))))
-          (return-from parse-proto-extends))
+          (return-from parse-proto-extend))
         (cond ((member token '("required" "optional" "repeated") :test #'string=)
                (parse-proto-field stream extends token))
               ((string= token "option")

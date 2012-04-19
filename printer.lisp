@@ -128,7 +128,7 @@
       (write-protobuf-documentation type documentation stream :indentation indentation))
     (format stream "~&~@[~VT~]~A ~A {~%"
             (and (not (zerop indentation)) indentation)
-            (if extension-p "extends" "message") name)
+            (if extension-p "extend" "message") name)
     (let ((other (and class (not (string= name (class-name->proto class))) class)))
       (when other
         (format stream "~&~VToption (lisp_name) = \"~A:~A\";~%"
@@ -311,7 +311,7 @@
       (write-protobuf-documentation type documentation stream :indentation indentation))
     (format stream "~&~@[~VT~](proto:define-~A ~(~S~)"
             (and (not (zerop indentation)) indentation)
-            (if extension-p "extends" "message") class)
+            (if extension-p "extend" "message") class)
     (let ((other (and name (not (string= name (class-name->proto class))) name)))
       (cond (extension-p
              (format stream " ()"))
