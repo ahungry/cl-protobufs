@@ -194,12 +194,12 @@
                                (name   (and option (proto-name option)))
                                (value  (and option (proto-value option))))
                           (when option
-                            (cond ((string= name "optimize_for")
+                            (cond ((option-name= name "optimize_for")
                                    (let ((value (cond ((string= value "SPEED") :speed)
                                                       ((string= value "CODE_SIZE") :space)
                                                       (t nil))))
                                      (setf (proto-optimize protobuf) value)))
-                                  ((string= name "lisp_package")
+                                  ((option-name= name "lisp_package")
                                    (let ((package (or (find-package value)
                                                       (find-package (string-upcase value)))))
                                      (setf (proto-lisp-package protobuf) value)
@@ -218,7 +218,8 @@
 (defun parse-proto-syntax (stream protobuf &optional (terminator #\;))
   "Parse a Protobufs syntax line from 'stream'.
    Updates the 'protobuf' object to use the syntax."
-  (let ((syntax (prog1 (parse-token stream)
+  (let ((syntax (prog2 (expect-char stream #\= "syntax")
+                    (parse-string stream)
                   (expect-char stream terminator "syntax")
                   (maybe-skip-comments stream))))
     (setf (proto-syntax protobuf) syntax)))
@@ -388,14 +389,14 @@
               (setf (proto-alias-for extends) (make-lisp-symbol alias))))
           (return-from parse-proto-extend))
         (cond ((member token '("required" "optional" "repeated") :test #'string=)
-               (parse-proto-field stream extends token))
+               (parse-proto-field stream extends token message))
               ((string= token "option")
                (parse-proto-option stream extends #\;))
               (t
                (error "Unrecognized token ~A at position ~D"
                       token (file-position stream))))))))
 
-(defun parse-proto-field (stream message required)
+(defun parse-proto-field (stream message required &optional extended-from)
   "Parse a Protobufs field from 'stream'.
    Updates the 'protobuf-message' object to have the field."
   (check-type message protobuf-message)
@@ -425,7 +426,10 @@
                    :default dflt
                    :packed  (and packed (string= packed "true"))
                    :extension-p (proto-extension-p message))))
-    ;;--- Make sure extension field's index is allowable within 'proto-extensions'
+    (when extended-from
+      (assert (index-within-extensions-p idx extended-from) ()
+              "The index ~D is not in range for extending ~S"
+              idx (proto-class extended-from)))
     (let ((slot (find-option opts "lisp_name")))
       (when slot
         (setf (proto-value field) (make-lisp-symbol type))))

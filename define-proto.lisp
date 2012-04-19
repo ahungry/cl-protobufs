@@ -208,10 +208,10 @@
              (assert (not (find (proto-index field) (proto-fields message) :key #'proto-index)) ()
                      "The field ~S overlaps with another field in ~S"
                      (proto-value field) (proto-class message))
+             (setq index idx)
              (when slot
                (collect-slot slot))
-             (setf (proto-fields message) (nconc (proto-fields message) (list field)))
-             (setq index idx)))))
+             (setf (proto-fields message) (nconc (proto-fields message) (list field)))))))
       (if alias-for
         ;; If we've got an alias, define a a type that is the subtype of
         ;; the Lisp class that typep and subtypep work
@@ -276,10 +276,13 @@
                 "The body of ~S can only contain field definitions" 'define-extend)
         (multiple-value-bind (field slot idx)
             (process-field field index :conc-name conc-name :alias-for alias-for)
-          ;;--- Make sure extension field's index is allowable within 'proto-extensions'
           (assert (not (find (proto-index field) (proto-fields extends) :key #'proto-index)) ()
                   "The field ~S overlaps with another field in ~S"
                   (proto-value field) (proto-class extends))
+          (assert (index-within-extensions-p idx message) ()
+                  "The index ~D is not in range for extending ~S"
+                  idx (proto-class message))
+          (setq index idx)
           (when slot
             (let* ((inits (cdr slot))
                    (sname (car slot))
@@ -305,8 +308,7 @@
               (setf (proto-reader field) reader
                     (proto-writer field) writer)))
           (setf (proto-extension-p field) t)            ;this field is an extension
-          (setf (proto-fields extends) (nconc (proto-fields extends) (list field)))
-          (setq index idx)))
+          (setf (proto-fields extends) (nconc (proto-fields extends) (list field)))))
       `(progn
          define-extend
          ,extends
@@ -355,7 +357,14 @@
                        :packed  (and (eq reqd :repeated)
                                      (packed-type-p pclass))
                        :documentation documentation)))
-          (values field slot index))))))
+          (values field slot idx))))))
+
+(defun index-within-extensions-p (index message)
+  (let ((extensions (proto-extensions message)))
+    (some #'(lambda (ext)
+              (and (i>= index (proto-extension-from ext))
+                   (i<= index (proto-extension-to ext))))
+          extensions)))
 
 (defmacro define-extension (from to)
   "Define an extension range within a message.

@@ -168,12 +168,19 @@
     (format stream "~A~@[ = ~S~]" (proto-name o) (proto-value o))))
 
 (defmethod find-option ((protobuf base-protobuf) (name string))
-  (let ((option (find name (proto-options protobuf) :key #'proto-name :test #'string=)))
+  (let ((option (find name (proto-options protobuf) :key #'proto-name :test #'option-name=)))
     (and option (proto-value option))))
 
 (defmethod find-option ((options list) (name string))
-  (let ((option (find name options :key #'proto-name :test #'string=)))
+  (let ((option (find name options :key #'proto-name :test #'option-name=)))
     (and option (proto-value option))))
+
+(defun option-name= (name1 name2)
+  (let ((start1 (if (eql (char name1 0) #\() 1 0))
+        (start2 (if (eql (char name2 0) #\() 1 0))
+        (end1   (if (eql (char name1 0) #\() (- (length name1) 1) (length name1)))
+        (end2   (if (eql (char name2 0) #\() (- (length name2) 1) (length name2))))
+    (string= name1 name2 :start1 start1 :end1 end1 :start2 start2 :end2 end2)))
 
 
 ;; A protobuf enumeration
