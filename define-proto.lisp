@@ -288,15 +288,19 @@
                                (getf inits :reader)
                                (intern (if conc-name (format nil "~A~A" conc-name sname) (symbol-name sname))
                                        (symbol-package sname))))
-                   (writer (or (getf inits :writer) `(setf ,reader)))
+                   (writer (or (getf inits :writer)
+                               (intern (format nil "~A-~A" reader 'setter)
+                                       (symbol-package sname))))
                    (default (getf inits :initform)))
               ;;--- Can we avoid having to use a hash table?
+              ;;--- Maybe the table should be in each instance, keyed by slot name?
               (collect-form `(let ((,sname (make-hash-table :test #'eq :weak t)))
                                (defmethod ,reader ((object ,type))
                                  (gethash object ,sname ,default))
-                               (defmethod ,writer (value (object ,type))
+                               (defmethod ,writer ((object ,type) value)
                                  (declare (type ,stype value))
-                                 (setf (gethash object ,sname) value))))
+                                 (setf (gethash object ,sname) value))
+                               (defsetf ,reader ,writer)))
               ;; This so that (de)serialization works
               (setf (proto-reader field) reader
                     (proto-writer field) writer)))

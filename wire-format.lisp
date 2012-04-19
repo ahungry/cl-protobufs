@@ -944,4 +944,5 @@
     (($wire-type-32bit)
      (i+ index 4))
     (($wire-type-64bit)
-     (i+ index 8))))
+     (i+ index 8))
+    (t index)))

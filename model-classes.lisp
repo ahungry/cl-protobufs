@@ -271,8 +271,8 @@
 
 (defmethod print-object ((m protobuf-message) stream)
   (print-unreadable-object (m stream :type t :identity t)
-    (format stream "~S~@[ (alias for ~S)~]"
-            (proto-class m) (proto-alias-for m))))
+    (format stream "~S~@[ (alias for ~S)~]~@[ (extended~*)~]"
+            (proto-class m) (proto-alias-for m) (proto-extension-p m))))
 
 (defmethod find-message ((message protobuf-message) (type symbol))
   ;; Extended messages "shadow" non-extended ones
@@ -347,8 +347,8 @@
 
 (defmethod print-object ((f protobuf-field) stream)
   (print-unreadable-object (f stream :type t :identity t)
-    (format stream "~S :: ~S = ~D"
-            (proto-value f) (proto-class f) (proto-index f))))
+    (format stream "~S :: ~S = ~D~@[ (extended~*)~]"
+            (proto-value f) (proto-class f) (proto-index f) (proto-extension-p f))))
 
 
 ;; An extension within a message
