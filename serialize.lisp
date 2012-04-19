@@ -35,6 +35,12 @@
       (write-sequence buffer stream))
     buffer))
 
+(defun serialize-object-to-file (filename object type &key visited)
+  (with-open-file (stream filename
+                   :direction :output
+                   :element-type '(unsigned-byte 8))
+    (serialize-object-to-stream object type :stream stream :visited visited)))
+
 ;; Allow clients to add their own methods
 ;; This is how we address the problem of cycles, e.g. -- if you have an object
 ;; that may contain cycles, serialize the cyclic object using a "handle"
@@ -143,6 +149,12 @@
          (buffer  (make-array size :element-type '(unsigned-byte 8))))
     (read-sequence buffer stream)
     (deserialize-object type buffer 0 size)))
+
+(defun deserialize-object-from-file (type filename)
+  (with-open-file (stream filename
+                   :direction :input
+                   :element-type '(unsigned-byte 8))
+    (deserialize-object-from-stream type :stream stream)))
 
 ;; Allow clients to add their own methods
 ;; This is you might preserve object identity, e.g.

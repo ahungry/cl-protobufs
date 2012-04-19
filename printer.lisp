@@ -75,7 +75,7 @@
                          ("lisp_alias"   "string" 195803)))
 
 (defmethod write-protobuf-header ((type (eql :proto)) stream)
-  (format stream "~&import \"net/proto2/proto/descriptor.proto\"~%~%")
+  (format stream "~&import \"net/proto2/proto/descriptor.proto\";~%~%")
   (format stream "~&extend proto2.MessageOptions {~%")
   (loop for (option type index) in *lisp-options* doing
     (format stream "~&  optional ~A ~A = ~D;~%" type option index))

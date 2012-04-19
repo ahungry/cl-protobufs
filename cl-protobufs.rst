@@ -273,7 +273,7 @@ looks like this::
 
   package color_wheel;
 
-  import "net/proto2/proto/descriptor.proto"
+  import "net/proto2/proto/descriptor.proto";
 
   extend proto2.MessageOptions {
     optional string lisp_package = 195801;
