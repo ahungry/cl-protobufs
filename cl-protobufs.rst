@@ -32,20 +32,21 @@ Protobufs for Common Lisp
 Introduction
 ============
 
-The Protobufs library provides a way for Common Lisp programs to use
-existing (or define new) Protobufs "schemas", and serialize and
-deserialize objects to and from the Protobufs wire and text formats.
+The Common Lisp Protobufs library provides a way for Common Lisp
+programs to use existing (or define new) Protobufs "schemas", and
+serialize and deserialize objects to and from the Protobufs wire and
+text formats.
 
 To use it, first load the ASDF declaration file ``protobufs/protobufs.asd``
-and then use ASDF to load the library.
+and then use ASDF to load the library named ``:protobufs``.
 
 
 Implementation notes
 --------------------
 
 The Protobufs library defines a set of model classes that describes a
-protobufs "schema". There is a class that describes one .proto file
-(i.e., one "schema"), options, enums and enum values, messages and
+protobufs "schema" (i.e., one .proto file). There is a class that
+describes each schema, options, enums and enum values, messages and
 fields, and services and methods.
 
 The library provides the means to convert several kinds of inputs into
@@ -79,7 +80,8 @@ Model classes
   proto:protobuf                                                [Class]
 
 The class the represents a Protobufs schema, i.e., one .proto file.
-It has slots for the name, options, enums, messages and services.
+It has slots for the name, options, enums, messages and services.  The
+name is equal to the name of the .proto file, without the file type.
 
 
 ::
@@ -138,10 +140,10 @@ Defining a Protobufs schema
 ===========================
 
 There are several ways to define a Protobufs schema: convert a .proto
-file to a .lisp source file and then using the Lisp file; convert a set
+file to a .lisp source file and then use the Lisp file; convert a set
 of Lisp classes to a Protobufs model, and then use either the .lisp or
-the .proto representation of the model; use a .proto file directly in as
-ASDF system; or use the Protobufs macros in a Lisp source file.
+the .proto representation of the model; use a .proto file directly in
+an ASDF system; or use the Protobufs macros in a Lisp source file.
 
 
 .proto file to Lisp conversion
@@ -149,8 +151,9 @@ ASDF system; or use the Protobufs macros in a Lisp source file.
 
 If you have an existing .proto source file that you would like to
 convert to Lisp classes (more precisely, to the macros defined by the
-Protobufs library), you can use ``proto:parse-protobuf-from-file`` to read the
-.proto file and then use ``proto:write-protobuf`` to write a new .lisp file.
+Protobufs library), you can use ``proto:parse-protobuf-from-file`` to
+read the .proto file and then use ``proto:write-protobuf`` to write a
+new .lisp file. (This is what that ASDF module type ``:proto`` does.)
 
 ::
 
@@ -176,7 +179,7 @@ Lisp name.
 
   proto:write-protobuf (protobuf &key stream type)              [Function]
 
-Pretty-prints the Protobufs schema *protobuf* onto the stream,
+Pretty-prints the Protobufs schema *protobuf* onto the stream *stream*,
 which defaults to ``*standard-output*``.
 
 ``type`` can be either ``:proto`` or ``:lisp``.
@@ -199,11 +202,11 @@ classes as well) until you have a good Protobufs schema definition.
 
 Given a list of class names *classes*, this generates a Protobufs schema
 for the classes, generating any necessary enum types that correspond to
-Lisp ``member`` types.
+Lisp ``member`` types. The return value is the model rooted at ``proto:protobuf``.
 
-*name* and *package* can be supplied to give the Protobufs name and package.
-*lisp-package* can be supplied to give the name of the Lisp package, if it
-is different from *package*.
+*name* and *package* can be supplied to give the Protobufs name and
+*package.  lisp-package* can be supplied to give the name of the Lisp
+*package, if it is different from *package*.
 
 
 ::
@@ -214,11 +217,11 @@ is different from *package*.
 Given a list of class names *classes*, this generates a Protobufs schema
 for the classes, generating enum types as necessary, and then
 pretty-prints the result onto *stream*. *type* can be either ``:proto``
-(the default) or ``:lisp``.
+(the default) or ``:lisp``. The return value is the model rooted at ``proto:protobuf``.
 
-*name* and *package* can be supplied to give the Protobufs name and package.
-*lisp-package* can be supplied to give the name of the Lisp package, if it
-is different from *package*.
+*name* and *package* can be supplied to give the Protobufs name and
+*package.  lisp-package* can be supplied to give the name of the Lisp
+*package, if it is different from *package*.
 
 
 Using .proto files directly
@@ -229,7 +232,8 @@ files and .lisp files, you can also use .proto files directly in ASDF
 systems. Just use the ASDF module type ``:proto`` in your system, and
 compile and load the system in the usual way. This will create both the
 Protobufs model and the Lisp classes that correspond to the Protobufs
-messages.
+messages. (Note that it will also leave a .lisp file having the same
+name as the .proto file in the file system.)
 
 
 Using the Protobufs macros
@@ -239,7 +243,8 @@ You can define a Protobufs schema entirely within Lisp by using the
 following macros. For example::
 
   (proto:define-proto color-wheel
-      (:package color-wheel)
+      (:package com.google.colorwheel
+       :lisp-package color-wheel)
     (proto:define-message color-wheel
         (:conc-name color-wheel-)
       (name   :type string)
@@ -271,7 +276,7 @@ looks like this::
 
   syntax = "proto2";
 
-  package color_wheel;
+  package com.google.colorwheel;
 
   import "net/proto2/proto/descriptor.proto";
 
@@ -280,6 +285,8 @@ looks like this::
     optional string lisp_name = 195802;
     optional string lisp_alias = 195803;
   }
+
+  option (lisp_package) = "color-wheel";
 
   message ColorWheel {
     required string name = 1;
@@ -317,6 +324,9 @@ looks like this::
     }
   }
 
+Note that Lisp types ``(or null <T>)`` turn into optional fields,
+and Lisp types ``(proto:list-of <T>)`` turn into repeated fields.
+
 
 ::
 
@@ -325,30 +335,34 @@ looks like this::
                                  optimize options documentation)
                       &body messages)
 
-Defines a Protobufs schema whose name is given by the symbol *type*,
-corresponding to a .proto file of that name. If *name* is not supplied,
-the Protobufs name of the schema is the camel-cased rendition of *type*
-(e.g., ``color-wheel`` becomes ``ColorWheel``); otherwise the Protobufs
-name is the string *name*.
+Defines a Protobufs "schema" whose name is given by the symbol *type*,
+corresponding to a .proto file of that name. By a "schema", we mean an
+object that corresponds to the contents of one .proto file. If *name*
+is not supplied, the Protobufs name of the schema is the camel-cased
+rendition of *type* (e.g., ``color-wheel`` becomes ``ColorWheel``);
+otherwise the Protobufs name is the string *name*.
 
 *imports* is a list of pathname strings to be imported. This corresponds
-to ``import`` in a .proto file.
+to ``import`` in a .proto file. Note that ``proto:define-proto`` can
+import both .proto files and .lisp files containing Protobufs macros,
+but the generated .proto code will convert all of these to imports of
+.proto files.
 
 *syntax* and *package* are strings that give the Protobufs syntax and
 package name. *lisp-package* can be supplied to give the name of the
 Lisp package, if it is different from *package*. *package* corresponds
 to ``package`` in a .proto file. If you want to specify a Lisp package
-in a .proto file, you can use ``option lisp_package``.
+in a .proto file, you can use ``option (lisp_package)``.
 
 *optimize* can be either ``:space`` (the default) or ``:speed``. When it
 is ``:space`` the serialization methods generated for each message are
 compact, but slower; when it is ``:speed``, the serialization methods
 will be much faster, but will take more space. This corresponds to
-``option optimize_for CODE_SIZE|SPEED`` in a .proto file.
+``option optimize_for = CODE_SIZE|SPEED`` in a .proto file.
 
 *options* is a property list whose keys and values are both strings,
 for example, ``:option ("java_package" "com.yoyodyne.overthruster")``.
-The are passed along unchanged to a generated .proto file.
+They are passed along unchanged to the generated .proto file.
 
 *documentation* is a documentation string that is preserved as a comment
 in the .proto file.
@@ -368,12 +382,12 @@ is given by the symbol *type*. If *name* is not supplied, the Protobufs
 name of the enum is the camel-cased rendition of *type*; otherwise the
 Protobufs name is the string *name*. If *conc-name* is given, it will
 be used as the prefix for all of the enum value names. In a .proto file,
-you can use ``option lisp_name`` to override the default name for the
+you can use ``option (lisp_name)`` to override the default name for the
 enum type in Lisp.
 
 If *alias-for* is given, no Lisp deftype is defined. Instead, the enum
 will be used as an alias for an enum type that already exists in Lisp.
-You can use ``option lisp_alias`` in a .proto file to give the Lisp
+You can use ``option (lisp_alias)`` in a .proto file to give the Lisp
 alias for an enum type.
 
 *options*  is a property list whose keys and values are both strings.
@@ -384,6 +398,8 @@ in the .proto file.
 *body* consists of the enum values, each of which is either a symbol
 or a list of the form ``(name index)``. By default, the indexes start at
 0 and are incremented by 1 for each new enum value.
+
+This can only be used within ``proto:define-proto`` or ``proto:define-message``.
 
 
 ::
@@ -397,16 +413,16 @@ is given by the symbol *type*. If *name* is not supplied, the Protobufs
 name of the class is the camel-cased rendition of *type*; otherwise the
 Protobufs name is the string *name*. If *conc-name* is given, it will
 be used as the prefix for all of the slot accessor names. In a .proto
-file, you can use ``option lisp_name`` to override the default name
+file, you can use ``option (lisp_name)`` to override the default name
 for the class in Lisp.
 
 If *alias-for* is given, no Lisp defclass is defined. Instead, the
 message will be used as an alias for a class that already exists in
 Lisp. This feature is intended to be used to define messages that will
-be serialized from existing Lisp classes; unless you get the slot names
-or readers exactly right for each field, it will be the case that trying
-to (de)serialize into a Lisp object won't work.
-You can use ``option lisp_alias`` in a .proto file to give the Lisp
+be serialized from existing Lisp classes; unless you get the slot names,
+readers and writers exactly right for each field, it will be the case
+that trying to (de)serialize into a(n aliased) Lisp object won't work.
+You can use ``option (lisp_alias)`` in a .proto file to give the Lisp
 alias for the class corresponding to a message.
 
 *options*  is a property list whose keys and values are both strings.
@@ -420,14 +436,16 @@ The body *fields* consists of fields, ``proto:define-enum``,
 Fields take the form ``(slot &key type name default reader writer)``.
 *slot* can be either a symbol giving the slot name or a list of the
 form ``(slot index)``. By default, the field indexes start at 1 and
-are incremented by 1 for each new field value.  *type* is the type of
+are incremented by 1 for each new field value. *type* is the type of
 the slot. *name* can be used to override the defaultly generated
 Protobufs field name (for example, ``color-name`` becomes
-``colorName``).  *default* is the default value for the slot. *reader*
+``colorName``). *default* is the default value for the slot. *reader*
 is a Lisp slot reader function to use to get the value during
 serialization, as opposed to using ``slot-value``; this is meant to be
 used when aliasing an existing class. *writer* can be similarly used
 to give a Lisp slot writer function.
+
+This can only be used within ``proto:define-proto`` or ``proto:define-message``.
 
 
 ::
@@ -437,11 +455,11 @@ to give a Lisp slot writer function.
                        &body fields)
 
 Defines a Protobuf "extend", that is, an extension to an existing
-message and Lisp class that has additional fields that were reserved
-by ``proto:define-extension``. *type* and *name* are as for
-``proto:define-message``. Note that no new Lisp class is defined; the
-additional slots are implemented as getter and setter methods with a
-closed-over variable. The other options, such as *conc-name* and
+message (and corresponding Lisp class) that has additional fields that
+were reserved by ``proto:define-extension``. *type* and *name* are as
+for ``proto:define-message``. Note that no new Lisp class is defined;
+the additional slots are implemented as getter and setter methods on
+a closed-over variable. The other options, such as *conc-name* and
 *alias-for* are take from the extended message.
 
 *options*  is a property list whose keys and values are both strings.
@@ -452,6 +470,8 @@ in the .proto file.
 The body *fields* consists only of fields, which take the same form as
 they do for ``proto:define-message``.
 
+This can only be used within ``proto:define-proto`` or ``proto:define-message``.
+
 
 ::
 
@@ -461,6 +481,8 @@ Defines a field extension for the indexes from *from* to *to*.
 *from* and *to* are positive integers ranging from 1 to 2^29 - 1.
 *to* can also be the token ``max``, i.e., 2^29 - 1.
 
+This can only be used within ``proto:define-message``.
+
 
 ::
 
@@ -468,10 +490,10 @@ Defines a field extension for the indexes from *from* to *to*.
                                    options documentation)
                         &body method-specs)
 
-Defines a Protobufs service named *type* and corresponding Lisp
-defgenerics for all its methods. If *name* is not supplied, the Protobufs
-name of the enum is the camel-cased rendition of *type*; otherwise the
-Protobufs name is the string *name*.
+Defines a Protobufs service named *type* and corresponding Lisp generic
+functions for all its methods. If *name* is not supplied, the Protobufs
+name of the service is the camel-cased rendition of *type*; otherwise
+the Protobufs name is the string *name*.
 
 *options*  is a property list whose keys and values are both strings.
 
@@ -482,6 +504,8 @@ The body is a set of method specs of the form
 ``(name (input-type output-type) &key options documentation)``.
 *name* is a symbol naming the RPC method. *input-type* and
 *output-type* may either be symbols or a list of the form ``(type &key name)``.
+
+This can only be used within ``proto:define-message``.
 
 
 Serializing and deserializing
@@ -505,13 +529,14 @@ using the wire format. *type* is the Lisp name of a Protobufs message
 (often the name of a Lisp class) or a ``proto:protobuf-message`` object.
 *type* defaults to the class of *object*
 
-*visited* is a hash table used to cache object sizes. If it is supplied,
-it will be cleared before it is used; otherwise, a fresh table will be
-created.
+The element type of *stream* must be ``(unsigned-byte 8)``.
 
-The returned values are a byte vector containing the serialized object
-and the number of bytes required to serialize the object. If the stream
-is ``nil``, the buffer is not actually written anywhere.
+*visited* is an ``eql``-hash table used to cache object sizes. If it is
+supplied, it will be cleared before it is used; otherwise, a fresh table
+will be created.
+
+The returned value is a byte vector containing the serialized object.
+If the stream is ``nil``, the buffer is not actually written anywhere.
 
 
 ::
@@ -526,13 +551,16 @@ object. *type* defaults to the class of *object*. The buffer is assumed
 to be large enough to hold the serialized object; if it is not, an
 out-of-bounds condition may be signalled.
 
-The object is serialized into the byte array given by *buffer*, starting
-at the fixnum index *start* using the wire format.
+The object is serialized using the wire format into the byte array
+(i.e., a vector whose type is ``(unsigned-byte 8)``) given by *buffer*,
+starting at the fixnum index *start* .
 
-*visited* is a hash table used to cache object sizes.
+*visited* is an ``eql``-hash table used to cache object sizes.
 
 The returned values are the modified buffer containing the serialized
-object and the number of bytes required to serialize the object.
+object and the index that points one past the last serialized byte in
+the buffer, which will be the number of bytes required to serialize the
+object if *start* was 0.
 
 
 ::
@@ -542,6 +570,8 @@ object and the number of bytes required to serialize the object.
 Deserializes an object of the given type *type* as a Protobuf object.
 *type* is the Lisp name of a Protobufs message (usually the name of a
 Lisp class) or a ``proto:protobuf-message``.
+
+The element type of *stream* must be ``(unsigned-byte 8)``.
 
 The returned value is the deserialized object.
 
@@ -557,7 +587,8 @@ Lisp class) or a ``proto:protobuf-message``.
 The encoded bytes come from the byte array given by *buffer*, starting
 at the fixnum index *start* up to the end of the buffer, given by *end*.
 If a zero byte is encountered in in the "tag position" during
-deserialization, this is interpreted as an "end of object" marker.
+deserialization, this is interpreted as an "end of object" marker
+and deserialization stops.
 
 The returned values are the deserialized object and the index into the
 buffer at which the deserialization ended.
@@ -572,7 +603,7 @@ Computes the size in bytes of the object *object* of type *type*.
 Lisp class) or a ``proto:protobuf-message``. *type* defaults to the
 class of *object*
 
-*visited* is a hash table used to cache object sizes.
+*visited* is an ``eql``-hash table used to cache object sizes.
 
 The returned value is the size of the serialized object in bytes.
 
@@ -606,7 +637,7 @@ The returned value is the object.
 Python compatibility functions
 ==============================
 
-By popular demand, the Protobufs library provides an API that very
+By popular demand, the Protobufs library provides an API that is very
 similar to the API of the Python Protobufs library.
 
 ::

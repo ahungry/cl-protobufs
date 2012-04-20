@@ -20,6 +20,10 @@
   (:export
    "LIST-OF")
 
+  ;; ASDF module type
+  (:export
+   "PROTO-FILE")
+  
   ;; The Protobufs API
   (:export
    ;; Model classes
