@@ -510,13 +510,23 @@ service ColorWheel {
   (assert (listp (cdr x)) ())
   (cdr x))
 
-(proto:serialize-object-to-stream '("this" "is" "a" ("nested" "test")) 'typed-list :stream nil)
-(proto:print-text-format '("this" "is" "a" ("nested" "test")) 'typed-list)
-(proto:print-text-format '("this" "is" "a" ("nested" "test")) 'typed-list :suppress-line-breaks t)
+(let ((list '("this" "is" "a" ("nested" "test"))))
+  (proto:serialize-object-to-stream list 'typed-list :stream nil)
+  (proto:print-text-format list 'typed-list)
+  (proto:print-text-format list 'typed-list :suppress-line-breaks t)
+  (let ((text (with-output-to-string (s)
+                (proto:print-text-format list 'typed-list :stream s))))
+    (with-input-from-string (s text)
+      (proto:parse-text-format 'typed-list :stream s))))
 
-(proto:serialize-object-to-stream '((1 one) (2 two) (3 three)) 'typed-list :stream nil)
-(proto:print-text-format '((1 one) (2 two) (3 three)) 'typed-list)
-(proto:print-text-format '((1 one) (2 two) (3 three)) 'typed-list :suppress-line-breaks t)
+(let ((list '((1 one) (2 two) (3 three))))
+  (proto:serialize-object-to-stream list 'typed-list :stream nil)
+  (proto:print-text-format list 'typed-list)
+  (proto:print-text-format list 'typed-list :suppress-line-breaks t)
+  (let ((text (with-output-to-string (s)
+                (proto:print-text-format list 'typed-list :stream s))))
+    (with-input-from-string (s text)
+      (proto:parse-text-format 'typed-list :stream s))))
 ||#
 
 

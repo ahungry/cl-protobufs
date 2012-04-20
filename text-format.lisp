@@ -58,8 +58,8 @@
                                        (let ((indent (+ indent 2)))
                                          (dolist (v values)
                                            (if suppress-line-breaks
-                                             (format stream "~A: { " (proto-name field))
-                                             (format stream "~&~VT~A: {~%" indent (proto-name field)))
+                                             (format stream "~A { " (proto-name field))
+                                             (format stream "~&~VT~A {~%" indent (proto-name field)))
                                            (map () (curry #'do-field v msg indent)
                                                    (proto-fields msg))
                                            (if suppress-line-breaks
@@ -83,8 +83,8 @@
                                      (when v
                                        (let ((indent (+ indent 2)))
                                          (if suppress-line-breaks
-                                             (format stream "~A: { " (proto-name field))
-                                             (format stream "~&~VT~A: {~%" indent (proto-name field)))
+                                             (format stream "~A { " (proto-name field))
+                                             (format stream "~&~VT~A {~%" indent (proto-name field)))
                                          (map () (curry #'do-field v msg indent)
                                                  (proto-fields msg))
                                          (if suppress-line-breaks
@@ -106,7 +106,7 @@
         nil))))
 
 (defun print-prim (val type field stream indent)
-  (when val
+  (when (or val (eq type :bool))
     (if (eq indent 't)
       (format stream "~A: " (proto-name field))
       (format stream "~&~VT~A: " (+ indent 2) (proto-name field)))
@@ -176,8 +176,7 @@
                    (dolist (slot rslots)
                      (setf (slot-value object slot) (nreverse (slot-value object slot))))
                    (return-from deserialize object))
-                 (let* ((name  (prog1 (parse-token stream)
-                                 (expect-char stream #\:)))
+                 (let* ((name  (parse-token stream))
                         (field (and name (find name (proto-fields message) :key #'proto-name :test #'string=)))
                         (type  (and field (if (eq (proto-class field) 'boolean) :bool (proto-class field))))
                         (slot  (and field (proto-value field)))
@@ -187,6 +186,7 @@
                      (parse-token stream)
                      (cond ((and field (eq (proto-required field) :repeated))
                             (cond ((keywordp type)
+                                   (expect-char stream #\:)
                                    (let ((val (case type
                                                 ((:float :double) (parse-float stream))
                                                 ((:string) (parse-string stream))
@@ -198,11 +198,14 @@
                                   ((typep (setq msg (and type (or (find-message trace type)
                                                                   (find-enum trace type))))
                                           'protobuf-message)
-                                     (let ((obj (deserialize type msg)))
-                                       (when slot
-                                         (pushnew slot rslots)
-                                         (push obj (slot-value object slot)))))
+                                   (when (eql (peek-char nil stream nil) #\:)
+                                     (read-char stream))
+                                   (let ((obj (deserialize type msg)))
+                                     (when slot
+                                       (pushnew slot rslots)
+                                       (push obj (slot-value object slot)))))
                                   ((typep msg 'protobuf-enum)
+                                   (expect-char stream #\:)
                                    (let* ((name (parse-token stream))
                                           (enum (find name (proto-values msg) :key #'proto-name :test #'string=))
                                           (val  (and enum (proto-value enum))))
@@ -211,6 +214,7 @@
                                        (push val (slot-value object slot)))))))
                            (t
                             (cond ((keywordp type)
+                                   (expect-char stream #\:)
                                    (let ((val (case type
                                                 ((:float :double) (parse-float stream))
                                                 ((:string) (parse-string stream))
@@ -221,10 +225,13 @@
                                   ((typep (setq msg (and type (or (find-message trace type)
                                                                   (find-enum trace type))))
                                           'protobuf-message)
+                                   (when (eql (peek-char nil stream nil) #\:)
+                                     (read-char stream))
                                    (let ((obj (deserialize type msg)))
                                      (when slot
                                        (setf (slot-value object slot) obj))))
                                   ((typep msg 'protobuf-enum)
+                                   (expect-char stream #\:)
                                    (let* ((name (parse-token stream))
                                           (enum (find name (proto-values msg) :key #'proto-name :test #'string=))
                                           (val  (and enum (proto-value enum))))
