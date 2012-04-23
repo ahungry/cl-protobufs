@@ -16,20 +16,41 @@
 ;;--- Turn these into a test suite
 
 #||
-(setq cschema (proto:write-protobuf-schema-for-classes
-               '(qres-core::legacy-pnr
-                 qres-core::legacy-pnr-pax
-                 qres-core::legacy-pnr-segment
-                 qres-core::legacy-pnr-pax-segment)
-               :slot-filter #'quake::quake-slot-filter
-               :type-filter #'quake::quake-type-filter
-               :enum-filter #'quake::quake-enum-filter
-               :value-filter #'quake::quake-value-filter))
+(setq pnr-schema (proto:write-protobuf-schema-for-classes
+                  '(qres-core::legacy-pnr
+                    qres-core::legacy-pnr-pax
+                    qres-core::legacy-pnr-segment
+                    qres-core::legacy-pnr-pax-segment)
+                  :slot-filter #'quake::quake-slot-filter
+                  :type-filter #'quake::quake-type-filter
+                  :enum-filter #'quake::quake-enum-filter
+                  :value-filter #'quake::quake-value-filter))
 
-(proto:write-protobuf cschema)
-(proto:write-protobuf cschema :type :lisp)
+(proto:write-protobuf pnr-schema)
+(proto:write-protobuf pnr-schema :type :lisp)
 
 (proto:serialize-object-to-stream pnr 'qres-core::legacy-pnr :stream nil)
+||#
+
+#||
+(setq sched-schema (proto:write-protobuf-schema-for-classes
+                    '(sched::scheduled-flight
+                      sched::flight-designator
+                      sched::flight-key
+                      sched::scheduled-segment
+                      sched::segment-key
+                      sched::subsegment-key
+                      sched::scheduled-leg
+                      sched::leg-key
+                      sched::revision-entry)
+                    :package :qres-sched
+                    :slot-filter #'quake::quake-slot-filter
+                    :type-filter #'quake::quake-type-filter
+                    :enum-filter #'quake::quake-enum-filter
+                    :value-filter #'quake::quake-value-filter))
+
+(proto:write-protobuf sched-schema)
+(proto:write-protobuf sched-schema :type :lisp)
 ||#
 
 #||
@@ -39,21 +60,21 @@
    (cities :type (proto:list-of qres-core::city) :initform () :initarg :cities)
    (airports :type (proto:list-of qres-core::airport) :initform () :initarg :airports)))
 
-(setq bdschema (proto:generate-protobuf-schema-for-classes
-                '(qres-core::country
-                  qres-core::region
-                  qres-core::region-key
-                  qres-core::city
-                  qres-core::airport
-                  qres-core::timezone
-                  qres-core::tz-variation
-                  qres-core::carrier
-                  qres-core::currency
-                  qres-core::country-currencies
-                  geodata)))
+(setq bizd-schema (proto:generate-protobuf-schema-for-classes
+                   '(qres-core::country
+                     qres-core::region
+                     qres-core::region-key
+                     qres-core::city
+                     qres-core::airport
+                     qres-core::timezone
+                     qres-core::tz-variation
+                     qres-core::carrier
+                     qres-core::currency
+                     qres-core::country-currencies
+                     geodata)))
 
-(proto:write-protobuf bdschema)
-(proto:write-protobuf bdschema :type :lisp)
+(proto:write-protobuf bizd-schema)
+(proto:write-protobuf bizd-schema :type :lisp)
 
 (let* ((countries (loop for v being the hash-values of (qres-core::country-business-data) collect (car v)))
        (regions   (loop for v being the hash-values of (qres-core::region-business-data) collect v))
@@ -76,7 +97,7 @@
                  qres-core::currency
                  qres-core::country-currencies
                  geodata))
-  (let ((message (proto-impl:find-message bdschema class)))
+  (let ((message (proto-impl:find-message bizd-schema class)))
     (eval (proto-impl:generate-object-size  message))
     (eval (proto-impl:generate-serializer   message))
     (eval (proto-impl:generate-deserializer message))))
@@ -176,14 +197,14 @@
             :initform ()
             :initarg :recvals)))
 
-(setq tschema (proto:generate-protobuf-schema-for-classes
-               '(proto-test1 proto-test2 proto-test3 proto-test4 proto-test5 proto-test6)))
+(setq test-schema (proto:generate-protobuf-schema-for-classes
+                   '(proto-test1 proto-test2 proto-test3 proto-test4 proto-test5 proto-test6)))
 
-(proto:write-protobuf tschema)
-(proto:write-protobuf tschema :type :lisp)
+(proto:write-protobuf test-schema)
+(proto:write-protobuf test-schema :type :lisp)
 
 (dolist (class '(proto-test1 proto-test2 proto-test3 proto-test4 proto-test5 proto-test6))
-  (let ((message (proto-impl:find-message tschema class)))
+  (let ((message (proto-impl:find-message test-schema class)))
     (eval (proto-impl:generate-object-size  message))
     (eval (proto-impl:generate-serializer   message))
     (eval (proto-impl:generate-deserializer message))))

@@ -211,24 +211,27 @@
 (defmethod write-protobuf-as ((type (eql :lisp)) (protobuf protobuf) stream
                               &key (indentation 0))
   (with-prefixed-accessors (name class documentation package lisp-package imports optimize options) (proto- protobuf)
-    (let ((lisp-pkg (and lisp-package
-                         (or (null package) (not (string-equal lisp-package package))))))
-      (when (or lisp-pkg package)
-        (format stream "~&(in-package \"~A\")~%~%" (or lisp-pkg package)))
+    (let* ((pkg      (and package (if (stringp package) package (string package))))
+           (lisp-pkg (and lisp-package (if (stringp lisp-package) lisp-package (string lisp-package))))
+           (*protobuf-package* (or (find-package lisp-pkg)
+                                   (find-package (string-upcase lisp-pkg))))
+           (*package* (or *protobuf-package* *package*)))
+      (when (or lisp-pkg pkg)
+        (format stream "~&(in-package \"~A\")~%~%" (or lisp-pkg pkg)))
       (when documentation
         (write-protobuf-documentation type documentation stream :indentation indentation))
       (format stream "~&(proto:define-proto ~(~A~)" (or class name))
-      (if (or package lisp-pkg imports optimize options documentation)
+      (if (or pkg lisp-pkg imports optimize options documentation)
         (format stream "~%    (")
         (format stream " ("))
       (let ((spaces ""))
-        (when package
-          (format stream "~A:package ~A" spaces package)
+        (when pkg
+          (format stream "~A:package \"~A\"" spaces pkg)
           (when (or lisp-pkg imports optimize options documentation)
             (terpri stream))
           (setq spaces "     "))
         (when lisp-pkg
-          (format stream "~A:lisp-package ~A" spaces lisp-pkg)
+          (format stream "~A:lisp-package \"~A\"" spaces lisp-pkg)
           (when (or imports optimize options documentation)
             (terpri stream))
           (setq spaces "     "))
@@ -252,13 +255,13 @@
           (setq spaces "     "))
         (when documentation
           (format stream "~A:documentation ~S" spaces documentation)))
-      (format stream ")"))
-    (dolist (enum (proto-enums protobuf))
-      (write-protobuf-as type enum stream :indentation 2))
-    (dolist (msg (proto-messages protobuf))
-      (write-protobuf-as type msg stream :indentation 2))
-    (dolist (svc (proto-services protobuf))
-      (write-protobuf-as type svc stream :indentation 2))
+      (format stream ")")
+      (dolist (enum (proto-enums protobuf))
+        (write-protobuf-as type enum stream :indentation 2))
+      (dolist (msg (proto-messages protobuf))
+        (write-protobuf-as type msg stream :indentation 2))
+      (dolist (svc (proto-services protobuf))
+        (write-protobuf-as type svc stream :indentation 2)))
     (format stream ")~%")))
 
 (defmethod write-protobuf-documentation ((type (eql :lisp)) docstring stream

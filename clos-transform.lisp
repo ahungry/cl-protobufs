@@ -42,7 +42,7 @@
   "Given a set of CLOS classes, generates a Protobufs schema for the classes.
    The return value is the schema."
   (let* ((package  (and package (if (stringp package) package (string-downcase (string package)))))
-         (lisp-pkg (or lisp-package package))
+         (lisp-pkg (string (or lisp-package package)))
          (protobuf (make-instance 'protobuf
                      :name name
                      :package package
@@ -108,7 +108,7 @@
                          (let* ((names (mapcar #'enum-name->proto enums))
                                 (prefix (and (> (length names) 1)
                                              (subseq (first names)
-                                                     0 (mismatch (first names) (second names))))))
+                                                     0 (mismatch (first names) (car (last names)))))))
                            (when (and prefix (> (length prefix) 2)
                                       (every #'(lambda (name) (starts-with name prefix)) names))
                              (setq names (mapcar #'(lambda (name) (subseq name (length prefix))) names)))
@@ -117,7 +117,7 @@
                              :name   (class-name->proto ename)
                              :values (loop for name in names
                                            for val in enums
-                                           for index upfrom 1
+                                           for index upfrom 0
                                            collect (make-instance 'protobuf-enum-value
                                                      :name name
                                                      :index index

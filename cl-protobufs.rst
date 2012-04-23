@@ -198,7 +198,8 @@ classes as well) until you have a good Protobufs schema definition.
 ::
 
   proto:generate-protobuf-schema-for-classes (classes           [Function]
-                                              &key name package lisp-package)
+                                              &key name package lisp-package
+                                                   slot-filter type-filter enum-filter value-filter)
 
 Given a list of class names *classes*, this generates a Protobufs schema
 for the classes, generating any necessary enum types that correspond to
@@ -207,6 +208,31 @@ Lisp ``member`` types. The return value is the model rooted at ``proto:protobuf`
 *name* and *package* can be supplied to give the Protobufs name and
 *package.  lisp-package* can be supplied to give the name of the Lisp
 *package, if it is different from *package*.
+
+*slot-filter*, *type-filter*, *enum-filter* and *value-filter* are
+filtering functions that can be used to weed out things from the Lisp
+classes that should not be included in the Protobufs schema.
+
+*slot-filter* is a function of two arguments, a list of all the slots
+in the class and the slot currently being processed, and should return
+``t`` if the slot is to be kept or ``nil`` if it to be discarded.  For
+example, if there are internal implementation slots in a class that
+need not appear in the Protobufs description, it can be used to filter
+them out.
+
+*type-filter* is a function of one argument, the type (of a slot); it
+should return a "transformed" type if any is required. For example,
+complex ``and`` and ``or`` types can't be directly represented in
+Protobufs; this can be used to substitute something workable.
+
+*enum-filter* is a function of one argument, a list of all the values
+of a ``member`` type; it should return the transformed values. For
+example, there maybe be some enumeration values that don't make sense;
+they can be discarded by the filter.
+
+*value-filter* is a function of one argument, the value of a slot
+initform. It should transform the value into a scalar value suitable
+for Protobufs.
 
 
 ::
@@ -222,6 +248,9 @@ pretty-prints the result onto *stream*. *type* can be either ``:proto``
 *name* and *package* can be supplied to give the Protobufs name and
 *package.  lisp-package* can be supplied to give the name of the Lisp
 *package, if it is different from *package*.
+
+*slot-filter*, *type-filter*, *enum-filter* and *value-filter* are
+as for ``proto:generate-protobuf-schema-for-classes``.
 
 
 Using .proto files directly
