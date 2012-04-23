@@ -633,6 +633,7 @@
                             (collect-sizer
                              (if (eq class :bool)
                                `(let ((,vval ,reader))
+                                  (declare (ignorable ,vval))
                                   (iincf ,vsize (prim-size ,vval ,class ,tag)))
                                `(let ((,vval ,reader))
                                   (when ,vval

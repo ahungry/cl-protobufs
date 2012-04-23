@@ -552,8 +552,7 @@
   (if (member type '(:int32 :uint32 :int64 :uint64 :sint32 :sint64
                      :fixed32 :sfixed32 :fixed64 :sfixed64
                      :float :double))
-    `(locally (declare (optimize (speed 3) (safety 0) (debug 0))
-                       (type (unsigned-byte 32) tag))
+    `(locally (declare (optimize (speed 3) (safety 0) (debug 0)))
        (let ((len (let ((len 0))
                     (declare (type fixnum len))
                     (dolist (val ,values len)
@@ -567,7 +566,7 @@
                                     ((:float) `4)
                                     ((:double) `8)))))))
          (declare (type (unsigned-byte 32) len))
-         (values (i+ (length32 ,tag) (length32 len) len) len)))
+         (values (i+ (length32 (the (unsigned-byte 32) ,tag)) (length32 len) len) len)))
     form))
 
 (defun enum-size (val values tag)
