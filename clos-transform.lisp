@@ -140,13 +140,16 @@
                       :packed  packed)))
         (values field nil enum)))))
 
-;; Given a class and a slot descriptor, find the unexpanded type definition for the slot
+;; Given a class and a slot descriptor, find the "best" type definition for the slot
+;;--- Surely we can get more info to 'clos-type-to-protobuf-type' for member/enum types
 (defun find-slot-definition-type (class slotd)
   (let* ((slot-name    (slot-definition-name slotd))
          (direct-slotd (some #'(lambda (c)
                                  (find slot-name (class-direct-slots c) :key #'slot-definition-name))
                              (class-precedence-list class))))
     (if direct-slotd
+      ;; The direct slotd will have an unexpanded definition
+      ;; Prefer it for 'list-of' so we can get the base type
       (let ((type (slot-definition-type direct-slotd)))
         (if (and (listp type) (member (car type) '(list-of #+quux quux:list-of)))
           type

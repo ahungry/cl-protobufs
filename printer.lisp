@@ -72,7 +72,10 @@
 
 (defvar *lisp-options* '(("lisp_package" "string" 195801)
                          ("lisp_name"    "string" 195802)
-                         ("lisp_alias"   "string" 195803)))
+                         ("lisp_alias"   "string" 195803)
+                         ("lisp_type"    "string" 195804)
+                         ("lisp_class"   "string" 195805)
+                         ("lisp_slot"    "string" 195806)))
 
 (defmethod write-protobuf-header ((type (eql :proto)) stream)
   (format stream "~&import \"net/proto2/proto/descriptor.proto\";~%~%")

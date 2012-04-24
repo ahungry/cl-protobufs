@@ -34,7 +34,8 @@
 
 #||
 (setq sched-schema (proto:write-protobuf-schema-for-classes
-                    '(sched::scheduled-flight
+                    '(quux::zoned-time
+                      sched::scheduled-flight
                       sched::flight-designator
                       sched::flight-key
                       sched::scheduled-segment
