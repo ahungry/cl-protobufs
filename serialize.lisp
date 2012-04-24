@@ -614,9 +614,6 @@
                           (collect-sizer
                            (let ((tag (make-tag $wire-type-string index)))
                              `(dolist (,vval ,reader)
-                                ;; Call 'object-size' with the name of the message
-                                ;; class so that we preferentially get any optimized version
-                                ;; of the method
                                 (let ((len (or (and visited (gethash ,vval visited))
                                                (object-size ,vval ,msg visited))))
                                   (iincf ,vsize (length32 ,tag))

@@ -116,8 +116,13 @@
             finally (progn
                       (skip-whitespace stream)
                       (when (eq left #\()
-                        (expect-char stream #\) "option"))
+                        (expect-char stream #\)))
                       (return (coerce token 'string)))))))
+
+(defun parse-token-or-string (stream)
+  (if (eql (peek-char nil stream nil) #\")
+    (values (parse-string stream) 'string)
+    (values (parse-token stream) 'symbol)))
 
 (defun parse-string (stream)
   "Parse the next quoted string in the stream, then skip the following whitespace.

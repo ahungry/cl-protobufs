@@ -305,7 +305,7 @@
 
 
 ;; A protobuf field within a message
-;;---*** Support the 'deprecated' option (should serialization ignore such fields?)
+;;--- Support the 'deprecated' option (should serialization ignore such fields?)
 (defclass protobuf-field (base-protobuf)
   ((type :type string                           ;the name of the Protobuf type for the field
          :accessor proto-type
