@@ -578,7 +578,7 @@ Serializes the object *object* of type *type* into the byte array
 message (often the name of a Lisp class) or a ``proto:protobuf-message``
 object. *type* defaults to the class of *object*. The buffer is assumed
 to be large enough to hold the serialized object; if it is not, an
-out-of-bounds condition may be signalled.
+out-of-bounds condition may be signaled.
 
 The object is serialized using the wire format into the byte array
 (i.e., a vector whose type is ``(unsigned-byte 8)``) given by *buffer*,
