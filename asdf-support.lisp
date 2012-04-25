@@ -43,7 +43,7 @@
   (let ((protobuf (parse-protobuf-from-file proto-file)))
     (with-open-file (stream lisp-file
                      :direction :output
-                     :if-exists :replace)
+                     :if-exists :supersede)
       (write-protobuf protobuf :stream stream :type :lisp)))
   lisp-file)
 
