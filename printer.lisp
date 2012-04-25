@@ -220,7 +220,7 @@
                                    (find-package (string-upcase lisp-pkg))))
            (*package* (or *protobuf-package* *package*)))
       (when (or lisp-pkg pkg)
-        (format stream "~&(in-package \"~A\")~%~%" (or lisp-pkg pkg)))
+        (format stream "~&(in-package \"~A\")~%~%" (string-upcase (or lisp-pkg pkg))))
       (when documentation
         (write-protobuf-documentation type documentation stream :indentation indentation))
       (format stream "~&(proto:define-proto ~(~A~)" (or class name))

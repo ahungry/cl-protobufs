@@ -147,8 +147,8 @@
   (find type (proto-enums protobuf) :key #'proto-name :test #'string=))
 
 
-;;--- For now, we support only the built-in options
-;;--- We will want to extend this to customizable options as well
+;; We accept and store any option, but only act on a few: default, packed,
+;; optimize_for, lisp_package, lisp_name, lisp_alias
 (defclass protobuf-option (abstract-protobuf)
   ((name :type string                           ;the key
          :reader proto-name
@@ -305,7 +305,7 @@
 
 
 ;; A protobuf field within a message
-;;--- Support the 'deprecated' option (should serialization ignore such fields?)
+;;--- Support the 'deprecated' option (have serialization ignore such fields?)
 (defclass protobuf-field (base-protobuf)
   ((type :type string                           ;the name of the Protobuf type for the field
          :accessor proto-type

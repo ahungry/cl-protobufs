@@ -34,20 +34,21 @@
                          collect (make-instance 'protobuf-option
                                    :name  key
                                    :value val)))
+         (imports  (if (listp import) import (list import)))
          (protobuf (make-instance 'protobuf
                      :class    type
                      :name     name
                      :syntax   (or syntax "proto2")
                      :package  package
                      :lisp-package (or lisp-pkg package)
-                     ;;---*** This needs to parse the imported file(s)
-                     :imports  (if (listp import) import (list import))
+                     :imports  imports
                      :options  options
                      :optimize optimize
                      :documentation documentation))
          (*protobuf* protobuf)
          (*protobuf-package* (or (find-package lisp-pkg)
                                  (find-package (string-upcase lisp-pkg)))))
+    (apply #'process-imports imports)
     (with-collectors ((forms collect-form))
       (dolist (msg messages)
         (assert (and (listp msg)

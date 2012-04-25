@@ -167,7 +167,7 @@
                    :element-type 'character)
     (parse-protobuf-from-stream stream
                                 :name  (class-name->proto (pathname-name (pathname stream)))
-                                :class (pathname-name (pathname stream)))))
+                                :class (kintern (pathname-name (pathname stream))))))
 
 ;; The syntax for Protocol Buffers is so simple that it doesn't seem worth
 ;; writing a sophisticated parser
@@ -252,7 +252,7 @@
   (let ((import (prog1 (parse-string stream)
                   (expect-char stream terminator "package")
                   (maybe-skip-comments stream))))
-    ;;---*** This needs to parse the imported file(s)
+    (process-imports import)
     (setf (proto-imports protobuf) (nconc (proto-imports protobuf) (list import)))))
 
 (defun parse-proto-option (stream protobuf &optional (terminator #\;))
