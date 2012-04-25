@@ -67,7 +67,7 @@
           (map () #'collect-form definers)
           (ecase type
             ((define-enum)
-             (setf (proto-enums protobuf) (nconc (proto-messages protobuf) (list model))))
+             (setf (proto-enums protobuf) (nconc (proto-enums protobuf) (list model))))
             ((define-message define-extend)
              (setf (proto-parent model) protobuf)
              (setf (proto-messages protobuf) (nconc (proto-messages protobuf) (list model)))
@@ -195,7 +195,7 @@
              (map () #'collect-form definers)
              (ecase type
                ((define-enum)
-                (setf (proto-enums message) (nconc (proto-messages message) (list model))))
+                (setf (proto-enums message) (nconc (proto-enums message) (list model))))
                ((define-message define-extend)
                 (setf (proto-parent model) message)
                 (setf (proto-messages message) (nconc (proto-messages message) (list model)))

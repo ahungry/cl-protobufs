@@ -100,48 +100,57 @@
                                &key slot-filter type-filter enum-filter value-filter)
   (when (or (null slot-filter)
             (funcall slot-filter slot slots))
-    (multiple-value-bind (type pclass packed enums)
-        (clos-type-to-protobuf-type (find-slot-definition-type class slot) type-filter enum-filter)
-      (let* ((ename (and enums
-                         (format nil "~A-~A" 'enum (slot-definition-name slot))))
-             (enum  (and enums
-                         (let* ((names (mapcar #'enum-name->proto enums))
-                                (prefix (and (> (length names) 1)
-                                             (subseq (first names)
-                                                     0 (mismatch (first names) (car (last names)))))))
-                           (when (and prefix (> (length prefix) 2)
-                                      (every #'(lambda (name) (starts-with name prefix)) names))
-                             (setq names (mapcar #'(lambda (name) (subseq name (length prefix))) names)))
-                           (make-instance 'protobuf-enum
-                             :class  (intern ename (symbol-package (slot-definition-name slot)))
-                             :name   (class-name->proto ename)
-                             :values (loop for name in names
-                                           for val in enums
-                                           for index upfrom 0
-                                           collect (make-instance 'protobuf-enum-value
-                                                     :name name
-                                                     :index index
-                                                     :value val))))))
-             (reqd  (clos-type-to-protobuf-required (find-slot-definition-type class slot) type-filter))
-             (field (make-instance 'protobuf-field
-                      :name  (slot-name->proto (slot-definition-name slot))
-                      :type  (if enum (class-name->proto ename) type)
-                      :class (if enum (intern ename (symbol-package (slot-definition-name slot))) pclass)
-                      :required reqd
-                      :index index
-                      :value   (slot-definition-name slot)
-                      :reader  (let ((reader (find-slot-definition-reader class slot)))
-                                 ;; Only use the reader if it is "interesting"
-                                 (unless (string= (symbol-name reader)
-                                                  (format nil "~A-~A" 
-                                                          (class-name class) (slot-definition-name slot)))
-                                   reader))
-                      :default (clos-init-to-protobuf-default (slot-definition-initform slot) value-filter)
-                      :packed  packed)))
-        (values field nil enum)))))
+    (multiple-value-bind (expanded-type unexpanded-type)
+       (find-slot-definition-type class slot)
+      (multiple-value-bind (type pclass packed enums)
+          (clos-type-to-protobuf-type expanded-type type-filter enum-filter)
+        (let* ((ename (and enums
+                           (if (and unexpanded-type (symbolp unexpanded-type))
+                             (symbol-name unexpanded-type)
+                             (format nil "~A-~A" 'enum (slot-definition-name slot)))))
+               (etype (and enums
+                           (if (and unexpanded-type (symbolp unexpanded-type))
+                             unexpanded-type
+                             (intern ename (symbol-package (slot-definition-name slot))))))
+               (enum  (and enums
+                           (let* ((names (mapcar #'enum-name->proto enums))
+                                  (prefix (and (> (length names) 1)
+                                               (subseq (first names)
+                                                       0 (mismatch (first names) (car (last names)))))))
+                             (when (and prefix (> (length prefix) 2)
+                                        (every #'(lambda (name) (starts-with name prefix)) names))
+                               (setq names (mapcar #'(lambda (name) (subseq name (length prefix))) names)))
+                             (unless (and unexpanded-type (symbolp unexpanded-type))
+                               (protobufs-warn "Use DEFTYPE to define a MEMBER type instead of directly using ~S" type))
+                             (make-instance 'protobuf-enum
+                               :class  etype
+                               :name   (class-name->proto ename)
+                               :values (loop for name in names
+                                             for val in enums
+                                             for index upfrom 0
+                                             collect (make-instance 'protobuf-enum-value
+                                                       :name name
+                                                       :index index
+                                                       :value val))))))
+               (reqd  (clos-type-to-protobuf-required (find-slot-definition-type class slot) type-filter))
+               (field (make-instance 'protobuf-field
+                        :name  (slot-name->proto (slot-definition-name slot))
+                        :type  (if enum (class-name->proto ename) type)
+                        :class (if enum etype pclass)
+                        :required reqd
+                        :index index
+                        :value   (slot-definition-name slot)
+                        :reader  (let ((reader (find-slot-definition-reader class slot)))
+                                   ;; Only use the reader if it is "interesting"
+                                   (unless (string= (symbol-name reader)
+                                                    (format nil "~A-~A" 
+                                                            (class-name class) (slot-definition-name slot)))
+                                     reader))
+                        :default (clos-init-to-protobuf-default (slot-definition-initform slot) value-filter)
+                        :packed  packed)))
+          (values field nil enum))))))
 
 ;; Given a class and a slot descriptor, find the "best" type definition for the slot
-;;--- Surely we can get more info to 'clos-type-to-protobuf-type' for member/enum types
 (defun find-slot-definition-type (class slotd)
   (let* ((slot-name    (slot-definition-name slotd))
          (direct-slotd (some #'(lambda (c)
@@ -151,10 +160,16 @@
       ;; The direct slotd will have an unexpanded definition
       ;; Prefer it for 'list-of' so we can get the base type
       (let ((type (slot-definition-type direct-slotd)))
-        (if (and (listp type) (member (car type) '(list-of #+quux quux:list-of)))
-          type
-          (slot-definition-type slotd)))
-      (slot-definition-type slotd))))
+        (values (if (and (listp type) (member (car type) '(list-of #+quux quux:list-of)))
+                  type
+                  (slot-definition-type slotd))
+                (if (symbolp type)
+                  type
+                  (when (and (listp type)
+                             (eql (car type) 'or)
+                             (member 'null (cdr type)))
+                    (find-if-not #'(lambda (s) (eq s 'null)) (cdr type))))))
+      (values (slot-definition-type slotd) nil))))
 
 ;; Given a class and a slot descriptor, find the name of a reader method for the slot
 (defun find-slot-definition-reader (class slotd)
@@ -227,7 +242,6 @@
                                    (or (null x) (integerp x))) values)
                         (values "int32" :int32))
                        (t
-                        (protobufs-warn "Use DEFTYPE to define a MEMBER type instead of directly using ~S" type)
                         (let ((values (remove-if #'null values)))
                           (values (class-name->proto type)
                                   type

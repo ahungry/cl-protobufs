@@ -75,9 +75,13 @@
                (parse-protobuf-file proto-file lisp-file)
                (setq lisp-date (file-write-date lisp-file)))))
       ;; Compile the .lisp file, if necessary
-      (when (or (not fasl-date)
-                (< fasl-date lisp-date))
-        (setq fasl-file (compile-file lisp-file))
-        (setq fasl-date (file-write-date fasl-file)))
-      ;; Now we can load the .fasl file
-      (load fasl-file))))
+      (cond ((not lisp-date)
+             (unless (string= (pathname-type base-file) "proto")
+               (warn "Could not find the file to be imported ~A" proto-file)))
+            (t
+             (when (or (not fasl-date)
+                       (< fasl-date lisp-date))
+               (setq fasl-file (compile-file lisp-file))
+               (setq fasl-date (file-write-date fasl-file)))
+             ;; Now we can load the .fasl file
+             (load fasl-file))))))
