@@ -572,10 +572,10 @@
 (defun enum-size (val values tag)
   "Returns the size in bytes that the enum object will take when serialized."
   (declare (type (unsigned-byte 32) tag))
-  (let ((val (let ((e (find val values :key #'proto-value)))
+  (let ((idx (let ((e (find val values :key #'proto-value)))
                (and e (proto-index e)))))
-    (declare (type (unsigned-byte 32) val))
-    (i+ (length32 tag) (length32 val))))
+    (assert idx () "There is no enum value for ~S" val)
+    (i+ (length32 tag) (length32 idx))))
 
 
 ;;; Raw encoders
@@ -590,7 +590,7 @@
            (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
   ;; Seven bits at a time, least significant bits first
-  (loop do (let ((bits (ldb #.(byte 7 0) val)))
+  (loop do (let ((bits (ldb (byte 7 0) val)))
              (declare (type (unsigned-byte 8) bits))
              (setq val (ash val -7))
              (setf (aref buffer index) (ilogior bits (if (zerop val) 0 128)))
@@ -607,7 +607,7 @@
   (declare (type (unsigned-byte 64) val)
            (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
-  (loop do (let ((bits (ldb #.(byte 7 0) val)))
+  (loop do (let ((bits (ldb (byte 7 0) val)))
              (declare (type (unsigned-byte 8) bits))
              (setq val (ash val -7))
              (setf (aref buffer index) (ilogior bits (if (zerop val) 0 128)))
@@ -625,7 +625,7 @@
            (type fixnum index))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
     (loop repeat 4 doing
-      (let ((byte (ldb #.(byte 8 0) val)))
+      (let ((byte (ldb (byte 8 0) val)))
         (declare (type (unsigned-byte 8) byte))
         (setq val (ash val -8))
         (setf (aref buffer index) byte)
@@ -642,7 +642,7 @@
            (type fixnum index))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
     (loop repeat 8 doing
-      (let ((byte (ldb #.(byte 8 0) val)))
+      (let ((byte (ldb (byte 8 0) val)))
         (declare (type (unsigned-byte 8) byte))
         (setq val (ash val -8))
         (setf (aref buffer index) byte)
@@ -659,7 +659,7 @@
            (type fixnum index))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
     (loop repeat 4 doing
-      (let ((byte (ldb #.(byte 8 0) val)))
+      (let ((byte (ldb (byte 8 0) val)))
         (declare (type (unsigned-byte 8) byte))
         (setq val (ash val -8))
         (setf (aref buffer index) byte)
@@ -676,7 +676,7 @@
            (type fixnum index))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
     (loop repeat 8 doing
-      (let ((byte (ldb #.(byte 8 0) val)))
+      (let ((byte (ldb (byte 8 0) val)))
         (declare (type (unsigned-byte 8) byte))
         (setq val (ash val -8))
         (setf (aref buffer index) byte)
@@ -693,7 +693,7 @@
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
     (let ((bits (single-float-bits val)))
       (loop repeat 4 doing
-        (let ((byte (ldb #.(byte 8 0) bits)))
+        (let ((byte (ldb (byte 8 0) bits)))
           (declare (type (unsigned-byte 8) byte))
           (setq bits (ash bits -8))
           (setf (aref buffer index) byte)
@@ -711,13 +711,13 @@
     (multiple-value-bind (low high)
         (double-float-bits val)
       (loop repeat 4 doing
-        (let ((byte (ldb #.(byte 8 0) low)))
+        (let ((byte (ldb (byte 8 0) low)))
           (declare (type (unsigned-byte 8) byte))
           (setq low (ash low -8))
           (setf (aref buffer index) byte)
           (iincf index)))
       (loop repeat 4 doing
-        (let ((byte (ldb #.(byte 8 0) high)))
+        (let ((byte (ldb (byte 8 0) high)))
           (declare (type (unsigned-byte 8) byte))
           (setq high (ash high -8))
           (setf (aref buffer index) byte)
@@ -754,7 +754,7 @@
   (loop with val = 0
         for places fixnum upfrom 0 by 7
         for byte fixnum = (prog1 (aref buffer index) (iincf index))
-        do (setq val (logior val (ash (ldb #.(byte 7 0) byte) places)))
+        do (setq val (logior val (ash (ldb (byte 7 0) byte) places)))
         until (i< byte 128)
         finally (progn
                   (assert (< val #.(ash 1 32)) ()
@@ -772,7 +772,7 @@
   (loop with val = 0
         for places fixnum upfrom 0 by 7
         for byte fixnum = (prog1 (aref buffer index) (iincf index))
-        do (setq val (logior val (ash (ldb #.(byte 7 0) byte) places)))
+        do (setq val (logior val (ash (ldb (byte 7 0) byte) places)))
         until (i< byte 128)
         finally (return (values val index))))
 
@@ -804,7 +804,7 @@
             for places fixnum upfrom 0 by 8
             for byte fixnum = (prog1 (aref buffer index) (iincf index))
             do (setq val (logior val (ash byte places))))
-      (when (i= (ldb #.(byte 1 31) val) 1)              ;sign bit set, so negative value
+      (when (i= (ldb (byte 1 31) val) 1)              ;sign bit set, so negative value
         (decf val #.(ash 1 32)))
       (values val index))))
 
@@ -836,7 +836,7 @@
             for places fixnum upfrom 0 by 8
             for byte fixnum = (prog1 (aref buffer index) (iincf index))
             do (setq val (logior val (ash byte places))))
-      (when (i= (ldb #.(byte 1 63) val) 1)             ;sign bit set, so negative value
+      (when (i= (ldb (byte 1 63) val) 1)             ;sign bit set, so negative value
         (decf val #.(ash 1 64)))
       (values val index))))
 
@@ -853,7 +853,7 @@
             for places fixnum upfrom 0 by 8
             for byte fixnum = (prog1 (aref buffer index) (iincf index))
             do (setq bits (logior bits (ash byte places))))
-      (when (i= (ldb #.(byte 1 31) bits) 1)             ;sign bit set, so negative value
+      (when (i= (ldb (byte 1 31) bits) 1)             ;sign bit set, so negative value
         (decf bits #.(ash 1 32)))
       (values (make-single-float bits) index))))
 
@@ -876,7 +876,7 @@
             for byte fixnum = (prog1 (aref buffer index) (iincf index))
             do (setq high (logior high (ash byte places))))
       ;; High bits are signed, but low bits are unsigned
-      (when (i= (ldb #.(byte 1 31) high) 1)             ;sign bit set, so negative value
+      (when (i= (ldb (byte 1 31) high) 1)             ;sign bit set, so negative value
         (decf high #.(ash 1 32)))
       (values (make-double-float low high) index))))
 
