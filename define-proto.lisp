@@ -114,7 +114,7 @@
                         collect (make-instance 'protobuf-option
                                   :name  key
                                   :value val)))
-         (index 0)
+         (index -1)
          (enum  (make-instance 'protobuf-enum
                   :class  type
                   :name   name

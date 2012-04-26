@@ -25,13 +25,20 @@
   (let* ((x (string-upcase (string x)))
          (x (if (and prefix (starts-with x prefix)) (subseq x (length prefix)) x)))
     (remove-if-not #'(lambda (x) (or (alphanumericp x) (eql x #\_)))
-                   (format nil "~{~A~^_~}" (split-string x :separators '(#\- #\_ #\/ #\. #\space))))))
+                   (format nil "~{~A~^_~}"
+                           (split-string x :separators '(#\- #\_ #\/ #\. #\space))))))
 
-;; "slot-name" -> "slotName"
+;; "slot-name" -> "slot_name" or "slotName"
+(defvar *camel-case-field-names* nil)
 (defun slot-name->proto (x)
   "Given a Lisp slot name, returns a Protobufs field name."
-  (remove-if-not #'alphanumericp
-                 (camel-case-but-one (format nil "~A" x) :separators '(#\- #\_ #\/ #\. #\space))))
+  (if *camel-case-field-names*
+    (remove-if-not #'alphanumericp
+                   (camel-case-but-one (format nil "~A" x) :separators '(#\- #\_ #\/ #\. #\space)))
+    (let ((x (string-downcase (string x))))
+      (remove-if-not #'(lambda (x) (or (alphanumericp x) (eql x #\_)))
+                     (format nil "~{~A~^_~}"
+                             (split-string x :separators '(#\- #\_ #\/ #\. #\space)))))))
 
 
 ;; "ClassName" -> "class-name"
@@ -43,10 +50,11 @@
 ;; "ENUM_VALUE" -> "enum-name"
 (defun proto->enum-name (x &optional package)
   "Given a Protobufs enum value name, returns a Lisp enum value name."
-  (let ((name (format nil "~{~A~^-~}" (split-string (string-upcase x) :separators '(#\_)))))
+  (let ((name (format nil "~{~A~^-~}"
+                      (split-string (string-upcase x) :separators '(#\_)))))
     (if package (intern name package) (make-symbol name))))
 
-;; "slotName" -> "slot-name", "slot_name" -> "slot-name"
+;; "slot_name" or "slotName" -> "slot-name"
 (defun proto->slot-name (x &optional package)
   "Given a Protobufs field value name, returns a Lisp slot name."
   (let ((name (format nil "~{~A~^-~}" (split-string (nstring-upcase (uncamel-case x)) :separators '(#\_)))))
