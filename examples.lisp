@@ -557,6 +557,7 @@ service ColorWheel {
 #||
 (proto:define-proto color-wheel
     (:package color-wheel
+     :optimize :speed
      :documentation "Color wheel example")
   (proto:define-message color-wheel
       (:conc-name color-wheel-)

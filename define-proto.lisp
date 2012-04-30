@@ -89,13 +89,12 @@
                                    ',type ',name)
                    (map () #'protobufs-warn warnings))))
              (setq ,var new-proto)
-             #+++ignore (
              ,@(when (eq optimize :speed)
                  (mapcar #'generate-object-size (proto-messages protobuf)))
              ,@(when (eq optimize :speed)
                  (mapcar #'generate-serializer (proto-messages protobuf)))
              ,@(when (eq optimize :speed)
-                 (mapcar #'generate-deserializer (proto-messages protobuf))) )
+                 (mapcar #'generate-deserializer (proto-messages protobuf)))
              new-proto))))))
 
 ;; Define an enum type named 'type' and a Lisp 'deftype'
