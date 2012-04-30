@@ -80,7 +80,7 @@ Model classes
   proto:protobuf                                                [Class]
 
 The class the represents a Protobufs schema, i.e., one .proto file.
-It has slots for the name, options, enums, messages and services.  The
+It has slots for the name, options, enums, messages and services. The
 name is equal to the name of the .proto file, without the file type.
 
 
@@ -206,8 +206,10 @@ for the classes, generating any necessary enum types that correspond to
 Lisp ``member`` types. The return value is the model rooted at ``proto:protobuf``.
 
 *name* and *package* can be supplied to give the Protobufs name and
-*package.  lisp-package* can be supplied to give the name of the Lisp
-*package, if it is different from *package*.
+package. *lisp-package* can be supplied to give the name of the Lisp
+package, if it is different from *package*. (Note that you should
+still use ``in-package`` at the top of .lisp files, and it should
+match the value of *lisp-package*.)
 
 *slot-filter*, *type-filter*, *enum-filter* and *value-filter* are
 filtering functions that can be used to weed out things from the Lisp
@@ -215,7 +217,7 @@ classes that should not be included in the Protobufs schema.
 
 *slot-filter* is a function of two arguments, a list of all the slots
 in the class and the slot currently being processed, and should return
-``t`` if the slot is to be kept or ``nil`` if it to be discarded.  For
+``t`` if the slot is to be kept or ``nil`` if it to be discarded. For
 example, if there are internal implementation slots in a class that
 need not appear in the Protobufs description, it can be used to filter
 them out.
@@ -246,8 +248,8 @@ pretty-prints the result onto *stream*. *type* can be either ``:proto``
 (the default) or ``:lisp``. The return value is the model rooted at ``proto:protobuf``.
 
 *name* and *package* can be supplied to give the Protobufs name and
-*package.  lisp-package* can be supplied to give the name of the Lisp
-*package, if it is different from *package*.
+package. *lisp-package* can be supplied to give the name of the Lisp
+package, if it is different from *package*.
 
 *slot-filter*, *type-filter*, *enum-filter* and *value-filter* are
 as for ``proto:generate-protobuf-schema-for-classes``.

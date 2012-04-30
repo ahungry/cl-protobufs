@@ -47,7 +47,8 @@
                      :documentation documentation))
          (*protobuf* protobuf)
          (*protobuf-package* (or (find-package lisp-pkg)
-                                 (find-package (string-upcase lisp-pkg)))))
+                                 (find-package (string-upcase lisp-pkg))
+				 *package*)))
     (apply #'process-imports imports)
     (with-collectors ((forms collect-form))
       (dolist (msg messages)
@@ -75,7 +76,7 @@
                (setf (proto-extenders protobuf) (nconc (proto-extenders protobuf) (list model)))))
             ((define-service)
              (setf (proto-services protobuf) (nconc (proto-services protobuf) (list model)))))))
-      (let ((var (fintern "*~A*" type)))
+      (let ((var (intern (format nil "*~A*" type) *protobuf-package*)))
         `(progn
            ,@forms
            (defvar ,var nil)
