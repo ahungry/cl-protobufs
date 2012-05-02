@@ -69,9 +69,9 @@
                      qres-core::airport
                      qres-core::timezone
                      qres-core::tz-variation
-                     qres-core::carrier
                      qres-core::currency
                      qres-core::country-currencies
+                     qres-core::carrier
                      geodata)))
 
 (proto:write-protobuf bizd-schema)
@@ -94,9 +94,9 @@
                  qres-core::airport
                  qres-core::timezone
                  qres-core::tz-variation
-                 qres-core::carrier
                  qres-core::currency
                  qres-core::country-currencies
+                 qres-core::carrier
                  geodata))
   (let ((message (proto-impl:find-message bizd-schema class)))
     (eval (proto-impl:generate-object-size  message))

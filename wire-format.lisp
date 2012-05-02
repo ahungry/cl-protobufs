@@ -162,7 +162,10 @@
   (if (member type '(:int32 :uint32 :int64 :uint64 :sint32 :sint64
                      :fixed32 :sfixed32 :fixed64 :sfixed64
                      :string :bytes :bool :float :double))
-    `(locally (declare (optimize (speed 3) (safety 0) (debug 0)))
+    `(locally (declare (optimize (speed 3) (safety 0) (debug 0))
+                       (type (simple-array (unsigned-byte 8)) ,buffer)
+                       ;; 'tag' is a constant, no need to declare its type
+                       (type fixnum ,index))
        (let ((idx (encode-uint32 ,tag ,buffer ,index)))
          (declare (type fixnum idx))
          ,(ecase type
@@ -245,7 +248,9 @@
   (if (member type '(:int32 :uint32 :int64 :uint64 :sint32 :sint64
                      :fixed32 :sfixed32 :fixed64 :sfixed64
                      :float :double))
-    `(locally (declare (optimize (speed 3) (safety 0) (debug 0)))
+    `(locally (declare (optimize (speed 3) (safety 0) (debug 0))
+                       (type (simple-array (unsigned-byte 8)) ,buffer)
+                       (type fixnum ,index))
        (let ((idx (encode-uint32 ,tag ,buffer ,index)))
          (declare (type fixnum idx))
          (multiple-value-bind (full-len len)
@@ -350,7 +355,9 @@
   (if (member type '(:int32 :uint32 :int64 :uint64 :sint32 :sint64
                      :fixed32 :sfixed32 :fixed64 :sfixed64
                      :string :bytes :bool :float :double))
-    `(locally (declare (optimize (speed 3) (safety 0) (debug 0)))
+    `(locally (declare (optimize (speed 3) (safety 0) (debug 0))
+                       (type (simple-array (unsigned-byte 8)) ,buffer)
+                       (type fixnum ,index))
        ,(ecase type
           ((:int32 :uint32)
            `(decode-uint32 ,buffer ,index))
@@ -432,6 +439,53 @@
                    (decode-double buffer idx)))
               (collect-value val)
               (setq idx nidx))))))))
+
+(define-compiler-macro deserialize-packed (&whole form type buffer index)
+  (if (member type '(:int32 :uint32 :int64 :uint64 :sint32 :sint64
+                     :fixed32 :sfixed32 :fixed64 :sfixed64
+                     :float :double))
+    `(locally (declare (optimize (speed 3) (safety 0) (debug 0))
+                       (type (simple-array (unsigned-byte 8)) ,buffer)
+                       (type fixnum ,index))
+       (multiple-value-bind (len idx)
+           (decode-uint32 .buffer ,index)
+         (declare (type (unsigned-byte 32) len)
+                  (type fixnum idx))
+         (let ((end (i+ idx len)))
+           (declare (type (unsigned-byte 32) end))
+           (with-collectors ((values collect-value))
+             (loop
+               (when (>= idx end)
+                 (return-from deserialize-packed (values values idx)))
+               (multiple-value-bind (val nidx)
+                   ,(ecase type
+                      ((:int32 :uint32)
+                       `(decode-uint32 ,buffer idx))
+                      ((:int64 :uint64)
+                       `(decode-uint64 ,buffer idx))
+                      ((:sint32)
+                       `(multiple-value-bind (val idx)
+                            (decode-uint32 ,buffer idx)
+                          (values (zig-zag-decode32 val) idx)))
+                      ((:sint64)
+                       `(multiple-value-bind (val idx)
+                            (decode-uint64 ,buffer idx)
+                          (values (zig-zag-decode64 val) idx)))
+                      ((:fixed32)
+                       `(decode-fixed32 ,buffer idx))
+                      ((:sfixed32)
+                       `(decode-sfixed32 ,buffer idx))
+                      ((:fixed64)
+                       `(decode-fixed64 ,buffer idx))
+                      ((:sfixed64)
+                       `(decode-sfixed64 ,buffer idx))
+                      ((:float)
+                       `(decode-single ,buffer idx))
+                      ((:double)
+                       `(decode-double ,buffer idx)))
+                 (collect-value val)
+                 (setq idx nidx)))))))
+    form))
 
 (defun deserialize-enum (values buffer index)
   "Deserializes the next enum value take from 'values'.
