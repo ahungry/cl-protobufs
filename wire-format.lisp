@@ -139,7 +139,7 @@
         ((:sfixed64)
          (encode-sfixed64 val buffer idx))
         ((:string)
-         (encode-octets (babel:string-to-octets val :encoding :utf-8) buffer idx))
+         (encode-string val buffer idx))
         ((:bytes)
          (encode-octets val buffer idx))
         ((:bool)
@@ -154,7 +154,7 @@
                       (string val)
                       ;; Non-keyword symbols are consy, avoid them if possible
                       (format nil "~A:~A" (package-name (symbol-package val)) (symbol-name val)))))
-           (encode-octets (babel:string-to-octets val :encoding :utf-8) buffer idx)))
+           (encode-string val buffer idx)))
         ((:date :time :datetime :timestamp)
          (encode-uint64 val buffer idx))))))
 
@@ -183,7 +183,7 @@
             ((:sfixed64)
              `(encode-sfixed64 ,val ,buffer idx))
             ((:string)
-             `(encode-octets (babel:string-to-octets ,val :encoding :utf-8) ,buffer idx))
+             `(encode-string ,val ,buffer idx))
             ((:bytes)
              `(encode-octets ,val ,buffer idx))
             ((:bool)
@@ -326,9 +326,7 @@
       ((:sfixed64)
        (decode-sfixed64 buffer index))
       ((:string)
-       (multiple-value-bind (val idx)
-           (decode-octets buffer index)
-         (values (babel:octets-to-string val :encoding :utf-8) idx)))
+       (decode-string buffer index))
       ((:bytes)
        (decode-octets buffer index))
       ((:bool)
@@ -343,9 +341,8 @@
       ((:symbol)
        ;; Note that this is consy, avoid it if possible
        (multiple-value-bind (val idx)
-           (decode-octets buffer index)
-         (let ((val (babel:octets-to-string val :encoding :utf-8)))
-           (values (make-lisp-symbol val) idx))))
+           (decode-string buffer index)
+         (values (make-lisp-symbol val) idx)))
       ((:date :time :datetime :timestamp)
        (decode-uint64 buffer index)))))
 
@@ -376,9 +373,7 @@
           ((:sfixed64)
            `(decode-sfixed64 ,buffer ,index))
           ((:string)
-           `(multiple-value-bind (val idx)
-                (decode-octets ,buffer ,index)
-              (values (babel:octets-to-string val :encoding :utf-8) idx)))
+           `(decode-string ,buffer ,index))
           ((:bytes)
            `(decode-octets ,buffer ,index))
           ((:bool)
@@ -724,6 +719,21 @@
           (iincf index)))))
   (values index buffer))
 
+(defun encode-string (string buffer index)
+  "Encodes the octets into the buffer at the given index.
+   Modifies the buffer, and returns the new index into the buffer.
+   Watch out, this function turns off most type checking and all array bounds checking."
+  (declare (type (simple-array (unsigned-byte 8)) buffer)
+           (type fixnum index))
+  (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
+    (let* ((octets (babel:string-to-octets string :encoding :utf-8))
+           (len (length octets))
+           (idx (encode-uint32 len buffer index)))
+      (declare (type fixnum len)
+               (type (unsigned-byte 32) idx))
+      (replace buffer octets :start1 idx)
+      (values (i+ idx len) buffer))))
+
 (defun encode-octets (octets buffer index)
   "Encodes the octets into the buffer at the given index.
    Modifies the buffer, and returns the new index into the buffer.
@@ -879,6 +889,19 @@
       (when (i= (ldb (byte 1 31) high) 1)             ;sign bit set, so negative value
         (decf high #.(ash 1 32)))
       (values (make-double-float low high) index))))
+
+(defun decode-string (buffer index)
+  "Decodes the next UTF-8 encoded string in the buffer at the given index.
+   Returns both the decoded string and the new index into the buffer.
+   Watch out, this function turns off most type checking and all array bounds checking."
+  (declare (type (simple-array (unsigned-byte 8)) buffer)
+           (type fixnum index))
+  (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
+    (multiple-value-bind (len idx)
+        (decode-uint32 buffer index)
+      (declare (type (unsigned-byte 32) len)
+               (type fixnum idx))
+      (values (babel:octets-to-string buffer :start idx :end (i+ idx len) :encoding :utf-8) (i+ idx len)))))
 
 (defun decode-octets (buffer index)
   "Decodes the next octets in the buffer at the given index.
