@@ -63,9 +63,10 @@
 
 (defun make-lisp-symbol (string)
   "Intern a string of the 'package:string' and return the symbol."
-  (let* ((colon (position #\: string))
-         (pkg   (if colon (subseq string 0 colon) "KEYWORD"))
-         (sym   (if colon (subseq string (+ colon 1)) string)))
+  (let* ((string (string string))
+         (colon  (position #\: string))
+         (pkg    (if colon (subseq string 0 colon) "KEYWORD"))
+         (sym    (if colon (subseq string (+ colon 1)) string)))
     (intern sym pkg)))
 
 #-quux

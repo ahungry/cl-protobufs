@@ -612,3 +612,99 @@ service ColorWheel {
     #+stubby (add-color request)
     #+ignore (add-color request)))
 ||#
+
+#||
+(let ((ps "syntax = \"proto2\";
+
+package color_wheel;
+
+option optimize_for = SPEED;
+
+message ColorWheel {
+  required string name = 1;
+  repeated Color colors = 2;
+  optional group Metadata = 3 {
+    optional string author = 1;
+    optional string revision = 2;
+    optional string date = 3;
+  }
+}
+
+message Color {
+  optional string name = 1;
+  required int64 r_value = 2;
+  required int64 g_value = 3;
+  required int64 b_value = 4;
+  extensions 1000 to max;
+}
+
+extend Color {
+  optional int64 opacity = 1000;
+}
+
+message GetColorRequest {
+  required ColorWheel wheel = 1;
+  required string name = 2;
+}
+
+message AddColorRequest {
+  required ColorWheel wheel = 1;
+  required Color color = 2;
+}
+
+service ColorWheel {
+  rpc GetColor (GetColorRequest) returns (Color) {
+    option deadline = \"1.0\";
+  }
+  rpc AddColor (AddColorRequest) returns (Color) {
+    option deadline = \"1.0\";
+  }
+}"))
+  (with-input-from-string (s ps)
+    (setq cw (proto:parse-protobuf-from-stream s))))
+
+(proto:define-proto color-wheel
+    (:package color-wheel
+     :optimize :speed
+     :documentation "Color wheel example, with groups")
+  (proto:define-message color-wheel ()
+    (name :type string)
+    (colors :type (list-of color))
+    (proto:define-group metadata
+        (:index 3
+         :arity :optional)
+      (author :type (or null string))
+      (revision :type (or null string))
+      (date :type (or null string))))
+  (proto:define-message color ()
+    (name :type (or null string))
+    (r-value :type integer)
+    (g-value :type integer)
+    (b-value :type integer))
+  (proto:define-message get-color-request ()
+    (wheel :type color-wheel)
+    (name :type string))
+  (proto:define-message add-color-request ()
+    (wheel :type color-wheel)
+    (color :type color))
+  (proto:define-service color-wheel ()
+    (get-color (get-color-request color))
+    (add-color (add-color-request color))))
+
+(proto:write-protobuf *color-wheel*)
+(proto:write-protobuf *color-wheel* :type :lisp)
+
+(progn ;with-rpc-channel (rpc)
+  (let* ((meta1  (make-instance 'metadata :revision "1.0"))
+         (wheel  (make-instance 'color-wheel :name "Colors" :metadata meta1))
+         (color1 (make-instance 'color :r-value 100 :g-value 0 :b-value 100))
+         (rqst1  (make-instance 'add-color-request :wheel wheel :color color1)))
+    #-ignore (progn
+               (format t "~2&Unextended~%")
+               (let ((ser1 (proto:serialize-object-to-stream rqst1 'add-color-request :stream nil)))
+                 (print ser1)
+                 (proto:print-text-format rqst1)
+                 (proto:print-text-format (proto:deserialize-object 'add-color-request ser1))))
+    #+stubby (add-color request)
+    #+ignore (add-color request)))
+||#

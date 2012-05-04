@@ -224,7 +224,7 @@
                               (reader (and field (proto-reader field)))
                               (writer (and field (proto-writer field)))
                               msg)
-			 (if (null field)
+                         (if (null field)
                            ;; If there's no field descriptor for this index, just skip
                            ;; the next element in the buffer having the given wire type
                            (setq index (skip-element buffer index tag))

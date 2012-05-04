@@ -78,10 +78,6 @@
             :accessor proto-imports
             :initarg :imports
             :initform ())
-   (optimize :type (member nil :space :speed)
-             :accessor proto-optimize
-             :initarg :optimize
-             :initform nil)
    (enums :type (list-of protobuf-enum)         ;the set of enum types
           :accessor proto-enums
           :initarg :enums
@@ -156,7 +152,11 @@
    (value :type (or null string)                ;the value
           :accessor proto-value
           :initarg :value
-          :initform nil))
+          :initform nil)
+   (type :type (or null symbol)                 ;(optional) Lisp type,
+         :reader proto-type                     ;  one of string, integer, sybol (for now)
+         :initarg :type
+         :initform 'string))
   (:documentation
    "The model class that represents a Protobufs options, i.e., a keyword/value pair."))
 
@@ -167,13 +167,20 @@
   (print-unreadable-object (o stream :type t :identity t)
     (format stream "~A~@[ = ~S~]" (proto-name o) (proto-value o))))
 
+(defgeneric find-option (protobuf name)
+  (:documentation
+   "Given a protobuf schema, message, enum, etc and the name of an option,
+    returns the value of the option and its (Lisp) type."))
+
 (defmethod find-option ((protobuf base-protobuf) (name string))
   (let ((option (find name (proto-options protobuf) :key #'proto-name :test #'option-name=)))
-    (and option (proto-value option))))
+    (and option
+         (values (proto-value option) (proto-type option)))))
 
 (defmethod find-option ((options list) (name string))
   (let ((option (find name options :key #'proto-name :test #'option-name=)))
-    (and option (proto-value option))))
+    (and option
+         (values (proto-value option) (proto-type option)))))
 
 (defun option-name= (name1 name2)
   (let ((start1 (if (eql (char name1 0) #\() 1 0))
@@ -259,18 +266,22 @@
                :accessor proto-extensions
                :initarg :extensions
                :initform ())
-   (extension-p :type (member t nil)            ;true iff this message extends another message
-                :accessor proto-extension-p
-                :initarg :extension-p
-                :initform nil))
+   ;; :message is an ordinary message
+   ;; :group is a (deprecated) group (kind of an "implicit" message)
+   ;; :extends is an 'extends' to an existing message
+   (message-type :type (member :message :group :extends)
+                 :accessor proto-message-type
+                 :initarg :message-type
+                 :initform :message))
     (:documentation
    "The model class that represents a Protobufs message."))
 
 (defmethod initialize-instance :after ((message protobuf-message) &rest initargs)
   (declare (ignore initargs))
   ;; Record this message under just its Lisp class name
-  (with-slots (class extension-p) message
-    (when (and class (not extension-p))
+  ;; No need to record an extension, it's already been recorded
+  (with-slots (class message-type) message
+    (when (and class (not (eql message-type :extends)))
       (setf (gethash class *all-messages*) message))))
 
 (defmethod make-load-form ((m protobuf-message) &optional environment)
@@ -278,8 +289,10 @@
 
 (defmethod print-object ((m protobuf-message) stream)
   (print-unreadable-object (m stream :type t :identity t)
-    (format stream "~S~@[ (alias for ~S)~]~@[ (extended~*)~]"
-            (proto-class m) (proto-alias-for m) (proto-extension-p m))))
+    (format stream "~S~@[ (alias for ~S)~]~@[ (group~*)~]~@[ (extended~*)~]"
+            (proto-class m) (proto-alias-for m)
+            (eql (proto-message-type m) :group)
+            (eql (proto-message-type m) :extends))))
 
 (defmethod find-message ((message protobuf-message) (type symbol))
   ;; Extended messages "shadow" non-extended ones
@@ -336,10 +349,11 @@
            :accessor proto-packed
            :initarg :packed
            :initform nil)
-   (extension-p :type (member t nil)            ;true iff this field is an extension
-                :accessor proto-extension-p
-                :initarg :extension-p
-                :initform nil))
+   ;; Copied from 'proto-message-type' of the field
+   (message-type :type (member :message :group :extends)
+                 :accessor proto-message-type
+                 :initarg :message-type
+                 :initform :message))
   (:documentation
    "The model class that represents one field within a Protobufs message."))
 
@@ -354,8 +368,10 @@
 
 (defmethod print-object ((f protobuf-field) stream)
   (print-unreadable-object (f stream :type t :identity t)
-    (format stream "~S :: ~S = ~D~@[ (extended~*)~]"
-            (proto-value f) (proto-class f) (proto-index f) (proto-extension-p f))))
+    (format stream "~S :: ~S = ~D~@[ (group~*)~]~@[ (extended~*)~]"
+            (proto-value f) (proto-class f) (proto-index f)
+            (eql (proto-message-type f) :group)
+            (eql (proto-message-type f) :extends))))
 
 
 ;; An extension within a message

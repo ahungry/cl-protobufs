@@ -44,14 +44,17 @@
   "If what appears next in the stream is a comment, skip it and any following comments,
    then skip any following whitespace."
   (loop
-    (unless (eql (peek-char nil stream nil) #\/)
-      (return)
+    (let ((ch (peek-char nil stream nil)))
+      (when (or (null ch) (not (eql ch #\/)))
+        (return-from maybe-skip-comments))
       (read-char stream)
       (case (peek-char nil stream nil)
         ((#\/)
          (skip-line-comment stream))
         ((#\*)
          (skip-block-comment stream))
+        ((nil)
+         (return-from maybe-skip-comments))
         (otherwise
          (error "Found a '~C' at position ~D to start a comment, but no following '~C' or '~C'"
                 #\/ (file-position stream) #\/ #\*)))))
@@ -179,7 +182,7 @@
                      :class class
                      :name  name))
          (*protobuf* protobuf)
-         (*protobuf-package* nil))
+         (*protobuf-package* *package*))
     (loop
       (skip-whitespace stream)
       (maybe-skip-comments stream)
@@ -198,17 +201,12 @@
                         (let* ((option (parse-proto-option stream protobuf))
                                (name   (and option (proto-name option)))
                                (value  (and option (proto-value option))))
-                          (when option
-                            (cond ((option-name= name "optimize_for")
-                                   (let ((value (cond ((string= value "SPEED") :speed)
-                                                      ((string= value "CODE_SIZE") :space)
-                                                      (t nil))))
-                                     (setf (proto-optimize protobuf) value)))
-                                  ((option-name= name "lisp_package")
-                                   (let ((package (or (find-package value)
-                                                      (find-package (string-upcase value)))))
-                                     (setf (proto-lisp-package protobuf) value)
-                                     (setq *protobuf-package* package)))))))
+                          (when (and option (option-name= name "lisp_package"))
+                            (let ((package (or (find-package value)
+                                               (find-package (string-upcase value))
+                                               *protobuf-package*)))
+                              (setf (proto-lisp-package protobuf) value)
+                              (setq *protobuf-package* package)))))
                        ((string= token "enum")
                         (parse-proto-enum stream protobuf))
                        ((string= token "extend")
@@ -242,7 +240,8 @@
     (unless (proto-lisp-package protobuf)
       (setf (proto-lisp-package protobuf) lisp-pkg))
     (let ((package (or (find-package lisp-pkg)
-                       (find-package (string-upcase lisp-pkg)))))
+                       (find-package (string-upcase lisp-pkg))
+                       *protobuf-package*)))
       (setq *protobuf-package* package))))
 
 (defun parse-proto-import (stream protobuf &optional (terminator #\;))
@@ -299,7 +298,7 @@
           (let ((alias (find-option enum "lisp_alias")))
             (when alias
               (setf (proto-alias-for enum) (make-lisp-symbol alias))))
-          (return-from parse-proto-enum))
+          (return-from parse-proto-enum enum))
         (if (string= name "option")
           (parse-proto-option stream enum #\;)
           (parse-proto-enum-value stream enum name))))))
@@ -316,14 +315,15 @@
                   :name  name
                   :index idx
                   :value (proto->enum-name name *protobuf-package*))))
-    (setf (proto-values enum) (nconc (proto-values enum) (list value)))))
+    (setf (proto-values enum) (nconc (proto-values enum) (list value)))
+    value))
 
 
-(defun parse-proto-message (stream protobuf)
+(defun parse-proto-message (stream protobuf &optional name)
   "Parse a Protobufs 'message' from 'stream'.
    Updates the 'protobuf' or 'protobuf-message' object to have the message."
   (check-type protobuf (or protobuf protobuf-message))
-  (let* ((name (prog1 (parse-token stream)
+  (let* ((name (prog1 (or name (parse-token stream))
                  (expect-char stream #\{ "message")
                  (maybe-skip-comments stream)))
          (message (make-instance 'protobuf-message
@@ -343,7 +343,7 @@
           (let ((alias (find-option message "lisp_alias")))
             (when alias
               (setf (proto-alias-for message) (make-lisp-symbol alias))))
-          (return-from parse-proto-message))
+          (return-from parse-proto-message message))
         (cond ((string= token "enum")
                (parse-proto-enum stream message))
               ((string= token "extend")
@@ -378,7 +378,7 @@
                          :enums    (copy-list (proto-enums message))
                          :messages (copy-list (proto-messages message))
                          :fields   (copy-list (proto-fields message))
-                         :extension-p t))))             ;this message is an extension
+                         :message-type :extends))))     ;this message is an extension
     (loop
       (let ((token (parse-token stream)))
         (when (null token)
@@ -392,7 +392,7 @@
           (let ((alias (find-option extends "lisp_alias")))
             (when alias
               (setf (proto-alias-for extends) (make-lisp-symbol alias))))
-          (return-from parse-proto-extend))
+          (return-from parse-proto-extend extends))
         (cond ((member token '("required" "optional" "repeated") :test #'string=)
                (parse-proto-field stream extends token message))
               ((string= token "option")
@@ -405,21 +405,54 @@
   "Parse a Protobufs field from 'stream'.
    Updates the 'protobuf-message' object to have the field."
   (check-type message protobuf-message)
-  (let* ((type (parse-token stream))
-         (name (prog1 (parse-token stream)
+  (let ((type (parse-token stream)))
+    (if (string= type "group")
+      (parse-proto-group stream message required extended-from)
+      (let* ((name (prog1 (parse-token stream)
+                     (expect-char stream #\= "message")))
+             (idx  (parse-int stream))
+             (opts (prog1 (parse-proto-field-options stream)
+                     (expect-char stream #\; "message")
+                     (maybe-skip-comments stream)))
+             (dflt   (find-option opts "default"))
+             (packed (find-option opts "packed"))
+             (ptype  (if (member type '("int32" "int64" "uint32" "uint64" "sint32" "sint64"
+                                        "fixed32" "fixed64" "sfixed32" "sfixed64"
+                                        "string" "bytes" "bool" "float" "double") :test #'string=)
+                       (kintern type)
+                       type))
+             (class  (if (keywordp ptype) ptype (proto->class-name type *protobuf-package*)))
+             (field  (make-instance 'protobuf-field
+                       :name  name
+                       :value (proto->slot-name name *protobuf-package*)
+                       :type  type
+                       :class class
+                       ;; One of :required, :optional or :repeated
+                       :required (kintern required)
+                       :index idx
+                       :default dflt
+                       :packed  (and packed (string= packed "true"))
+                       :message-type (proto-message-type message))))
+        (when extended-from
+          (assert (index-within-extensions-p idx extended-from) ()
+                  "The index ~D is not in range for extending ~S"
+                  idx (proto-class extended-from)))
+        (let ((slot (find-option opts "lisp_name")))
+          (when slot
+            (setf (proto-value field) (make-lisp-symbol type))))
+        (setf (proto-fields message) (nconc (proto-fields message) (list field)))
+        field))))
+
+(defun parse-proto-group (stream message required &optional extended-from)
+  "Parse a (deprecated) Protobufs group from 'stream'.
+   Updates the 'protobuf-message' object to have the group type and field."
+  (check-type message protobuf-message)
+  (let* ((type (prog1 (parse-token stream)
                  (expect-char stream #\= "message")))
+         (name (slot-name->proto (proto->slot-name type)))
          (idx  (parse-int stream))
-         (opts (prog1 (parse-proto-field-options stream)
-                 (expect-char stream #\; "message")
-                 (maybe-skip-comments stream)))
-         (dflt   (find-option opts "default"))
-         (packed (find-option opts "packed"))
-         (ptype  (if (member type '("int32" "int64" "uint32" "uint64" "sint32" "sint64"
-                                    "fixed32" "fixed64" "sfixed32" "sfixed64"
-                                    "string" "bytes" "bool" "float" "double") :test #'string=)
-                   (kintern type)
-                   type))
-         (class  (if (keywordp ptype) ptype (proto->class-name type *protobuf-package*)))
+         (msg  (parse-proto-message stream message type))
+         (class  (proto->class-name type *protobuf-package*))
          (field  (make-instance 'protobuf-field
                    :name  name
                    :value (proto->slot-name name *protobuf-package*)
@@ -428,17 +461,14 @@
                    ;; One of :required, :optional or :repeated
                    :required (kintern required)
                    :index idx
-                   :default dflt
-                   :packed  (and packed (string= packed "true"))
-                   :extension-p (proto-extension-p message))))
+                   :message-type :group)))
+    (setf (proto-message-type msg) :group)
     (when extended-from
       (assert (index-within-extensions-p idx extended-from) ()
               "The index ~D is not in range for extending ~S"
               idx (proto-class extended-from)))
-    (let ((slot (find-option opts "lisp_name")))
-      (when slot
-        (setf (proto-value field) (make-lisp-symbol type))))
-    (setf (proto-fields message) (nconc (proto-fields message) (list field)))))
+    (setf (proto-fields message) (nconc (proto-fields message) (list field)))
+    field))
 
 (defun parse-proto-field-options (stream)
   "Parse any options in a Protobufs field from 'stream'.
@@ -463,11 +493,13 @@
             "Expected 'to' in 'extensions' at position ~D" (file-position stream))
     (assert (or (integerp to) (string= to "max")) ()
             "Extension value is not an integer or 'max' as position ~D" (file-position stream))
-    (setf (proto-extensions message)
-          (nconc (proto-extensions message)
-                 (list (make-instance 'protobuf-extension
-                         :from from
-                         :to   (if (integerp to) to #.(1- (ash 1 29)))))))))
+    (let ((extension (make-instance 'protobuf-extension
+                       :from from
+                       :to   (if (integerp to) to #.(1- (ash 1 29))))))
+      (setf (proto-extensions message)
+            (nconc (proto-extensions message)
+                   (list extension)))
+      extension)))
 
 
 (defun parse-proto-service (stream protobuf)
@@ -486,7 +518,7 @@
           (expect-char stream #\} "service")
           (maybe-skip-comments stream)
           (setf (proto-services protobuf) (nconc (proto-services protobuf) (list service)))
-          (return-from parse-proto-service))
+          (return-from parse-proto-service service))
         (cond ((string= token "option")
                (parse-proto-option stream service #\;))
               ((string= token "rpc")
@@ -525,7 +557,8 @@
         (setf (proto-function method) (make-lisp-symbol name))))
     (assert (string= ret "returns") ()
             "Syntax error in 'message' at position ~D" (file-position stream))
-    (setf (proto-methods service) (nconc (proto-methods service) (list method)))))
+    (setf (proto-methods service) (nconc (proto-methods service) (list method)))
+    method))
 
 (defun parse-proto-method-options (stream)
   "Parse any options in a Protobufs method from 'stream'.

@@ -42,13 +42,17 @@
                      :package  package
                      :lisp-package (or lisp-pkg package)
                      :imports  imports
-                     :options  options
-                     :optimize optimize
+                     :options  (if optimize
+                                 (append options (list (make-instance 'protobuf-option
+                                                         :name  "optimize_for"
+                                                         :value (if (eq optimize :speed) "SPEED" "CODE_SIZE")
+                                                         :type  'symbol)))
+                                 options)
                      :documentation documentation))
          (*protobuf* protobuf)
          (*protobuf-package* (or (find-package lisp-pkg)
                                  (find-package (string-upcase lisp-pkg))
-				 *package*)))
+                                 *package*)))
     (apply #'process-imports imports)
     (with-collectors ((forms collect-form))
       (dolist (msg messages)
@@ -72,7 +76,7 @@
             ((define-message define-extend)
              (setf (proto-parent model) protobuf)
              (setf (proto-messages protobuf) (nconc (proto-messages protobuf) (list model)))
-             (when (proto-extension-p model)
+             (when (eql (proto-message-type model) :extends)
                (setf (proto-extenders protobuf) (nconc (proto-extenders protobuf) (list model)))))
             ((define-service)
              (setf (proto-services protobuf) (nconc (proto-services protobuf) (list model)))))))
@@ -174,7 +178,6 @@
                         collect (make-instance 'protobuf-option
                                   :name  key
                                   :value val)))
-         (index   0)
          (message (make-instance 'protobuf-message
                     :class type
                     :name  name
@@ -182,13 +185,14 @@
                     :conc-name (and conc-name (string conc-name))
                     :options  options
                     :documentation documentation))
+         (index 0)
          (*protobuf* message))
     (with-collectors ((slots collect-slot)
                       (forms collect-form))
       (dolist (field fields)
         (case (car field)
-          ((define-enum define-message define-extend define-extension)
-           (destructuring-bind (&optional progn type model definers)
+          ((define-enum define-message define-extend define-extension define-group)
+           (destructuring-bind (&optional progn type model definers extra-field extra-slot)
                (macroexpand-1 field env)
              (assert (eq progn 'progn) ()
                      "The macroexpansion for ~S failed" field)
@@ -199,8 +203,14 @@
                ((define-message define-extend)
                 (setf (proto-parent model) message)
                 (setf (proto-messages message) (nconc (proto-messages message) (list model)))
-                (when (proto-extension-p model)
+                (when (eql (proto-message-type model) :extends)
                   (setf (proto-extenders message) (nconc (proto-extenders message) (list model)))))
+               ((define-group)
+                (setf (proto-parent model) message)
+                (setf (proto-messages message) (nconc (proto-messages message) (list model)))
+                (when extra-slot
+                  (collect-slot extra-slot))
+                (setf (proto-fields message) (nconc (proto-fields message) (list extra-field))))
                ((define-extension)
                 (setf (proto-extensions message) (nconc (proto-extensions message) (list model)))))))
           (otherwise
@@ -248,7 +258,6 @@
                         collect (make-instance 'protobuf-option
                                   :name  key
                                   :value val)))
-         (index   0)
          (message   (find-message *protobuf* name))
          (conc-name (and message (proto-conc-name message)))
          (alias-for (and message (proto-alias-for message)))
@@ -263,8 +272,9 @@
                          :messages (copy-list (proto-messages message))
                          :fields   (copy-list (proto-fields message))
                          :options  (or options (copy-list (proto-options message)))
-                         :extension-p t                 ;this message is an extension
-                         :documentation documentation))))
+                         :message-type :extends         ;this message is an extension
+                         :documentation documentation)))
+         (index 0))
     (assert message ()
             "There is no message named ~A to extend" name)
     (assert (eq type (proto-class message)) ()
@@ -273,7 +283,7 @@
     (with-collectors ((forms collect-form))
       (dolist (field fields)
         (assert (not (member (car field)
-                             '(define-enum define-message define-extend define-extension))) ()
+                             '(define-enum define-message define-extend define-extension define-group))) ()
                 "The body of ~S can only contain field definitions" 'define-extend)
         (multiple-value-bind (field slot idx)
             (process-field field index :conc-name conc-name :alias-for alias-for)
@@ -308,12 +318,125 @@
               ;; This so that (de)serialization works
               (setf (proto-reader field) reader
                     (proto-writer field) writer)))
-          (setf (proto-extension-p field) t)            ;this field is an extension
+          (setf (proto-message-type field) :extends)    ;this field is an extension
           (setf (proto-fields extends) (nconc (proto-fields extends) (list field)))))
       `(progn
          define-extend
          ,extends
          ,forms))))
+
+(defmacro define-group (type (&key index arity name conc-name alias-for options documentation)
+                        &body fields &environment env)
+  "Define a message named 'type' and a Lisp 'defclass', *and* a field named type.
+   This is deprecated in Protobufs, but if you have to use it, you must give
+   'index' as the field index and 'arity' of :required, :optional or :repeated.
+   'name' can be used to override the defaultly generated Protobufs message name.
+   The body consists of fields, or 'define-enum' or 'define-message' forms.
+   'conc-name' will be used as the prefix to the Lisp slot accessors, if it's supplied.
+   If 'alias-for' is given, no Lisp class is defined. Instead, the message will be
+   used as an alias for a class that already exists in Lisp. This feature is intended
+   to be used to define messages that will be serialized from existing Lisp classes;
+   unless you get the slot names or readers exactly right for each field, it will be
+   the case that trying to (de)serialize into a Lisp object won't work.
+   'options' is a set of keyword/value pairs, both of which are strings.
+
+   Fields take the form (slot &key type name default reader)
+   'slot' can be either a symbol giving the field name, or a list whose
+   first element is the slot name and whose second element is the index.
+   'type' is the type of the slot.
+   'name' can be used to override the defaultly generated Protobufs field name.
+   'default' is the default value for the slot.
+   'reader' is a Lisp slot reader function to use to get the value, instead of
+   using 'slot-value'; this is often used when aliasing an existing class.
+   'writer' is a Lisp slot writer function to use to set the value."
+  (check-type index integer)
+  (check-type arity (member :required :optional :repeated))
+  (let* ((slot    (or (and name (proto->slot-name name)) type))
+         (name    (or name (class-name->proto type)))
+         (options (loop for (key val) on options by #'cddr
+                        collect (make-instance 'protobuf-option
+                                  :name  key
+                                  :value val)))
+         (mslot   (unless alias-for
+                    `(,slot ,@(case arity
+                                (:required
+                                 `(:type ,type))
+                                (:optional
+                                 `(:type (or ,type null)
+                                   :initform nil))
+                                (:repeated
+                                 `(:type (list-of ,type)
+                                   :initform ())))
+                            :initarg ,(kintern (symbol-name slot)))))
+         (mfield  (make-instance 'protobuf-field
+                    :name  (slot-name->proto slot)
+                    :value slot
+                    :type  name
+                    :class type
+                    ;; One of :required, :optional or :repeated
+                    :required arity
+                    :index index
+                    :message-type :group))
+         (message (make-instance 'protobuf-message
+                    :class type
+                    :name  name
+                    :alias-for alias-for
+                    :conc-name (and conc-name (string conc-name))
+                    :options  options
+                    :message-type :group                ;this message is a group
+                    :documentation documentation))
+         (index 0)
+         (*protobuf* message))
+    (with-collectors ((slots collect-slot)
+                      (forms collect-form))
+      (dolist (field fields)
+        (case (car field)
+          ((define-enum define-message define-extend define-extension define-group)
+           (destructuring-bind (&optional progn type model definers extra-field extra-slot)
+               (macroexpand-1 field env)
+             (assert (eq progn 'progn) ()
+                     "The macroexpansion for ~S failed" field)
+             (map () #'collect-form definers)
+             (ecase type
+               ((define-enum)
+                (setf (proto-enums message) (nconc (proto-enums message) (list model))))
+               ((define-message define-extend)
+                (setf (proto-parent model) message)
+                (setf (proto-messages message) (nconc (proto-messages message) (list model)))
+                (when (eql (proto-message-type model) :extends)
+                  (setf (proto-extenders message) (nconc (proto-extenders message) (list model)))))
+               ((define-group)
+                (setf (proto-parent model) message)
+                (setf (proto-messages message) (nconc (proto-messages message) (list model)))
+                (when extra-slot
+                  (collect-slot extra-slot))
+                (setf (proto-fields message) (nconc (proto-fields message) (list extra-field))))
+               ((define-extension)
+                (setf (proto-extensions message) (nconc (proto-extensions message) (list model)))))))
+          (otherwise
+           (multiple-value-bind (field slot idx)
+               (process-field field index :conc-name conc-name :alias-for alias-for)
+             (assert (not (find (proto-index field) (proto-fields message) :key #'proto-index)) ()
+                     "The field ~S overlaps with another field in ~S"
+                     (proto-value field) (proto-class message))
+             (setq index idx)
+             (when slot
+               (collect-slot slot))
+             (setf (proto-fields message) (nconc (proto-fields message) (list field)))))))
+      (if alias-for
+        ;; If we've got an alias, define a a type that is the subtype of
+        ;; the Lisp class that typep and subtypep work
+        (unless (or (eq type alias-for) (find-class type nil))
+          (collect-form `(deftype ,type () ',alias-for)))
+        ;; If no alias, define the class now
+        (collect-form `(defclass ,type () (,@slots)
+                         ,@(and documentation `((:documentation ,documentation))))))
+      `(progn
+         define-group
+         ,message
+         ,forms
+         ,mfield
+         ,mslot))))
 
 (defun process-field (field index &key conc-name alias-for)
   "Process one field descriptor within 'define-message' or 'define-extend'.
