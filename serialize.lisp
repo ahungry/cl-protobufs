@@ -213,8 +213,7 @@
                          (return-from deserialize
                            (values object index)))
                        (setq index idx)
-                       (let* ((wtype (ilogand tag #x7))
-                              (fidx  (ilogand (iash tag -3) #x1FFFFFFF))
+                       (let* ((fidx  (ilogand (iash tag -3) #x1FFFFFFF))
                               (field (find fidx (proto-fields message) :key #'proto-index))
                               (type  (and field (if (eq (proto-class field) 'boolean) :bool (proto-class field))))
                               ;; It's OK for this to be null
@@ -225,10 +224,10 @@
                               (reader (and field (proto-reader field)))
                               (writer (and field (proto-writer field)))
                               msg)
-                         (if (null field)
+			 (if (null field)
                            ;; If there's no field descriptor for this index, just skip
                            ;; the next element in the buffer having the given wire type
-                           (setq index (skip-element buffer index wtype))
+                           (setq index (skip-element buffer index tag))
                            ;;--- Check for mismatched wire type, running past end of buffer, etc
                            (cond ((and field (eq (proto-required field) :repeated))
                                   (cond ((and (proto-packed field) (packed-type-p type))
@@ -582,7 +581,7 @@
                  (case tag
                    ,@deserializers
                    (otherwise
-                    (setq ,vidx (skip-element ,vbuf ,vidx (ilogand tag #x7))))))))))))))
+                    (setq ,vidx (skip-element ,vbuf ,vidx tag)))))))))))))
 
 ;; Note well: keep this in sync with the main 'object-size' method above
 (defun generate-object-size (message)

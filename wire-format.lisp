@@ -18,6 +18,8 @@
 (defconstant $wire-type-varint 0)
 (defconstant $wire-type-64bit  1)
 (defconstant $wire-type-string 2)
+(defconstant $wire-type-start-group 3)          ;supposedly obsolete
+(defconstant $wire-type-end-group   4)          ;supposedly obsolete
 (defconstant $wire-type-32bit  5)
 
 (defun make-tag (type index)
@@ -998,15 +1000,15 @@
 
 ;;; Skipping elements
 
-(defun skip-element (buffer index wire-type)
+(defun skip-element (buffer index tag)
   "Skip an element in the buffer at the index of the given wire type.
    Returns the new index in the buffer.
    Watch out, this function turns off all type checking and all array bounds checking."
   (declare (optimize (speed 3) (safety 0) (debug 0)))
   (declare (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index)
-           (type (unsigned-byte 32) wire-type))
-  (case wire-type
+           (type (unsigned-byte 32) tag))
+  (case (ilogand tag #x7)
     (($wire-type-varint)
      (loop for byte fixnum = (prog1 (aref buffer index) (iincf index))
            until (i< byte 128))
@@ -1021,4 +1023,15 @@
      (i+ index 4))
     (($wire-type-64bit)
      (i+ index 8))
+    (($wire-type-start-group)
+     (loop (multiple-value-bind (new-tag idx)
+               (decode-uint32 buffer index)
+             (cond ((not (i= (ilogand new-tag #x7) $wire-type-start-group))
+                    (setq index (skip-element buffer idx new-tag)))
+                   ;; Clever test for matching end group number
+                   ((i= (i- tag $wire-type-start-group) (i- new-tag $wire-type-end-group))
+                    (return idx))
+                   (t
+                    (assert (i= (i- tag $wire-type-start-group) (i- new-tag $wire-type-end-group)) ()
+                            "Couldn't find a matching end group tag"))))))
     (t index)))

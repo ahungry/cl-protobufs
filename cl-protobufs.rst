@@ -199,11 +199,13 @@ classes as well) until you have a good Protobufs schema definition.
 
   proto:generate-protobuf-schema-for-classes (classes           [Function]
                                               &key name package lisp-package
-                                                   slot-filter type-filter enum-filter value-filter)
+                                                   slot-filter type-filter enum-filter value-filter
+                                                   alias-existing-classes)
 
 Given a list of class names *classes*, this generates a Protobufs schema
 for the classes, generating any necessary enum types that correspond to
-Lisp ``member`` types. The return value is the model rooted at ``proto:protobuf``.
+Lisp ``member`` types. The return value is the model, rooted at instance
+of ``proto:protobuf``.
 
 *name* and *package* can be supplied to give the Protobufs name and
 package. *lisp-package* can be supplied to give the name of the Lisp
@@ -236,16 +238,23 @@ they can be discarded by the filter.
 initform. It should transform the value into a scalar value suitable
 for Protobufs.
 
+If *alias-existing-classes* is true (the default), the generated
+code will include ``:alias-for`` so that there will be no clash
+with the existing Lisp class.
 
 ::
 
   proto:write-protobuf-schema-for-classes (classes              [Function]
-                                           &key stream type name package lisp-package)
+                                           &key stream type name package lisp-package
+                                                slot-filter type-filter enum-filter value-filter
+                                                alias-existing-classes)
 
 Given a list of class names *classes*, this generates a Protobufs schema
 for the classes, generating enum types as necessary, and then
 pretty-prints the result onto *stream*. *type* can be either ``:proto``
-(the default) or ``:lisp``. The return value is the model rooted at ``proto:protobuf``.
+(the default) or ``:lisp``; it controls which format the generated
+code will be printed in. The return value is the model, rooted at an
+instance of ``proto:protobuf``.
 
 *name* and *package* can be supplied to give the Protobufs name and
 package. *lisp-package* can be supplied to give the name of the Lisp
@@ -253,6 +262,8 @@ package, if it is different from *package*.
 
 *slot-filter*, *type-filter*, *enum-filter* and *value-filter* are
 as for ``proto:generate-protobuf-schema-for-classes``.
+
+*alias-existing-classes* is as for ``proto:generate-protobuf-schema-for-classes``.
 
 
 Using .proto files directly

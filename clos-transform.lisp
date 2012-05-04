@@ -13,13 +13,21 @@
 
 ;;; Protocol buffer generation from ordinary CLOS classes
 
+;; Controls whether or not to use ':alias-for' for the Protobuf generated
+;; for an existing Lisp class
+;; The default is presently true because, at least initially, we'll be using
+;; the generated Protobufs code in the Lisp world that includes that classes
+;; from which the code was generated
+(defvar *alias-existing-classes* t)
+
 ;; Doing this can't really work perfectly, there's not enough information
 ;;  - How do we decide if there's an ownership hierarchy that should produce embedded messages?
 ;;  - How do we decide if there are volatile slots that should not be included in the message?
 (defun write-protobuf-schema-for-classes (classes
                                           &key (stream *standard-output*) (type :proto)
                                                name package lisp-package
-                                               slot-filter type-filter enum-filter value-filter)
+                                               slot-filter type-filter enum-filter value-filter
+                                               (alias-existing-classes *alias-existing-classes*))
   "Given a set of CLOS classes, generates a Protobufs schema for the classes
    and pretty prints the schema to the stream.
    The return value is the schema."
@@ -30,7 +38,8 @@
                     :slot-filter slot-filter
                     :type-filter type-filter
                     :enum-filter enum-filter
-                    :value-filter value-filter)))
+                    :value-filter value-filter
+                    :alias-existing-classes alias-existing-classes)))
     (fresh-line stream)
     (write-protobuf protobuf :stream stream :type type)
     (terpri stream)
@@ -38,10 +47,12 @@
 
 (defun generate-protobuf-schema-for-classes (classes
                                              &key name package lisp-package
-                                                  slot-filter type-filter enum-filter value-filter)
+                                                  slot-filter type-filter enum-filter value-filter
+                                                  (alias-existing-classes *alias-existing-classes*))
   "Given a set of CLOS classes, generates a Protobufs schema for the classes.
    The return value is the schema."
-  (let* ((package  (and package (if (stringp package) package (string-downcase (string package)))))
+  (let* ((*alias-existing-classes* alias-existing-classes)
+         (package  (and package (if (stringp package) package (string-downcase (string package)))))
          (lisp-pkg (string (or lisp-package package)))
          (protobuf (make-instance 'protobuf
                      :name name
@@ -58,11 +69,6 @@
     (setf (proto-messages protobuf) messages)
     protobuf))
 
-
-;; Controls whether or not to use ':alias-for' for the generated Protobuf
-;; Bind this to 'true' when you plan to use the generated Protobufs code in
-;; a Lisp world that includes that classes from which the code was generated
-(defvar *alias-existing-classes* nil)
 
 (defun class-to-protobuf-message (class protobuf
                                   &key slot-filter type-filter enum-filter value-filter)
@@ -212,7 +218,8 @@
                (clos-type-to-protobuf-type (first tail))))
             ((and)
              (cond #+quux
-                   ((subtypep type '(quux:list-of t))
+                   ((ignore-errors
+                      (subtypep type '(quux:list-of t)))
                     ;; Special knowledge of Quux 'list-of', which uses (and list (satisfies <t>))
                     (let* ((satisfies (find 'satisfies tail :key #'car))
                            (pred (second satisfies))
@@ -278,9 +285,10 @@
             ((float double-float)
              (type->protobuf-type head))
             (otherwise
-             (if (subtypep head '(or string character))
+             (if (ignore-errors
+                   (subtypep type '(or string character symbol)))
                (values "string" :string)
-               (error "Don't know how to translate the type ~S" head)))))
+               (error "Don't know how to translate the type ~S" type)))))
         (type->protobuf-type type)))))
 
 (defun packed-type-p (class)
