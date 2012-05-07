@@ -15,12 +15,17 @@
 
 ;;; Utilities
 
+(eval-when (:compile-toplevel :load-toplevel :execute)
+
 (defconstant $wire-type-varint 0)
 (defconstant $wire-type-64bit  1)
 (defconstant $wire-type-string 2)
 (defconstant $wire-type-start-group 3)          ;supposedly obsolete
 (defconstant $wire-type-end-group   4)          ;supposedly obsolete
 (defconstant $wire-type-32bit  5)
+
+)       ;eval-when
+
 
 (defun make-tag (type index)
   "Given a wire type or the name of a Protobufs type and a field index,
