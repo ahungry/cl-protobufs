@@ -628,6 +628,8 @@ Lisp class) or a ``proto:protobuf-message``.
 
 The encoded bytes come from the byte array given by *buffer*, starting
 at the fixnum index *start* up to the end of the buffer, given by *end*.
+*start* defaults to 0, *end*' defaults to the length of the buffer.
+
 If a zero byte is encountered in in the "tag position" during
 deserialization, this is interpreted as an "end of object" marker
 and deserialization stops.

@@ -663,48 +663,71 @@ service ColorWheel {
   (with-input-from-string (s ps)
     (setq cw (proto:parse-protobuf-from-stream s))))
 
-(proto:define-proto color-wheel
+(proto:define-proto color-wheel1
     (:package color-wheel
-     :optimize :speed
-     :documentation "Color wheel example, with groups")
-  (proto:define-message color-wheel ()
+     ;; :optimize :speed
+     :documentation "Color wheel example, with nested")
+  (proto:define-message color-wheel1 ()
+    (proto:define-message metadata1 ()
+      (author :type (or null string))
+      (revision :type (or null string))
+      (date :type (or null string)))
     (name :type string)
-    (colors :type (list-of color))
-    (proto:define-group metadata
+    (colors :type (list-of color1))
+    (metadata1 :type (or null metadata1)))
+  (proto:define-message color1 ()
+    (name :type (or null string))
+    (r-value :type integer)
+    (g-value :type integer)
+    (b-value :type integer))
+  (proto:define-message add-color1 ()
+    (wheel :type color-wheel1)
+    (color :type color1)))
+
+(proto:define-proto color-wheel2
+    (:package color-wheel
+     ;; :optimize :speed
+     :documentation "Color wheel example, with group")
+  (proto:define-message color-wheel2 ()
+    (name :type string)
+    (colors :type (list-of color2))
+    (proto:define-group metadata2
         (:index 3
          :arity :optional)
       (author :type (or null string))
       (revision :type (or null string))
       (date :type (or null string))))
-  (proto:define-message color ()
+  (proto:define-message color2 ()
     (name :type (or null string))
     (r-value :type integer)
     (g-value :type integer)
     (b-value :type integer))
-  (proto:define-message get-color-request ()
-    (wheel :type color-wheel)
-    (name :type string))
-  (proto:define-message add-color-request ()
-    (wheel :type color-wheel)
-    (color :type color))
-  (proto:define-service color-wheel ()
-    (get-color (get-color-request color))
-    (add-color (add-color-request color))))
+  (proto:define-message add-color2 ()
+    (wheel :type color-wheel2)
+    (color :type color2)))
 
-(proto:write-protobuf *color-wheel*)
-(proto:write-protobuf *color-wheel* :type :lisp)
+(proto:write-protobuf *color-wheel1*)
+(proto:write-protobuf *color-wheel2*)
 
 (progn ;with-rpc-channel (rpc)
-  (let* ((meta1  (make-instance 'metadata :revision "1.0"))
-         (wheel  (make-instance 'color-wheel :name "Colors" :metadata meta1))
-         (color1 (make-instance 'color :r-value 100 :g-value 0 :b-value 100))
-         (rqst1  (make-instance 'add-color-request :wheel wheel :color color1)))
+  (let* ((meta1  (make-instance 'metadata1 :revision "1.0"))
+         (wheel1 (make-instance 'color-wheel1 :name "Colors" :metadata1 meta1))
+         (color1 (make-instance 'color1 :r-value 100 :g-value 0 :b-value 100))
+         (rqst1  (make-instance 'add-color1 :wheel wheel1 :color color1))
+         (meta2  (make-instance 'metadata2 :revision "1.0"))
+         (wheel2 (make-instance 'color-wheel2 :name "Colors" :metadata2 meta2))
+         (color2 (make-instance 'color2 :r-value 100 :g-value 0 :b-value 100))
+         (rqst2  (make-instance 'add-color2 :wheel wheel2 :color color2)))
     #-ignore (progn
-               (format t "~2&Unextended~%")
-               (let ((ser1 (proto:serialize-object-to-stream rqst1 'add-color-request :stream nil)))
+               (format t "~2&Nested")
+               (let ((ser1 (proto:serialize-object-to-stream rqst1 'add-color1 :stream nil)))
                  (print ser1)
                  (proto:print-text-format rqst1)
-                 (proto:print-text-format (proto:deserialize-object 'add-color-request ser1))))
-    #+stubby (add-color request)
-    #+ignore (add-color request)))
+                 (proto:print-text-format (proto:deserialize-object 'add-color1 ser1))))
+    #-ignore (progn
+               (format t "~2&Group")
+               (let ((ser2 (proto:serialize-object-to-stream rqst2 'add-color2 :stream nil)))
+                 (print ser2)
+                 (proto:print-text-format rqst2)
+                 (proto:print-text-format (proto:deserialize-object 'add-color2 ser2))))))
 ||#
