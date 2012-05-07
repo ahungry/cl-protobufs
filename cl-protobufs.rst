@@ -11,7 +11,7 @@ Protobufs for Common Lisp
 
 :Description: Protobufs for Common Lisp
 :Author: Scott McKay <swm@google.com>
-:Date: $Date: 2012-04-10 14:18:00 -0500 (Tue, 10 Apr 2012) $
+:Date: $Date: 2012-05-07 14:58:00 -0500 (Mon, 7 May 2012) $
 
 .. contents::
 ..
@@ -46,7 +46,7 @@ Implementation notes
 
 The Protobufs library defines a set of model classes that describes a
 protobufs "schema" (i.e., one .proto file). There is a class that
-describes each schema, options, enums and enum values, messages and
+describes a schema, its options, enums and enum values, messages and
 fields, and services and methods.
 
 The library provides the means to convert several kinds of inputs into
@@ -83,7 +83,6 @@ The class the represents a Protobufs schema, i.e., one .proto file.
 It has slots for the name, options, enums, messages and services. The
 name is equal to the name of the .proto file, without the file type.
 
-
 ::
 
   proto:protobuf-option                                         [Class]
@@ -91,14 +90,12 @@ name is equal to the name of the .proto file, without the file type.
 The class that represents a Protobufs option.
 It has slots for a key and a value.
 
-
 ::
 
   proto:protobuf-enum                                           [Class]
 
 The class that represents a Protobufs enum type.
 It has slots for the enum name and its values.
-
 
 ::
 
@@ -164,7 +161,6 @@ Protobufs model (a set object objects rooted at ``proto:protobuf``)
 corresponding to the parsed file. The name of the Protobufs schema is
 generated automatically from the file name.
 
-
 ::
 
   proto:parse-protobuf-from-stream (stream &key name class)     [Function]
@@ -174,7 +170,6 @@ schema corresponding to the parsed file. If *name* is supplied, it gives
 the Protobufs name for the schema. If *class* is supplied, it gives the
 Lisp name.
 
-
 ::
 
   proto:write-protobuf (protobuf &key stream type)              [Function]
@@ -182,7 +177,7 @@ Lisp name.
 Pretty-prints the Protobufs schema *protobuf* onto the stream *stream*,
 which defaults to ``*standard-output*``.
 
-``type`` can be either ``:proto`` or ``:lisp``.
+*type* can be either ``:proto`` or ``:lisp``.
 
 
 CLOS classes to .proto conversion
@@ -204,7 +199,7 @@ classes as well) until you have a good Protobufs schema definition.
 
 Given a list of class names *classes*, this generates a Protobufs schema
 for the classes, generating any necessary enum types that correspond to
-Lisp ``member`` types. The return value is the model, rooted at instance
+Lisp ``member`` types. The return value is the model, rooted at an instance
 of ``proto:protobuf``.
 
 *name* and *package* can be supplied to give the Protobufs name and
@@ -369,7 +364,6 @@ looks like this::
 Note that Lisp types ``(or null <T>)`` turn into optional fields,
 and Lisp types ``(proto:list-of <T>)`` turn into repeated fields.
 
-
 ::
 
   proto:define-proto (type (&key name syntax import             [Macro]
@@ -412,7 +406,6 @@ in the .proto file.
 *body* consists of any number of calls to ``proto:define-enum``,
 ``proto:define-message``, ``proto:define-extend`` or ``proto:define-service``.
 
-
 ::
 
   proto:define-enum (type (&key name conc-name alias-for        [Macro]
@@ -441,8 +434,8 @@ in the .proto file.
 or a list of the form ``(name index)``. By default, the indexes start at
 0 and are incremented by 1 for each new enum value.
 
-This can only be used within ``proto:define-proto`` or ``proto:define-message``.
-
+``proto:define-enum`` can be used only within ``proto:define-proto``
+or ``proto:define-message``.
 
 ::
 
@@ -487,8 +480,26 @@ serialization, as opposed to using ``slot-value``; this is meant to be
 used when aliasing an existing class. *writer* can be similarly used
 to give a Lisp slot writer function.
 
-This can only be used within ``proto:define-proto`` or ``proto:define-message``.
+Note that the Protobufs does not support full Lisp type expressions in
+the types of fields. The following type expressions are supported:
 
+ - ``integer``, optionally with upper and lower bounds
+ - ``signed-byte`` and ``unsigned-byte``
+ - ``single-float`` and ``double-float``
+ - ``string``and ``character``
+ - ``(simple-array (unsigned-byte 8))``
+ - ``boolean``
+ - ``(member ...)``, where all the members are symbols or keywords or ``nil``
+ - the name of a class that corresponds to another Protobufs message
+ - ``(proto:list-of <T>)``, where ``<T>`` is any of the above types
+ - ``(or <T> null)``, where ``<T>`` is any of the above types
+
+``member`` corresponds to a Protobufs ``enum``, ``proto:list-of`` to
+a repeated field, and ``(or <T> null)`` to an optional field. The other
+types correspond to the various Protobufs scalar field types.
+
+``proto:define-message`` can be used only within ``proto:define-proto``
+or ``proto:define-message``.
 
 ::
 
@@ -496,7 +507,7 @@ This can only be used within ``proto:define-proto`` or ``proto:define-message``.
                                   options documentation)
                        &body fields)
 
-Defines a Protobuf "extend", that is, an extension to an existing
+Defines a Protobuf ``extend``, that is, an extension to an existing
 message (and corresponding Lisp class) that has additional fields that
 were reserved by ``proto:define-extension``. *type* and *name* are as
 for ``proto:define-message``. Note that no new Lisp class is defined;
@@ -512,8 +523,8 @@ in the .proto file.
 The body *fields* consists only of fields, which take the same form as
 they do for ``proto:define-message``.
 
-This can only be used within ``proto:define-proto`` or ``proto:define-message``.
-
+``proto:define-extend`` can be used only within ``proto:define-proto``
+or ``proto:define-message``.
 
 ::
 
@@ -523,8 +534,7 @@ Defines a field extension for the indexes from *from* to *to*.
 *from* and *to* are positive integers ranging from 1 to 2^29 - 1.
 *to* can also be the token ``max``, i.e., 2^29 - 1.
 
-This can only be used within ``proto:define-message``.
-
+``proto:define-extension`` can be used only within ``proto:define-message``.
 
 ::
 
@@ -547,7 +557,7 @@ The body is a set of method specs of the form
 *name* is a symbol naming the RPC method. *input-type* and
 *output-type* may either be symbols or a list of the form ``(type &key name)``.
 
-This can only be used within ``proto:define-message``.
+``proto:define-service`` can only be used within ``proto:define-proto``.
 
 
 Serializing and deserializing
@@ -573,13 +583,12 @@ using the wire format. *type* is the Lisp name of a Protobufs message
 
 The element type of *stream* must be ``(unsigned-byte 8)``.
 
-*visited* is an ``eql``-hash table used to cache object sizes. If it is
+*visited* is an ``eql`` hash table used to cache object sizes. If it is
 supplied, it will be cleared before it is used; otherwise, a fresh table
 will be created.
 
 The returned value is a byte vector containing the serialized object.
 If the stream is ``nil``, the buffer is not actually written anywhere.
-
 
 ::
 
@@ -597,13 +606,15 @@ The object is serialized using the wire format into the byte array
 (i.e., a vector whose type is ``(unsigned-byte 8)``) given by *buffer*,
 starting at the fixnum index *start* .
 
-*visited* is an ``eql``-hash table used to cache object sizes.
+*visited* is an ``eql`` hash table used to cache object sizes.
 
 The returned values are the modified buffer containing the serialized
 object and the index that points one past the last serialized byte in
 the buffer, which will be the number of bytes required to serialize the
 object if *start* was 0.
 
+Note that ``proto:serialize-object`` will not correctly serialize a
+set of objects that has cycles. You must resolve these yourself.
 
 ::
 
@@ -616,7 +627,6 @@ Lisp class) or a ``proto:protobuf-message``.
 The element type of *stream* must be ``(unsigned-byte 8)``.
 
 The returned value is the deserialized object.
-
 
 ::
 
@@ -637,7 +647,6 @@ and deserialization stops.
 The returned values are the deserialized object and the index into the
 buffer at which the deserialization ended.
 
-
 ::
 
   proto:object-size (object type &optional visited)             [Generic function]
@@ -647,7 +656,7 @@ Computes the size in bytes of the object *object* of type *type*.
 Lisp class) or a ``proto:protobuf-message``. *type* defaults to the
 class of *object*
 
-*visited* is an ``eql``-hash table used to cache object sizes.
+*visited* is an ``eql`` hash table used to cache object sizes.
 
 The returned value is the size of the serialized object in bytes.
 
@@ -664,7 +673,6 @@ Prints the object *object* of type *type* onto the stream *stream* using
 the textual format. *type* defaults to the class of *object*.
 
 If *suppress-line-breaks* is true, all the output is put on a single line.
-
 
 ::
 
@@ -690,14 +698,12 @@ similar to the API of the Python Protobufs library.
 
 Initializes all of the fields of *object* to their default values.
 
-
 ::
 
   proto:is-initialized (object)                                 [Generic function]
 
 Returns true iff all of the fields of *object* are initialized, i.e.,
 there are no fields whose value is unbound.
-
 
 ::
 
@@ -714,7 +720,6 @@ whose Lisp class corresponds to a Protobufs message.
 Deserializes the object encoded in *buffer* into *object*, starting at
 the index *start* and ending at *end*. *object* is an object whose Lisp
 class corresponds to a Protobufs message.
-
 
 ::
 
