@@ -109,7 +109,7 @@
    The token might be surrounded by parentheses.
    The returned value is the token."
   (let ((left (peek-char nil stream nil)))
-    (when (eq left #\()
+    (when (eql left #\()
       (read-char stream))
     (when (proto-token-char-p (peek-char nil stream nil))
       (loop for ch = (read-char stream nil)
@@ -118,7 +118,7 @@
             until (or (null ch1) (not (proto-token-char-p ch1)))
             finally (progn
                       (skip-whitespace stream)
-                      (when (eq left #\()
+                      (when (eql left #\()
                         (expect-char stream #\)))
                       (return (coerce token 'string)))))))
 

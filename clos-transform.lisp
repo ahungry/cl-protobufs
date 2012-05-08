@@ -127,7 +127,8 @@
                                         (every #'(lambda (name) (starts-with name prefix)) names))
                                (setq names (mapcar #'(lambda (name) (subseq name (length prefix))) names)))
                              (unless (and unexpanded-type (symbolp unexpanded-type))
-                               (protobufs-warn "Use DEFTYPE to define a MEMBER type instead of directly using ~S" type))
+                               (protobufs-warn "Use DEFTYPE to define a MEMBER type instead of directly using ~S"
+                                               expanded-type))
                              (make-instance 'protobuf-enum
                                :class  etype
                                :name   (class-name->proto ename)
@@ -172,7 +173,7 @@
                 (if (symbolp type)
                   type
                   (when (and (listp type)
-                             (eql (car type) 'or)
+                             (eq (car type) 'or)
                              (member 'null (cdr type)))
                     (find-if-not #'(lambda (s) (eq s 'null)) (cdr type))))))
       (values (slot-definition-type slotd) nil))))
@@ -195,7 +196,7 @@
                 (values "bool" :bool))
                ((integer)
                 (values "int64" :int64))
-               ((float)
+               ((single-float float)
                 (values "float" :float))
                ((double-float)
                 (values "double" :double))
@@ -212,7 +213,7 @@
             ((or)
              (when (or (> (length tail) 2)
                        (not (member 'null tail)))
-               (protobufs-warn "Can't handle the complicated OR type ~S" type))
+               (protobufs-warn "The OR type ~S is too complicated" type))
              (if (eq (first tail) 'null)
                (clos-type-to-protobuf-type (second tail))
                (clos-type-to-protobuf-type (first tail))))
@@ -231,8 +232,8 @@
                         (values type class (packed-type-p class)))))
                    (t
                     (let ((new-tail (remove-if #'(lambda (x) (and (listp x) (eq (car x) 'satisfies))) tail)))
-                      (assert (= (length new-tail) 1) ()
-                              "Can't handle the complicated AND type ~S" type)
+                      (when (> (length new-tail) 1)
+                        (protobufs-warn "The AND type ~S is too complicated" type))
                       (type->protobuf-type (first tail))))))
             ((member)                           ;maybe generate an enum type
              (if (or (equal type '(member t nil))
@@ -248,12 +249,14 @@
                        ((every #'(lambda (x)
                                    (or (null x) (integerp x))) values)
                         (values "int32" :int32))
-                       (t
+                       ((every #'(lambda (x) (symbolp x)) values)
                         (let ((values (remove-if #'null values)))
                           (values (class-name->proto type)
                                   type
                                   nil           ;don't pack enums
-                                  (if enum-filter (funcall enum-filter values) values))))))))
+                                  (if enum-filter (funcall enum-filter values) values))))
+                       (t
+                        (error "The MEMBER type ~S is too complicated" type))))))
             ((list-of #+quux quux:list-of)      ;special knowledge of 'list-of'
              (multiple-value-bind (type class)
                  (type->protobuf-type (first tail))
@@ -282,7 +285,7 @@
                (if (<= len 32)
                  (values "uint32" :uint32)
                  (values "uint64" :uint64))))
-            ((float double-float)
+            ((float single-float double-float)
              (type->protobuf-type head))
             (otherwise
              (if (ignore-errors

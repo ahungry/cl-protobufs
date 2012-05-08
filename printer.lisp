@@ -91,9 +91,9 @@
     (cond (colon-p                              ;~:/protobuf-option/ -- .proto format
            (let ((fmt-control
                   (cond ((find (proto-name option) *lisp-options* :key #'first :test #'string=)
-                         (if (eql type 'symbol) "(~A)~@[ = ~A~]" "(~A)~@[ = ~S~]"))
+                         (if (eq type 'symbol) "(~A)~@[ = ~A~]" "(~A)~@[ = ~S~]"))
                         (t
-                         (if (eql type 'symbol) "~A~@[ = ~A~]" "~A~@[ = ~S~]")))))
+                         (if (eq type 'symbol) "~A~@[ = ~A~]" "~A~@[ = ~S~]")))))
              (format stream fmt-control (proto-name option) (proto-value option))))
           (atsign-p                             ;~@/protobuf-option/ -- .lisp format
            (format stream "~S ~S" (proto-name option) (proto-value option)))
@@ -136,7 +136,7 @@
                               &key (indentation 0) more index arity)
   (declare (ignore more arity))
   (with-prefixed-accessors (name class alias-for message-type documentation options) (proto- message)
-    (cond ((eql message-type :group)
+    (cond ((eq message-type :group)
            ;; If we've got a group, the printer for fields has already
            ;; printed a partial line (nice modularity, huh?)
            (format stream "group ~A = ~D {~%" name index)
@@ -162,7 +162,7 @@
              (write-protobuf-documentation type documentation stream :indentation indentation))
            (format stream "~&~@[~VT~]~A ~A {~%"
                    (and (not (zerop indentation)) indentation)
-                   (if (eql message-type :message) "message" "extend") name)
+                   (if (eq message-type :message) "message" "extend") name)
            (let ((other (and class (not (string= name (class-name->proto class))) class)))
              (when other
                (format stream "~&~VToption (lisp_name) = \"~A:~A\";~%"
@@ -173,9 +173,9 @@
            (dolist (option options)
              (format stream "~&~VToption ~:/protobuf-option/;~%"
                      (+ indentation 2) option))
-           (cond ((eql message-type :extends)
+           (cond ((eq message-type :extends)
                   (loop for (field . more) on (proto-fields message) doing
-                    (when (eql (proto-message-type field) :extends)
+                    (when (eq (proto-message-type field) :extends)
                       (write-protobuf-as type field stream
                                          :indentation (+ indentation 2) :more more
                                          :message message))))
@@ -183,7 +183,7 @@
                   (loop for (enum . more) on (proto-enums message) doing
                     (write-protobuf-as type enum stream :indentation (+ indentation 2) :more more))
                   (loop for (msg . more) on (proto-messages message) doing
-                    (unless (eql (proto-message-type msg) :group)
+                    (unless (eq (proto-message-type msg) :group)
                       (write-protobuf-as type msg stream :indentation (+ indentation 2) :more more)))
                   (loop for (field . more) on (proto-fields message) doing
                     (write-protobuf-as type field stream
@@ -200,7 +200,7 @@
   (declare (ignore more))
   (with-prefixed-accessors (name documentation required index default packed) (proto- field)
     (let ((group (let ((msg (find-message message (proto-class field))))
-                   (and msg (eql (proto-message-type msg) :group) msg)))
+                   (and msg (eq (proto-message-type msg) :group) msg)))
           (dflt  (if (stringp default)
                    (if (i= (length default) 0) nil default)
                    default)))
@@ -369,7 +369,7 @@
                               &key (indentation 0) more index arity)
   (declare (ignore more))
   (with-prefixed-accessors (name class alias-for conc-name message-type documentation) (proto- message)
-    (cond ((eql message-type :group)
+    (cond ((eq message-type :group)
            (when documentation
              (write-protobuf-documentation type documentation stream :indentation indentation))
            (format stream "~&~@[~VT~](proto:define-group ~(~S~)"
@@ -403,9 +403,9 @@
              (write-protobuf-documentation type documentation stream :indentation indentation))
            (format stream "~&~@[~VT~](proto:define-~A ~(~S~)"
                    (and (not (zerop indentation)) indentation)
-                   (if (eql message-type :message) "message" "extend") class)
+                   (if (eq message-type :message) "message" "extend") class)
            (let ((other (and name (not (string= name (class-name->proto class))) name)))
-             (cond ((eql message-type :extends)
+             (cond ((eq message-type :extends)
                     (format stream " ()"))
                    ((or other alias-for conc-name documentation)
                     (format stream "~%~@[~VT~](~:[~*~*~;:name ~(~S~)~@[~%~VT~]~]~
@@ -419,9 +419,9 @@
                             documentation documentation))
                    (t
                     (format stream " ()"))))
-           (cond ((eql message-type :extends)
+           (cond ((eq message-type :extends)
                   (loop for (field . more) on (proto-fields message) doing
-                    (when (eql (proto-message-type field) :extends)
+                    (when (eq (proto-message-type field) :extends)
                       (write-protobuf-as type field stream
                                          :indentation (+ indentation 2) :more more
                                          :message message)
@@ -433,7 +433,7 @@
                     (when more
                       (terpri stream)))
                   (loop for (msg . more) on (proto-messages message) doing
-                    (unless (eql (proto-message-type msg) :group)
+                    (unless (eq (proto-message-type msg) :group)
                       (write-protobuf-as type msg stream :indentation (+ indentation 2) :more more)
                       (when more
                         (terpri stream))))
@@ -454,7 +454,7 @@
                               &key (indentation 0) more message)
   (with-prefixed-accessors (value reader writer class required index documentation default) (proto- field)
     (let ((group (let ((msg (find-message message (proto-class field))))
-                   (and msg (eql (proto-message-type msg) :group) msg)))
+                   (and msg (eq (proto-message-type msg) :group) msg)))
           (dflt  (protobuf-default-to-clos-init default class))
           (clss  (let ((cl (case class
                              ((:int32 :uint32 :int64 :uint64 :sint32 :sint64

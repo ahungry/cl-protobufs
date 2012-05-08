@@ -71,9 +71,15 @@
    "PARSE-TEXT-FORMAT"
    "PRINT-TEXT-FORMAT")
 
-  ;; The "compatibility" API, whose names are taken from the Python API
+  ;; Miscellaneous bits of the API
+  (:export
+   "OBJECT-INITIALIZED-P"
+   "SLOT-INITIALIZED-P")
+
+  ;; The Python "compatibility" API
   (:export
    "CLEAR"
+   "HAS-FIELD"
    "IS-INITIALIZED"
    "OCTET-SIZE"
    "SERIALIZE"
@@ -138,10 +144,13 @@
    "PROTO-VALUE"
    "PROTO-VALUES"
    "PROTO-WRITER"
+
+   ;; Object lookup
    "FIND-PROTOBUF"
    "FIND-MESSAGE-FOR-CLASS"
    "FIND-MESSAGE"
    "FIND-ENUM"
+   "FIND-FIELD"
    "FIND-OPTION"
 
    ;; Printing

@@ -71,9 +71,19 @@
                                                            (or suppress-line-breaks indent)))
                                            (read-slot object slot reader)))))
                            (t
-                            (cond ((keywordp type)
+                            (cond ((eq type :bool)
+                                   (let ((v (cond ((or (eq (proto-required field) :required)
+                                                       (null slot))
+                                                   (read-slot object slot reader))
+                                                  ((slot-boundp object slot)
+                                                   (read-slot object slot reader))
+                                                  (t :unbound))))
+                                     (unless (eq v :unbound)
+                                       (print-prim v type field stream
+                                                   (or suppress-line-breaks indent)))))
+                                  ((keywordp type)
                                    (let ((v (read-slot object slot reader)))
-                                     (when (or v (eq type :bool))
+                                     (when v
                                        (print-prim v type field stream
                                                    (or suppress-line-breaks indent)))))
                                   ((typep (setq msg (and type (or (find-message trace type)

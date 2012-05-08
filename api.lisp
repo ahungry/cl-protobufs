@@ -11,7 +11,114 @@
 (in-package "PROTO-IMPL")
 
 
-;;; A Protobufs2-compatible API, whose names are taken from the Python API
+;;; Other API functions
+
+(defgeneric object-initialized-p (object type)
+  (:documentation
+   "Returns true iff all of the fields of 'object' are initialized."))  
+
+(defmethod object-initialized-p (object (type symbol))
+  (let ((message (find-message-for-class type)))
+    (assert message ()
+            "There is no Protobuf message having the type ~S" type)
+    (object-initialized-p object message)))
+
+(defmethod object-initialized-p (object (message protobuf-message))
+  (macrolet ((read-slot (object slot reader)
+               `(if ,reader
+                  (funcall ,reader ,object)
+                  (slot-value ,object ,slot))))
+    (labels ((initialized-p (object trace field)
+               (let* ((type   (if (eq (proto-class field) 'boolean) :bool (proto-class field)))
+                      (slot   (proto-value field))
+                      (reader (proto-reader field))
+                      msg)
+                 (when slot
+                   (cond ((eq (proto-required field) :repeated)
+                          ;; We're claiming that empty repeated fields are initialized,
+			  ;; which might not be correct
+			  (cond ((keywordp type) t)
+                                ((typep (setq msg (and type (or (find-message trace type)
+                                                                (find-enum trace type))))
+                                        'protobuf-message)
+                                 (let ((values (read-slot object slot reader)))
+                                   (dolist (value values t)
+                                     (unless (every #'(lambda (field)
+                                                        (initialized-p value msg field))
+                                                    (proto-fields msg))
+                                       (return-from object-initialized-p nil)))))
+                                ((typep msg 'protobuf-enum) t)))
+                         (t
+                          (cond ((keywordp type)
+                                 (or (slot-initialized-p object message slot)
+                                     (return-from object-initialized-p nil)))
+                                ((typep (setq msg (and type (or (find-message trace type)
+                                                                (find-enum trace type))))
+                                        'protobuf-message)
+                                 (unless (slot-initialized-p object message slot)
+                                   (return-from object-initialized-p nil))
+                                 (let ((value (read-slot object slot reader)))
+                                   (unless (every #'(lambda (field)
+                                                      (initialized-p value msg field))
+                                                  (proto-fields msg))
+                                     (return-from object-initialized-p nil))))
+                                ((typep msg 'protobuf-enum)
+                                 (or (slot-initialized-p object message slot)
+                                     (return-from object-initialized-p nil))))))))))
+            (declare (dynamic-extent #'initialized-p))
+            (every #'(lambda (field)
+                       (initialized-p object message field))
+                   (proto-fields message)))))
+
+
+(defgeneric slot-initialized-p (object type slot)
+  (:documentation
+   "Returns true iff the field 'slot' in 'object' is initialized."))
+
+(defmethod slot-initialized-p (object (type symbol) slot)
+  (let ((message (find-message-for-class type)))
+    (assert message ()
+            "There is no Protobuf message having the type ~S" type)
+    (slot-initialized-p object message slot)))
+
+(defmethod slot-initialized-p (object (message protobuf-message) slot)
+  (let ((field (find-field message slot)))
+    (when field
+      (macrolet ((read-slot (object slot reader)
+                   `(if ,reader
+                      (funcall ,reader ,object)
+                      (slot-value ,object ,slot))))
+        (let ((type   (if (eq (proto-class field) 'boolean) :bool (proto-class field)))
+              (slot   (proto-value field))
+              (reader (proto-reader field)))
+          (cond ((null slot) nil)
+                ((or (eq (proto-required field) :required)
+                     (eq type :bool))
+                 (slot-boundp object slot))
+                (t (not (null (read-slot object slot reader))))))))))
+
+
+;;; A Python-like, Protobufs2-compatible API
+
+(defgeneric is-initialized (object)
+  (:documentation
+   "Returns true iff all of the fields of 'object' are initialized.")
+  (:method ((object standard-object))
+    (let* ((class   (class-of object))
+           (message (find-message-for-class class)))
+      (assert message ()
+              "There is no Protobufs message for the class ~S" class)
+      (object-initialized-p object message))))
+
+(defgeneric has-field (object slot)
+  (:documentation
+   "Returns true iff the field 'slot' in 'object' is initialized.")
+  (:method ((object standard-object) slot)
+    (let* ((class   (class-of object))
+           (message (find-message-for-class class)))
+      (assert message ()
+              "There is no Protobufs message for the class ~S" class)
+      (slot-initialized-p object message slot))))
 
 (defgeneric clear (object)
   (:documentation
@@ -22,17 +129,6 @@
       (assert message ()
               "There is no Protobufs message for the class ~S" class)
       ;;--- Do this: set everything either to the default value or "unbound"
-      message)))
-
-(defgeneric is-initialized (object)
-  (:documentation
-   "Returns true iff all of the fields of 'object' are initialized.")
-  (:method ((object standard-object))
-    (let* ((class   (class-of object))
-           (message (find-message-for-class class)))
-      (assert message ()
-              "There is no Protobufs message for the class ~S" class)
-      ;;--- Do this: check that there are no "unbound" slots
       message)))
 
 ;; This is simpler than 'object-size', but doesn't fully support aliasing

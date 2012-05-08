@@ -25,8 +25,9 @@ Protobufs for Common Lisp
       2.4  Using the Protobufs macros
     3  Serializing and deserializing
       3.1  Wire format
-      3.1  Text format
-    4  Python compatibility functions
+      3.2  Text format
+    4  Other API functions
+       4.1 Python compatibility functions
 
 
 Introduction
@@ -686,17 +687,29 @@ stream *stream*.
 The returned value is the object.
 
 
-Python compatibility functions
-==============================
-
-By popular demand, the Protobufs library provides an API that is very
-similar to the API of the Python Protobufs library.
+Other API functions
+===================
 
 ::
 
-  proto:clear (object)                                          [Generic function]
+  proto:object-initialized-p (object type)                      [Generic function]
 
-Initializes all of the fields of *object* to their default values.
+Returns true iff all of the fields of *object* of type *type* are
+initialized, i.e., there are no fields whose value is unbound.
+
+::
+
+  proto:slot-initialized-p (object type slot)                   [Generic function]
+
+Returns true iff the field *slot* of *object* of type *type* is
+initialized, i.e., there are no fields whose value is unbound.
+
+
+Python compatibility functions
+------------------------------
+
+By popular demand, the Protobufs library provides an API that is very
+similar to the API of the Python Protobufs library.
 
 ::
 
@@ -704,6 +717,18 @@ Initializes all of the fields of *object* to their default values.
 
 Returns true iff all of the fields of *object* are initialized, i.e.,
 there are no fields whose value is unbound.
+
+::
+
+  proto:has-field (object slot)                                 [Generic function]
+
+Returns true iff the field *slot* is initialized in *object*.
+
+::
+
+  proto:clear (object)                                          [Generic function]
+
+Initializes all of the fields of *object* to their default values.
 
 ::
 

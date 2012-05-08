@@ -239,7 +239,7 @@
 (describe (slot-value (proto:deserialize-object 'proto-test4 tser4) 'recval))
 
 (setq tser5 (proto:serialize-object-to-stream test5 'proto-test5 :stream nil))
-(equalp tser5 #(#x08 #x01
+(equalp tser5 #(#x08 #x00
                 #x10 #x04 #x02 #x03 #x05 #x07
                 #x1A #x03 #x74 #x77 #x6F #x1A #x05 #x74 #x68 #x72 #x65 #x65 #x1A #x04 #x66 #x69 #x76 #x65 #x1A #x05 #x73 #x65 #x76 #x65 #x6E))
 (describe (proto:deserialize-object 'proto-test5 tser5))

@@ -76,7 +76,7 @@
             ((define-message define-extend)
              (setf (proto-parent model) protobuf)
              (setf (proto-messages protobuf) (nconc (proto-messages protobuf) (list model)))
-             (when (eql (proto-message-type model) :extends)
+             (when (eq (proto-message-type model) :extends)
                (setf (proto-extenders protobuf) (nconc (proto-extenders protobuf) (list model)))))
             ((define-service)
              (setf (proto-services protobuf) (nconc (proto-services protobuf) (list model)))))))
@@ -206,7 +206,7 @@
                ((define-message define-extend)
                 (setf (proto-parent model) message)
                 (setf (proto-messages message) (nconc (proto-messages message) (list model)))
-                (when (eql (proto-message-type model) :extends)
+                (when (eq (proto-message-type model) :extends)
                   (setf (proto-extenders message) (nconc (proto-extenders message) (list model)))))
                ((define-group)
                 (setf (proto-parent model) message)
@@ -406,7 +406,7 @@
                ((define-message define-extend)
                 (setf (proto-parent model) message)
                 (setf (proto-messages message) (nconc (proto-messages message) (list model)))
-                (when (eql (proto-message-type model) :extends)
+                (when (eq (proto-message-type model) :extends)
                   (setf (proto-extenders message) (nconc (proto-extenders message) (list model)))))
                ((define-group)
                 (setf (proto-parent model) message)
@@ -465,9 +465,13 @@
                               ,@(and writer
                                      `(:writer ,writer))
                               :initarg ,(kintern (symbol-name slot))
-                              ,@(cond ((and (not default-p) (eq reqd :repeated))
+                              ,@(cond ((and (not default-p) 
+                                            (eq reqd :repeated))
                                        `(:initform ()))
-                                      ((and (not default-p) (eq reqd :optional))
+                                      ((and (not default-p)
+                                            (eq reqd :optional)
+                                            ;; Use unbound for booleans only
+                                            (not (eq pclass :bool)))
                                        `(:initform nil))
                                       (default-p
                                         `(:initform ,default))))))
@@ -500,7 +504,7 @@
      define-extension
      ,(make-instance 'protobuf-extension
         :from from
-        :to   (if (eql to 'max) #.(1- (ash 1 29)) to))
+        :to   (if (eq to 'max) #.(1- (ash 1 29)) to))
      ()))
 
 ;; Define a service named 'type' with generic functions declared for

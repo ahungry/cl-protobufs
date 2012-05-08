@@ -117,7 +117,7 @@
 (defgeneric find-message (protobuf type)
   (:documentation
    "Given a protobuf schema or message and a type name or class name,
-    returns the protobuf message corresponding to the type."))
+    returns the Protobufs message corresponding to the type."))
 
 (defmethod find-message ((protobuf protobuf) (type symbol))
   ;; Extended messages "shadow" non-extended ones
@@ -134,7 +134,7 @@
 (defgeneric find-enum (protobuf type)
   (:documentation
    "Given a protobuf schema or message and the name of an enum type,
-    returns the protobuf enum corresponding to the type."))
+    returns the Protobufs enum corresponding to the type."))
 
 (defmethod find-enum ((protobuf protobuf) type)
   (find type (proto-enums protobuf) :key #'proto-class))
@@ -281,7 +281,7 @@
   ;; Record this message under just its Lisp class name
   ;; No need to record an extension, it's already been recorded
   (with-slots (class message-type) message
-    (when (and class (not (eql message-type :extends)))
+    (when (and class (not (eq message-type :extends)))
       (setf (gethash class *all-messages*) message))))
 
 (defmethod make-load-form ((m protobuf-message) &optional environment)
@@ -291,8 +291,8 @@
   (print-unreadable-object (m stream :type t :identity t)
     (format stream "~S~@[ (alias for ~S)~]~@[ (group~*)~]~@[ (extended~*)~]"
             (proto-class m) (proto-alias-for m)
-            (eql (proto-message-type m) :group)
-            (eql (proto-message-type m) :extends))))
+            (eq (proto-message-type m) :group)
+            (eq (proto-message-type m) :extends))))
 
 (defmethod find-message ((message protobuf-message) (type symbol))
   ;; Extended messages "shadow" non-extended ones
@@ -316,6 +316,17 @@
   (or (find type (proto-enums message) :key #'proto-name :test #'string=)
       (find-enum (proto-parent message) type)))
 
+(defgeneric find-field (message name)
+  (:documentation
+   "Given a protobuf message and a slot name or field name,
+    returns the Protobufs field having that name."))
+
+(defmethod find-field ((message protobuf-message) (name symbol))
+  (find name (proto-fields message) :key #'proto-value))
+
+(defmethod find-field ((message protobuf-message) (name string))
+  (find name (proto-fields message) :key #'proto-name :test #'string=))
+
 
 ;; A protobuf field within a message
 ;;--- Support the 'deprecated' option (have serialization ignore such fields?)
@@ -330,7 +341,7 @@
           :accessor proto-index
           :initarg :index)
    (value :type (or null symbol)                ;the Lisp slot holding the value within an object
-          :accessor proto-value
+          :accessor proto-value                 ;this also serves as the Lisp field name
           :initarg :value
           :initform nil)
    (reader :type (or null symbol)               ;a reader that is used to access the value
@@ -370,8 +381,8 @@
   (print-unreadable-object (f stream :type t :identity t)
     (format stream "~S :: ~S = ~D~@[ (group~*)~]~@[ (extended~*)~]"
             (proto-value f) (proto-class f) (proto-index f)
-            (eql (proto-message-type f) :group)
-            (eql (proto-message-type f) :extends))))
+            (eq (proto-message-type f) :group)
+            (eq (proto-message-type f) :extends))))
 
 
 ;; An extension within a message

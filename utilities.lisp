@@ -193,7 +193,7 @@
          ,@body))))
 
 
-;;; Function programming, please
+;;; Functional programming, please
 
 (defun curry (function &rest args)
   (if (and args (null (cdr args)))                      ;fast test for length = 1
