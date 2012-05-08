@@ -340,5 +340,11 @@
                         :single :double))
          (read-from-string default))
         ((eq type :bool)
-         (if (string= default "true") t nil))
+         (if (boolean-true-p default) t nil))
         (t default)))
+
+(defun boolean-true-p (string)
+  (or (string= string "true")
+      (string= string "yes")
+      (string= string "t")
+      (string= string "1")))

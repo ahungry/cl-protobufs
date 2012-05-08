@@ -431,7 +431,7 @@
                        :required (kintern required)
                        :index idx
                        :default dflt
-                       :packed  (and packed (string= packed "true"))
+                       :packed  (and packed (boolean-true-p packed))
                        :message-type (proto-message-type message))))
         (when extended-from
           (assert (index-within-extensions-p idx extended-from) ()

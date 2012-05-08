@@ -74,7 +74,8 @@
   ;; Miscellaneous bits of the API
   (:export
    "OBJECT-INITIALIZED-P"
-   "SLOT-INITIALIZED-P")
+   "SLOT-INITIALIZED-P"
+   "REINITIALIZE-OBJECT")
 
   ;; The Python "compatibility" API
   (:export

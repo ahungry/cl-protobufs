@@ -36,8 +36,8 @@
                  (when slot
                    (cond ((eq (proto-required field) :repeated)
                           ;; We're claiming that empty repeated fields are initialized,
-			  ;; which might not be correct
-			  (cond ((keywordp type) t)
+                          ;; which might not be correct
+                          (cond ((keywordp type) t)
                                 ((typep (setq msg (and type (or (find-message trace type)
                                                                 (find-enum trace type))))
                                         'protobuf-message)
@@ -82,12 +82,12 @@
     (slot-initialized-p object message slot)))
 
 (defmethod slot-initialized-p (object (message protobuf-message) slot)
-  (let ((field (find-field message slot)))
-    (when field
-      (macrolet ((read-slot (object slot reader)
-                   `(if ,reader
-                      (funcall ,reader ,object)
-                      (slot-value ,object ,slot))))
+  (macrolet ((read-slot (object slot reader)
+               `(if ,reader
+                  (funcall ,reader ,object)
+                  (slot-value ,object ,slot))))
+    (let ((field (find-field message slot)))
+      (when field
         (let ((type   (if (eq (proto-class field) 'boolean) :bool (proto-class field)))
               (slot   (proto-value field))
               (reader (proto-reader field)))
@@ -96,6 +96,37 @@
                      (eq type :bool))
                  (slot-boundp object slot))
                 (t (not (null (read-slot object slot reader))))))))))
+
+
+(defgeneric reinitialize-object (object type)
+  (:documentation
+   "Reset all the fields of 'object' to their initial values."))
+
+(defmethod reinitialize-object (object (type symbol))
+  (let ((message (find-message-for-class type)))
+    (assert message ()
+            "There is no Protobuf message having the type ~S" type)
+    (reinitialize-object object message)))
+
+(defmethod reinitialize-object (object (message protobuf-message))
+  (macrolet ((write-slot (object slot writer value)
+               `(if ,writer
+                  (funcall ,writer ,object ,value)
+                  (setf (slot-value ,object ,slot) ,value))))
+    (dolist (field (proto-fields message))
+      (let* ((type    (if (eq (proto-class field) 'boolean) :bool (proto-class field)))
+             (default (protobuf-default-to-clos-init (proto-default field) type))
+             (slot    (proto-value field))
+             (writer  (proto-writer field)))
+        (cond ((null slot))
+              ((or (eq (proto-required field) :required)
+                   (eq type :bool))
+               (if (proto-default field)
+                 (write-slot object slot writer default)
+                 (slot-makunbound object slot)))
+              (t 
+               (write-slot object slot writer default))))))
+  object)
 
 
 ;;; A Python-like, Protobufs2-compatible API
@@ -128,8 +159,7 @@
            (message (find-message-for-class class)))
       (assert message ()
               "There is no Protobufs message for the class ~S" class)
-      ;;--- Do this: set everything either to the default value or "unbound"
-      message)))
+      (reinitialize-object object message))))
 
 ;; This is simpler than 'object-size', but doesn't fully support aliasing
 (defgeneric octet-size (object)

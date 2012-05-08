@@ -199,7 +199,7 @@
                                    (let ((val (case type
                                                 ((:float :double) (parse-float stream))
                                                 ((:string) (parse-string stream))
-                                                ((:bool)   (if (string= (parse-token stream) "true") t nil))
+                                                ((:bool)   (if (boolean-true-p (parse-token stream)) t nil))
                                                 (otherwise (parse-int stream)))))
                                      (when slot
                                        (pushnew slot rslots)
@@ -227,7 +227,7 @@
                                    (let ((val (case type
                                                 ((:float :double) (parse-float stream))
                                                 ((:string) (parse-string stream))
-                                                ((:bool)   (if (string= (parse-token stream) "true") t nil))
+                                                ((:bool)   (if (boolean-true-p (parse-token stream)) t nil))
                                                 (otherwise (parse-int stream)))))
                                      (when slot
                                        (setf (slot-value object slot) val))))

@@ -309,8 +309,9 @@
                                (intern (format nil "~A-~A" reader 'setter)
                                        (symbol-package sname))))
                    (default (getf inits :initform)))
-              ;;--- Can we avoid having to use a hash table?
-              ;;--- Maybe the table should be in each instance, keyed by slot name?
+              ;; For the extended slots, we use one table for each message class,
+              ;; keyed by the object, which lets us avoid having a slot in each
+              ;; instance that holds a table keyed by the slot name
               (collect-form `(let ((,sname (make-hash-table :test #'eq :weak t)))
                                (defmethod ,reader ((object ,type))
                                  (gethash object ,sname ,default))

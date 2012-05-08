@@ -704,6 +704,11 @@ initialized, i.e., there are no fields whose value is unbound.
 Returns true iff the field *slot* of *object* of type *type* is
 initialized, i.e., there are no fields whose value is unbound.
 
+  proto:reinitialize-object (object type)                       [Generic function]
+
+Initializes all of the fields of *object* of type *type* to their
+default values.
+
 
 Python compatibility functions
 ------------------------------
