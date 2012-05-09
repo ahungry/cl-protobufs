@@ -39,6 +39,30 @@
         until (or (null ch) (not (proto-whitespace-char-p ch)))
         do (read-char stream nil)))
 
+(defun expect-char (stream char &optional chars within)
+  "Expect to see 'char' as the next character in the stream; signal an error if it's not there.
+   Then skip all of the following whitespace."
+  (if (if (listp char)
+        (member (peek-char nil stream nil) char)
+        (eql (peek-char nil stream nil) char))
+    (read-char stream)
+    (error "No '~C' found~@[ within '~A'~] at position ~D"
+           char within (file-position stream)))
+  (maybe-skip-chars stream chars))
+
+(defun maybe-skip-chars (stream chars)
+  "Skip some optional characters in the stream,
+   then skip all of the following whitespace."
+  (skip-whitespace stream)
+  (when chars
+    (loop
+      (let ((ch (peek-char nil stream nil)))
+        (when (or (null ch) (not (member ch chars)))
+          (skip-whitespace stream)
+          (return-from maybe-skip-chars)))
+      (read-char stream))))
+
+
 ;;--- Collect the comment so we can attach it to its associated object
 (defun maybe-skip-comments (stream)
   "If what appears next in the stream is a comment, skip it and any following comments,
@@ -77,18 +101,6 @@
                        (eql (peek-char nil stream nil) #\/))
                   (read-char stream nil)
                   (return))))
-  (skip-whitespace stream))
-
-
-(defun expect-char (stream ch &optional within)
-  "Expect to see 'ch' as the next character in the stream; signal an error if it's not there.
-   Then skip all of the following whitespace."
-  (if (if (listp ch)
-        (member (peek-char nil stream nil) ch)
-        (eql (peek-char nil stream nil) ch))
-    (read-char stream)
-    (error "No '~C' found~@[ within '~A'~] at position ~D"
-           ch within (file-position stream)))
   (skip-whitespace stream))
 
 
@@ -221,9 +233,9 @@
 (defun parse-proto-syntax (stream protobuf &optional (terminator #\;))
   "Parse a Protobufs syntax line from 'stream'.
    Updates the 'protobuf' object to use the syntax."
-  (let ((syntax (prog2 (expect-char stream #\= "syntax")
+  (let ((syntax (prog2 (expect-char stream #\= () "syntax")
                     (parse-string stream)
-                  (expect-char stream terminator "syntax")
+                  (expect-char stream terminator () "syntax")
                   (maybe-skip-comments stream))))
     (setf (proto-syntax protobuf) syntax)))
 
@@ -232,7 +244,7 @@
    Updates the 'protobuf' object to use the package."
   (check-type protobuf protobuf)
   (let* ((package  (prog1 (parse-token stream)
-                     (expect-char stream terminator "package")
+                     (expect-char stream terminator () "package")
                      (maybe-skip-comments stream)))
          (lisp-pkg (or (proto-lisp-package protobuf)
                        (substitute #\- #\_ package))))
@@ -249,7 +261,7 @@
    Updates the 'protobuf' object to use the package."
   (check-type protobuf protobuf)
   (let ((import (prog1 (parse-string stream)
-                  (expect-char stream terminator "package")
+                  (expect-char stream terminator () "package")
                   (maybe-skip-comments stream))))
     (process-imports import)
     (setf (proto-imports protobuf) (nconc (proto-imports protobuf) (list import)))))
@@ -259,11 +271,11 @@
    Updates the 'protobuf' (or message, service, method) to have the option."
   (check-type protobuf (or null base-protobuf))
   (let* ((key (prog1 (parse-parenthesized-token stream)
-                (expect-char stream #\= "option")))
+                (expect-char stream #\= () "option")))
          (val (prog1 (if (eql (peek-char nil stream nil) #\")
                        (parse-string stream)
                        (parse-token stream))
-                (expect-char stream terminator "option")
+                (expect-char stream terminator () "option")
                 (maybe-skip-comments stream)))
          (option (make-instance 'protobuf-option
                    :name  key
@@ -281,7 +293,7 @@
    Updates the 'protobuf' or 'protobuf-message' object to have the enum."
   (check-type protobuf (or protobuf protobuf-message))
   (let* ((name (prog1 (parse-token stream)
-                 (expect-char stream #\{ "enum")
+                 (expect-char stream #\{ () "enum")
                  (maybe-skip-comments stream)))
          (enum (make-instance 'protobuf-enum
                  :class (proto->class-name name *protobuf-package*)
@@ -289,7 +301,7 @@
     (loop
       (let ((name (parse-token stream)))
         (when (null name)
-          (expect-char stream #\} "enum")
+          (expect-char stream #\} '(#\;) "enum")
           (maybe-skip-comments stream)
           (setf (proto-enums protobuf) (nconc (proto-enums protobuf) (list enum)))
           (let ((type (find-option enum "lisp_name")))
@@ -307,9 +319,9 @@
   "Parse a Protobufs enum value from 'stream'.
    Updates the 'protobuf-enum' object to have the enum value."
   (check-type enum protobuf-enum)
-  (expect-char stream #\= "enum")
+  (expect-char stream #\= () "enum")
   (let* ((idx  (prog1 (parse-int stream)
-                 (expect-char stream #\; "enum")
+                 (expect-char stream #\; () "enum")
                  (maybe-skip-comments stream)))
          (value (make-instance 'protobuf-enum-value
                   :name  name
@@ -324,7 +336,7 @@
    Updates the 'protobuf' or 'protobuf-message' object to have the message."
   (check-type protobuf (or protobuf protobuf-message))
   (let* ((name (prog1 (or name (parse-token stream))
-                 (expect-char stream #\{ "message")
+                 (expect-char stream #\{ () "message")
                  (maybe-skip-comments stream)))
          (message (make-instance 'protobuf-message
                     :class (proto->class-name name *protobuf-package*)
@@ -334,7 +346,7 @@
     (loop
       (let ((token (parse-token stream)))
         (when (null token)
-          (expect-char stream #\} "message")
+          (expect-char stream #\} '(#\;) "message")
           (maybe-skip-comments stream)
           (setf (proto-messages protobuf) (nconc (proto-messages protobuf) (list message)))
           (let ((type (find-option message "lisp_name")))
@@ -365,7 +377,7 @@
    Updates the 'protobuf' or 'protobuf-message' object to have the message."
   (check-type protobuf (or protobuf protobuf-message))
   (let* ((name (prog1 (parse-token stream)
-                 (expect-char stream #\{ "extend")
+                 (expect-char stream #\{ () "extend")
                  (maybe-skip-comments stream)))
          (message (find-message *protobuf* name))
          (extends (and message
@@ -382,7 +394,7 @@
     (loop
       (let ((token (parse-token stream)))
         (when (null token)
-          (expect-char stream #\} "extend")
+          (expect-char stream #\} '(#\;) "extend")
           (maybe-skip-comments stream)
           (setf (proto-messages protobuf) (nconc (proto-messages protobuf) (list extends)))
           (setf (proto-extenders protobuf) (nconc (proto-extenders protobuf) (list extends)))
@@ -409,10 +421,10 @@
     (if (string= type "group")
       (parse-proto-group stream message required extended-from)
       (let* ((name (prog1 (parse-token stream)
-                     (expect-char stream #\= "message")))
+                     (expect-char stream #\= () "message")))
              (idx  (parse-int stream))
              (opts (prog1 (parse-proto-field-options stream)
-                     (expect-char stream #\; "message")
+                     (expect-char stream #\; () "message")
                      (maybe-skip-comments stream)))
              (dflt   (find-option opts "default"))
              (packed (find-option opts "packed"))
@@ -448,7 +460,7 @@
    Updates the 'protobuf-message' object to have the group type and field."
   (check-type message protobuf-message)
   (let* ((type (prog1 (parse-token stream)
-                 (expect-char stream #\= "message")))
+                 (expect-char stream #\= () "message")))
          (name (slot-name->proto (proto->slot-name type)))
          (idx  (parse-int stream))
          (msg  (parse-proto-message stream message type))
@@ -477,7 +489,7 @@
     (loop
       (unless (eql (peek-char nil stream nil) #\[)
         (return-from parse-proto-field-options options))
-      (expect-char stream #\[ "message")
+      (expect-char stream #\[ () "message")
       (collect-option (parse-proto-option stream nil #\])))
     options))
 
@@ -488,7 +500,7 @@
          (to    (if (digit-char-p (peek-char nil stream nil))
                   (parse-int stream)
                   (parse-token stream))))
-    (expect-char stream #\; "message")
+    (expect-char stream #\; () "message")
     (assert (string= token "to") ()
             "Expected 'to' in 'extensions' at position ~D" (file-position stream))
     (assert (or (integerp to) (string= to "max")) ()
@@ -507,7 +519,7 @@
    Updates the 'protobuf-protobuf' object to have the service."
   (check-type protobuf protobuf)
   (let* ((name (prog1 (parse-token stream)
-                 (expect-char stream #\{ "service")
+                 (expect-char stream #\{ () "service")
                  (maybe-skip-comments stream)))
          (service (make-instance 'protobuf-service
                     :class (proto->class-name name *protobuf-package*)
@@ -515,7 +527,7 @@
     (loop
       (let ((token (parse-token stream)))
         (when (null token)
-          (expect-char stream #\} "service")
+          (expect-char stream #\} '(#\;) "service")
           (maybe-skip-comments stream)
           (setf (proto-services protobuf) (nconc (proto-services protobuf) (list service)))
           (return-from parse-proto-service service))
@@ -532,16 +544,16 @@
    Updates the 'protobuf-service' object to have the method."
   (check-type service protobuf-service)
   (let* ((name (parse-token stream))
-         (in   (prog2 (expect-char stream #\( "service")
+         (in   (prog2 (expect-char stream #\( () "service")
                    (parse-token stream)
-                 (expect-char stream #\) "service")))
+                 (expect-char stream #\) () "service")))
          (ret  (parse-token stream))
-         (out  (prog2 (expect-char stream #\( "service")
+         (out  (prog2 (expect-char stream #\( () "service")
                    (parse-token stream)
-                 (expect-char stream #\) "service")))
+                 (expect-char stream #\) () "service")))
          (opts (let ((opts (parse-proto-method-options stream)))
                  (when (or (null opts) (eql (peek-char nil stream nil) #\;))
-                   (expect-char stream #\; "service"))
+                   (expect-char stream #\; () "service"))
                  (maybe-skip-comments stream)
                  opts))
          (method (make-instance 'protobuf-method
@@ -564,7 +576,7 @@
   "Parse any options in a Protobufs method from 'stream'.
    Returns a list of 'protobuf-option' objects."
   (when (eql (peek-char nil stream nil) #\{)
-    (expect-char stream #\{ "service")
+    (expect-char stream #\{ () "service")
     (maybe-skip-comments stream)
     (with-collectors ((options collect-option))
       (loop
@@ -573,6 +585,6 @@
         (assert (string= (parse-token stream) "option") ()
                 "Syntax error in 'message' at position ~D" (file-position stream))
         (collect-option (parse-proto-option stream nil #\;)))
-      (expect-char stream #\} "service")
+      (expect-char stream #\} '(#\;) "service")
       (maybe-skip-comments stream)
       options)))

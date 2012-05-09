@@ -13,11 +13,12 @@
 
 ;;; Protobufs schema pretty printing
 
-(defun write-protobuf (protobuf &key (stream *standard-output*) (type :proto))
+(defun write-protobuf (protobuf &rest keys
+                       &key (stream *standard-output*) (type :proto) &allow-other-keys)
   "Writes the protobuf object 'protobuf' (schema, message, enum, etc) onto
    the given stream 'stream'in the format given by 'type' (:proto, :text, etc)."
    (let ((*protobuf* protobuf))
-     (write-protobuf-as type protobuf stream)))
+     (apply #'write-protobuf-as type protobuf stream keys)))
 
 (defgeneric write-protobuf-as (type protobuf stream &key indentation &allow-other-keys)
   (:documentation
@@ -258,8 +259,13 @@
 
 ;;; Pretty print a schema as a .lisp file
 
+(defvar *show-lisp-enum-indexes* t)
+(defvar *show-lisp-field-indexes* t)
+
 (defmethod write-protobuf-as ((type (eql :lisp)) (protobuf protobuf) stream
-                              &key (indentation 0))
+                              &key (indentation 0)
+                                   (show-field-indexes *show-lisp-field-indexes*)
+                                   (show-enum-indexes *show-lisp-enum-indexes*))
   (with-prefixed-accessors (name class documentation package lisp-package imports) (proto- protobuf)
     (let* ((optimize (let ((opt (find-option protobuf "optimize_for")))
                        (and opt (cond ((string= opt "SPEED") :speed)
@@ -268,6 +274,8 @@
            (options  (remove "optimize_for" (proto-options protobuf) :test #'string-equal :key #'proto-name))
            (pkg      (and package (if (stringp package) package (string package))))
            (lisp-pkg (and lisp-package (if (stringp lisp-package) lisp-package (string lisp-package))))
+           (*show-lisp-enum-indexes* show-enum-indexes)
+           (*show-lisp-field-indexes* show-field-indexes)
            (*protobuf-package* (or (find-package lisp-pkg)
                                    (find-package (string-upcase lisp-pkg))
                                    *package*))
@@ -361,8 +369,11 @@
                               &key (indentation 0) more)
   (declare (ignore more))
   (with-prefixed-accessors (value index) (proto- val)
-    (format stream "~&~@[~VT~](~(~A~) ~D)"
-            (and (not (zerop indentation)) indentation) value index)))
+    (if *show-lisp-enum-indexes*
+      (format stream "~&~@[~VT~](~(~A~) ~D)"
+              (and (not (zerop indentation)) indentation) value index)
+      (format stream "~&~@[~VT~]~(~A~)"
+              (and (not (zerop indentation)) indentation) value))))
 
 
 (defmethod write-protobuf-as ((type (eql :lisp)) (message protobuf-message) stream
@@ -473,17 +484,20 @@
       (cond (group
              (write-protobuf-as type group stream :indentation indentation :index index :arity required))
             (t
-             (format stream (if (keywordp class)
-                              ;; Keyword means a primitive type, print default with ~S
-                              "~&~@[~VT~](~(~S~) :type ~(~S~)~@[ :default ~S~]~
-                               ~@[ :reader ~(~S~)~]~@[ :writer ~(~S~)~])~:[~*~*~;~VT; ~A~]"
-                              ;; Non-keyword must mean an enum type, print default with ~A
-                              "~&~@[~VT~](~(~S~) :type ~(~S~)~@[ :default ~(:~A~)~]~
-                               ~@[ :reader ~(~S~)~]~@[ :writer ~(~S~)~])~:[~*~*~;~VT; ~A~]")
-                     (and (not (zerop indentation)) indentation)
-                     value clss dflt reader writer
-                     ;; Don't write the comment if we'll insert a close paren after it
-                     (and more documentation) *protobuf-slot-comment-column* documentation))))))
+             (let ((slot (if *show-lisp-field-indexes*
+                           (format nil "(~(~S~) ~D)" value index)
+                           (format nil "~(~S~)" value))))
+               (format stream (if (keywordp class)
+                                ;; Keyword means a primitive type, print default with ~S
+                                "~&~@[~VT~](~A :type ~(~S~)~@[ :default ~S~]~
+                                 ~@[ :reader ~(~S~)~]~@[ :writer ~(~S~)~])~:[~*~*~;~VT; ~A~]"
+                                ;; Non-keyword must mean an enum type, print default with ~A
+                                "~&~@[~VT~](~A :type ~(~S~)~@[ :default ~(:~A~)~]~
+                                 ~@[ :reader ~(~S~)~]~@[ :writer ~(~S~)~])~:[~*~*~;~VT; ~A~]")
+                       (and (not (zerop indentation)) indentation)
+                       slot clss dflt reader writer
+                       ;; Don't write the comment if we'll insert a close paren after it
+                       (and more documentation) *protobuf-slot-comment-column* documentation)))))))
 
 (defmethod write-protobuf-as ((type (eql :lisp)) (extension protobuf-extension) stream
                               &key (indentation 0) more)
