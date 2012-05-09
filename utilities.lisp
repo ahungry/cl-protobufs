@@ -89,8 +89,19 @@
         :format-control format-control
         :format-arguments format-arguments))
 
-
-;;; Other utilities
+
+#-(or allegro lispworks)
+(defmacro without-redefinition-warnings (() &body body)
+  `(progn ,@body))
+    
+#+allegro
+(defmacro without-redefinition-warnings (() &body body)
+  `(excl:without-redefinition-warnings ,@body))
+
+#+lispworks
+(defmacro without-redefinition-warnings (() &body body)
+  `(let ((dspec:*redefinition-action* :quiet)) ,@body))
+
 
 ;; A parameterized list types for repeated fields (not type-checked!)
 (deftype list-of (type)

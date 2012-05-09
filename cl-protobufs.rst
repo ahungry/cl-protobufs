@@ -27,7 +27,9 @@ Protobufs for Common Lisp
       3.1  Wire format
       3.2  Text format
     4  Other API functions
-       4.1 Python compatibility functions
+      4.1 Extensions functions
+      4.2 Initialization functions
+      4.3 Python compatibility functions
 
 
 Introduction
@@ -215,7 +217,7 @@ classes that should not be included in the Protobufs schema.
 
 *slot-filter* is a function of two arguments, a list of all the slots
 in the class and the slot currently being processed, and should return
-``t`` if the slot is to be kept or ``nil`` if it to be discarded. For
+true if the slot is to be kept or ``nil`` if it to be discarded. For
 example, if there are internal implementation slots in a class that
 need not appear in the Protobufs description, it can be used to filter
 them out.
@@ -504,6 +506,33 @@ or ``proto:define-message``.
 
 ::
 
+  proto:define-extension (from to)                              [Macro]
+
+Defines a field extension for the indexes from *from* to *to*.
+*from* and *to* are positive integers ranging from 1 to 2^29 - 1.
+*to* can also be the token ``max``, i.e., 2^29 - 1.
+
+Once an extension to a message has been defined, you can use
+``proto:define-extends`` to add new fields.
+
+``proto:define-extension`` can be used only within ``proto:define-message``.
+
+In non-Lisp implementations of Protobufs, you set and get the value
+of an extension using functions like ``SetExtension()`` and
+``GetExtension()``. For example, if you extended a ``Color`` message
+to have an ``opacity`` field, you would set the field using something
+like this::
+
+  Color color;
+  color.SetExtension(opacity, 0.5);
+
+In Common Lisp Protobufs, you can just use an ordinary slot accessor::
+
+  (let ((color (make-instance 'color)))
+    (setf (color-opacity color) 0.5))
+
+::
+
   proto:define-extend (type (&key name                          [Macro]
                                   options documentation)
                        &body fields)
@@ -526,16 +555,6 @@ they do for ``proto:define-message``.
 
 ``proto:define-extend`` can be used only within ``proto:define-proto``
 or ``proto:define-message``.
-
-::
-
-  proto:define-extension (from to)                              [Macro]
-
-Defines a field extension for the indexes from *from* to *to*.
-*from* and *to* are positive integers ranging from 1 to 2^29 - 1.
-*to* can also be the token ``max``, i.e., 2^29 - 1.
-
-``proto:define-extension`` can be used only within ``proto:define-message``.
 
 ::
 
@@ -690,6 +709,47 @@ The returned value is the object.
 Other API functions
 ===================
 
+Extensions functions
+--------------------
+
+::
+
+proto:get-extension (object slot)                               [Generic function]
+
+Returns the value of the extended slot *slot* in the object *object*.
+
+Since you can just use the ordinary slot reader function, you should
+not need to call ``proto:get-extension``. It is included for compatibility
+with other Protobufs APIs.
+
+::
+
+proto:set-extension (object slot value)                         [Generic function]
+
+Sets the value of the extended slot *slot* in the object *object*
+to *value*.
+
+Since you can just use the ordinary slot writer function, you should
+not need to call ``proto:set-extension``. It is included for compatibility
+with other Protobufs APIs.
+
+::
+
+proto:has-extension (object slot)                               [Generic function]
+
+Returns true iff the object *object* has any value for the extended
+slot *slot*.
+
+::
+
+proto:clear-extension (object slot)                             [Generic function]
+
+Removes the value for the extended slot *slot* in the object *object*.
+
+
+Initialization functions
+------------------------
+
 ::
 
   proto:object-initialized-p (object type)                      [Generic function]
@@ -703,6 +763,8 @@ initialized, i.e., there are no fields whose value is unbound.
 
 Returns true iff the field *slot* of *object* of type *type* is
 initialized, i.e., there are no fields whose value is unbound.
+
+::
 
   proto:reinitialize-object (object type)                       [Generic function]
 

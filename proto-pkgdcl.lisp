@@ -73,6 +73,10 @@
 
   ;; Miscellaneous bits of the API
   (:export
+   "GET-EXTENSION"
+   "SET-EXTENSION"
+   "HAS-EXTENSION"
+   "CLEAR-EXTENSION"
    "OBJECT-INITIALIZED-P"
    "SLOT-INITIALIZED-P"
    "REINITIALIZE-OBJECT")

@@ -634,8 +634,8 @@
     (assert idx () "There is no enum value for ~S" val)
     (i+ (length32 tag) (length32 idx))))
 
-
-;;; Raw encoders
+
+;;; Wire-level encoders
 ;;; These are called at the lowest level, so arg types are assumed to be correct
 
 (defun encode-uint32 (val buffer index)
@@ -812,7 +812,7 @@
     (values (i+ idx len) buffer)))
 
 
-;;; Raw decoders
+;;; Wire-level decoders
 ;;; These are called at the lowest level, so arg types are assumed to be correct
 
 ;; Decode the value from the buffer at the given index,
@@ -983,7 +983,7 @@
     (values (subseq buffer idx (i+ idx len)) (i+ idx len))))
 
 
-;;; Raw lengths
+;;; Wire-level lengths
 ;;; These are called at the lowest level, so arg types are assumed to be correct
 
 (defun length32 (val)

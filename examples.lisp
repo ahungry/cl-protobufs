@@ -598,13 +598,13 @@ service ColorWheel {
          (rqst2  (make-instance 'add-color-request :wheel wheel :color color2)))
     (setf (color-opacity color2) 50)
     #-ignore (progn
-               (format t "~2&Unextended~%")
+               (format t "~2&Unextended (has-extension ~S)~%" (has-extension color1 'opacity))
                (let ((ser1 (proto:serialize-object-to-stream rqst1 'add-color-request :stream nil)))
                  (print ser1)
                  (proto:print-text-format rqst1)
                  (proto:print-text-format (proto:deserialize-object 'add-color-request ser1))))
     #-ignore (progn 
-               (format t "~2&Extended~%")
+               (format t "~2&Extended (has-extension ~S)~%" (has-extension color2 'opacity))
                (let ((ser2 (proto:serialize-object-to-stream rqst2 'add-color-request :stream nil)))
                  (print ser2)
                  (proto:print-text-format rqst2)

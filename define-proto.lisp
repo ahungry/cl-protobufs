@@ -239,8 +239,18 @@
          ,message
          ,forms))))
 
+(defmacro define-extension (from to)
+  "Define an extension range within a message.
+   The \"body\" is the start and end of the range, both inclusive."
+  `(progn
+     define-extension
+     ,(make-instance 'protobuf-extension
+        :from from
+        :to   (if (eq to 'max) #.(1- (ash 1 29)) to))
+     ()))
+
 (defmacro define-extend (type (&key name options documentation)
-                          &body fields &environment env)
+                         &body fields &environment env)
   "Define an extension to the message named 'type'.
    'name' can be used to override the defaultly generated Protobufs message name.
    The body consists only  of fields.
@@ -298,9 +308,10 @@
                   idx (proto-class message))
           (setq index idx)
           (when slot
-            (let* ((inits (cdr slot))
-                   (sname (car slot))
-                   (stype (getf inits :type))
+            (let* ((inits  (cdr slot))
+                   (sname  (car slot))
+		   (stable (fintern "~A-VALUES" sname))
+                   (stype  (getf inits :type))
                    (reader (or (getf inits :accessor)
                                (getf inits :reader)
                                (intern (if conc-name (format nil "~A~A" conc-name sname) (symbol-name sname))
@@ -309,16 +320,31 @@
                                (intern (format nil "~A-~A" reader 'setter)
                                        (symbol-package sname))))
                    (default (getf inits :initform)))
-              ;; For the extended slots, we use one table for each message class,
+              ;; For the extended slots, each slot gets its own table
               ;; keyed by the object, which lets us avoid having a slot in each
               ;; instance that holds a table keyed by the slot name
-              (collect-form `(let ((,sname (make-hash-table :test #'eq :weak t)))
-                               (defmethod ,reader ((object ,type))
-                                 (gethash object ,sname ,default))
-                               (defmethod ,writer ((object ,type) value)
-                                 (declare (type ,stype value))
-                                 (setf (gethash object ,sname) value))
-                               (defsetf ,reader ,writer)))
+              ;; Multiple 'define-extends' on the same class in the same image
+              ;; will result in harmless redefinitions, so squelch the warnings
+              (collect-form `(without-redefinition-warnings ()
+                               (let ((,stable (make-hash-table :test #'eq :weak t)))
+                                 (defmethod ,reader ((object ,type))
+                                   (gethash object ,stable ,default))
+                                 (defmethod ,writer ((object ,type) value)
+                                   (declare (type ,stype value))
+                                   (setf (gethash object ,stable) value))
+				 ;; For Python compatibility
+				 (defmethod get-extension ((object ,type) (slot (eql ',sname)))
+				   (gethash object ,stable ,default))
+				 (defmethod set-extension ((object ,type) (slot (eql ',sname)) value)
+				   (setf (gethash object ,stable) value))
+				 (defmethod has-extension ((object ,type) (slot (eql ',sname)))
+				   (multiple-value-bind (value foundp)
+				       (gethash object ,stable ,default)
+				     (declare (ignore value))
+				     foundp))
+				 (defmethod clear-extension ((object ,type) (slot (eql ',sname)))
+				   (remhash object ,stable))
+                                 (defsetf ,reader ,writer))))
               ;; This so that (de)serialization works
               (setf (proto-reader field) reader
                     (proto-writer field) writer)))
@@ -328,6 +354,13 @@
          define-extend
          ,extends
          ,forms))))
+
+(defun index-within-extensions-p (index message)
+  (let ((extensions (proto-extensions message)))
+    (some #'(lambda (ext)
+              (and (i>= index (proto-extension-from ext))
+                   (i<= index (proto-extension-to ext))))
+          extensions)))
 
 (defmacro define-group (type (&key index arity name conc-name alias-for options documentation)
                         &body fields &environment env)
@@ -490,23 +523,6 @@
                                      (packed-type-p pclass))
                        :documentation documentation)))
           (values field slot idx))))))
-
-(defun index-within-extensions-p (index message)
-  (let ((extensions (proto-extensions message)))
-    (some #'(lambda (ext)
-              (and (i>= index (proto-extension-from ext))
-                   (i<= index (proto-extension-to ext))))
-          extensions)))
-
-(defmacro define-extension (from to)
-  "Define an extension range within a message.
-   The \"body\" is the start and end of the range, both inclusive."
-  `(progn
-     define-extension
-     ,(make-instance 'protobuf-extension
-        :from from
-        :to   (if (eq to 'max) #.(1- (ash 1 29)) to))
-     ()))
 
 ;; Define a service named 'type' with generic functions declared for
 ;; each of the methods within the service
