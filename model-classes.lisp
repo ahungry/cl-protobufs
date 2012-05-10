@@ -17,18 +17,20 @@
   "A table mapping names to 'protobuf' schemas.")
 
 (defun find-protobuf (name)
-  "Given a name (a string or a symbol), return the 'protobuf' schema having that name."
-  (gethash name *all-protobufs*))
+  "Given a name (a symbol or string), return the 'protobuf' schema having that name."
+  (values (gethash name *all-protobufs*)))
 
-(defvar *all-messages* (make-hash-table)
+
+(defvar *all-messages* (make-hash-table :test #'equal)
   "A table mapping Lisp class names to 'protobuf' messages.")
 
-(defmethod find-message-for-class ((class symbol))
-  "Given the name of a class, return the 'protobuf' message and schema for the class."
-  (gethash class *all-messages*))
+(defmethod find-message-for-class (class)
+  "Given the name of a class (a symbol or string), return the 'protobuf-message' for the class."
+  (values (gethash class *all-messages*)))
 
 (defmethod find-message-for-class ((class class))
-  (gethash (class-name class) *all-messages*))
+  (values (gethash (class-name class) *all-messages*)))
+
 
 ;; A few things (the pretty printer) want to keep track of the current schema
 (defvar *protobuf* nil)
@@ -101,13 +103,22 @@
   (declare (ignore initargs))
   ;; Record this schema under both its Lisp and its Protobufs name
   (with-slots (class name) protobuf
-    (when class
-      (setf (gethash class *all-protobufs*) protobuf))
-    (when name
-      (setf (gethash name *all-protobufs*) protobuf))))
+    (record-protobuf protobuf class name)))
+
+(defmethod record-protobuf ((protobuf protobuf) class name)
+  (when class
+    (setf (gethash class *all-protobufs*) protobuf))
+  (when name
+    (setf (gethash name *all-protobufs*) protobuf)))
 
 (defmethod make-load-form ((p protobuf) &optional environment)
-  (make-load-form-saving-slots p :environment environment))
+  (with-slots (class name) p
+    (multiple-value-bind (constructor initializer)
+        (make-load-form-saving-slots p :environment environment)
+      (values `(let ((p ,constructor))
+                  (record-protobuf p ',class ',name)
+                  p)
+              initializer))))
 
 (defmethod print-object ((p protobuf) stream)
   (print-unreadable-object (p stream :type t :identity t)
@@ -279,13 +290,27 @@
 (defmethod initialize-instance :after ((message protobuf-message) &rest initargs)
   (declare (ignore initargs))
   ;; Record this message under just its Lisp class name
-  ;; No need to record an extension, it's already been recorded
-  (with-slots (class message-type) message
-    (when (and class (not (eq message-type :extends)))
-      (setf (gethash class *all-messages*) message))))
+  (with-slots (class name message-type) message
+    ;; No need to record an extension, it's already been recorded
+    (when (not (eq message-type :extends))
+      (record-protobuf message class name))))
+
+(defmethod record-protobuf ((message protobuf-message) class name)
+  (when class
+    (setf (gethash class *all-messages*) message))
+  (when name
+    (setf (gethash name *all-messages*) message)))
 
 (defmethod make-load-form ((m protobuf-message) &optional environment)
-  (make-load-form-saving-slots m :environment environment))
+  (with-slots (class name message-type) m
+    (multiple-value-bind (constructor initializer)
+        (make-load-form-saving-slots m :environment environment)
+      (values (if (eq message-type :extends)
+                constructor
+                `(let ((m ,constructor))
+                   (record-protobuf m ',class ',name)
+                   m))
+              initializer))))
 
 (defmethod print-object ((m protobuf-message) stream)
   (print-unreadable-object (m stream :type t :identity t)
@@ -326,6 +351,23 @@
 
 (defmethod find-field ((message protobuf-message) (name string))
   (find name (proto-fields message) :key #'proto-name :test #'string=))
+
+;; Extensions protocol
+(defgeneric get-extension (object slot)
+  (:documentation
+   "Returns the value of the extended slot 'slot' in 'object'"))
+
+(defgeneric set-extension (object slot value)
+  (:documentation
+   "Sets the value of the extended slot 'slot' to 'value' in 'object'"))
+
+(defgeneric has-extension (object slot)
+  (:documentation
+   "Returns true iff the there is an extended slot named 'slot' in 'object'"))
+
+(defgeneric clear-extension (object slot)
+  (:documentation
+   "Clears the value of the extended slot 'slot' from 'object'"))
 
 
 ;; A protobuf field within a message
