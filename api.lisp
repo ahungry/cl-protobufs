@@ -135,7 +135,7 @@
   (:documentation
    "Returns true iff all of the fields of 'object' are initialized.")
   (:method ((object standard-object))
-    (let* ((class   (class-of object))
+    (let* ((class   (type-of object))
            (message (find-message-for-class class)))
       (assert message ()
               "There is no Protobufs message for the class ~S" class)
@@ -145,7 +145,7 @@
   (:documentation
    "Returns true iff the field 'slot' in 'object' is initialized.")
   (:method ((object standard-object) slot)
-    (let* ((class   (class-of object))
+    (let* ((class   (type-of object))
            (message (find-message-for-class class)))
       (assert message ()
               "There is no Protobufs message for the class ~S" class)
@@ -155,7 +155,7 @@
   (:documentation
    "Initialize all of the fields of 'object' to their default values.")
   (:method ((object standard-object))
-    (let* ((class   (class-of object))
+    (let* ((class   (type-of object))
            (message (find-message-for-class class)))
       (assert message ()
               "There is no Protobufs message for the class ~S" class)
@@ -167,7 +167,7 @@
    "Returns the number of octets required to encode 'object' using the wire format.
     'object' is an object whose Lisp class corresponds to a Protobufs message.")
   (:method ((object standard-object))
-    (let* ((class   (class-of object))
+    (let* ((class   (type-of object))
            (message (find-message-for-class class))
            (type    (and message (proto-class message))))
       (assert message ()
@@ -183,7 +183,7 @@
    corresponds to a Protobufs message.")
   (:method ((object standard-object) &optional buffer (start 0) end)
     (declare (ignore end))
-    (let* ((class   (class-of object))
+    (let* ((class   (type-of object))
            (message (find-message-for-class class))
            (type    (and message (proto-class message))))
       (assert message ()
@@ -197,32 +197,38 @@
         (serialize-object object type buffer start visited)
         buffer))))
 
-;; This is simpler than 'deserialize-object', but doesn't fully support aliasing
 (defgeneric merge-from-array (object buffer &optional start end)
   (:documentation
-   "Deserialize the object encoded in 'buffer' into 'object', starting at the index
-    'start' and ending at 'end'. 'object' is an object whose Lisp class corresponds
-    to a Protobufs message.")
+   "Deserialize the object encoded in 'buffer' and merge it into 'object'.
+    Deserialization starts at the index 'start' and ends at 'end'.
+    'object' must an object whose Lisp class corresponds to the message
+    being deserialized.
+    The return value is the updated object.")
   (:method ((object standard-object) buffer &optional (start 0) (end (length buffer)))
-    (let* ((class   (class-of object))
+    (let* ((class   (type-of object))
            (message (find-message-for-class class))
            (type    (and message (proto-class message))))
       (assert message ()
               "There is no Protobufs message for the class ~S" class)
       (let* ((start  (or start 0))
              (end    (or end (length buffer))))
-        (deserialize-object type buffer start end)))))
+        (merge-from-message object (deserialize-object type buffer start end))))))
 
-(defgeneric merge-from-message (object source-object)
+(defgeneric merge-from-message (object source)
   (:documentation
-   "")
-  (:method ((object standard-object) (source-object standard-object))
-    (let* ((class   (class-of object))
+   "Merge the fields from the source object 'source' into 'object'.
+    The two objects must be of the same type.
+    Singular fields will be overwritten, with embedded messages being be merged.
+    Repeated fields will be concatenated.
+    The return value is the updated object 'object'.")
+  (:method ((object standard-object) (source standard-object))
+    (let* ((class   (type-of object))
            (message (find-message-for-class class))
            (type    (and message (proto-class message))))
-      (assert (eq class (class-of source-object)) ()
-              "The objects ~S and ~S are of not of the same class" object source-object)
       (assert message ()
               "There is no Protobufs message for the class ~S" class)
+      (assert (eq class (type-of source)) ()
+              "The objects ~S and ~S are of not of the same class" object source)
       ;;--- Do this
-      type)))
+      type
+      object)))

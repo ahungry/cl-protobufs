@@ -551,6 +551,35 @@ service ColorWheel {
       (proto:parse-text-format 'typed-list :stream s))))
 ||#
 
+#||
+(proto:define-proto integrity-test ()
+  (proto:define-message inner ()
+    (i :type (or null integer)))
+  (proto:define-message outer ()
+    (inner :type (proto:list-of inner))
+    (simple :type (or null inner))
+    (i :type (or null integer))))
+
+(defun integrity-test (message)
+  (let* ((type (type-of message))
+         (buf (proto:serialize-object-to-stream message type :stream nil))
+         (new (proto:deserialize-object type buf))
+         (newbuf (proto:serialize-object-to-stream new type :stream nil)))
+    (assert (equalp (length buf) (length newbuf)))
+    (assert (equalp buf newbuf))
+    (assert (string= (with-output-to-string (s) (proto:print-text-format message))
+                     (with-output-to-string (s) (proto:print-text-format new))))
+    new))
+
+(integrity-test (make-instance 'outer :i 4))
+
+(integrity-test (make-instance 'outer 
+                  :inner (mapcar #'(lambda (i) (make-instance 'inner :i i)) '(1 2 3))))
+
+(integrity-test (make-instance 'outer 
+                  :simple (make-instance 'inner :i 4)))
+||#
+
 
 ;;; Stubby examples
 

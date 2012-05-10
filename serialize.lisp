@@ -55,7 +55,7 @@
     'visited' is a hash table used to cache object sizes.
     The return value is the buffer containing the serialized object."))
 
-(defmethod serialize-object (object (type symbol) buffer &optional start visited)
+(defmethod serialize-object (object type buffer &optional start visited)
   (let ((message (find-message-for-class type)))
     (assert message ()
             "There is no Protobuf message having the type ~S" type)
@@ -198,7 +198,7 @@
     'end-tag' is used internally to handle the (deprecated) \"group\" feature.
     The return values are the object and the index at which deserialization stopped.."))
 
-(defmethod deserialize-object ((type symbol) buffer &optional start end (end-tag 0))
+(defmethod deserialize-object (type buffer &optional start end (end-tag 0))
   (let ((message (find-message-for-class type)))
     (assert message ()
             "There is no Protobuf message having the type ~S" type)
@@ -215,9 +215,11 @@
                     (funcall ,reader ,object)
                     (slot-value ,object ,slot)))
                (write-slot (object slot writer value)
-                 `(if ,writer
-                    (funcall ,writer ,object ,value)
-                    (setf (slot-value ,object ,slot) ,value))))
+                 (with-gensyms (vval)
+                   `(let ((,vval ,value))
+                      (if ,writer
+                        (funcall ,writer ,object ,vval)
+                        (setf (slot-value ,object ,slot) ,vval))))))
       (labels ((deserialize (type trace end end-tag)
                  (declare (type fixnum end end-tag))
                  (let* ((message (find-message trace type))
@@ -266,73 +268,65 @@
                                          (multiple-value-bind (values idx)
                                              (deserialize-packed type buffer index)
                                            (setq index idx)
-                                           (when slot
-                                             (write-slot object slot writer values))))
+                                           (write-slot object slot writer values)))
                                         ((keywordp type)
                                          (multiple-value-bind (val idx)
                                              (deserialize-prim type buffer index)
                                            (setq index idx)
-                                           (when slot
-                                             (pushnew field rslots)
-                                             ;; This "push" will type-check the entire list for
-                                             ;; 'quux:list-of', so avoid using that type in classes
-                                             ;; in Protobufs if performance is an issue
-                                             ;; We'll reverse the slots at the last minute
-                                             (write-slot object slot writer
-                                                         (cons val (read-slot object slot reader))))))
+                                           (pushnew field rslots)
+                                           ;; This "push" will type-check the entire list for
+                                           ;; 'quux:list-of', so avoid using that type in classes
+                                           ;; in Protobufs if performance is an issue
+                                           ;; We'll reverse the slots at the last minute
+                                           (write-slot object slot writer
+                                                       (cons val (read-slot object slot reader)))))
                                         ((typep (setq msg (and type (or (find-message trace type)
                                                                         (find-enum trace type))))
                                                 'protobuf-message)
                                          (if (eq (proto-message-type msg) :group)
                                            (let* ((etag (make-tag $wire-type-end-group fidx))
-                                                  (obj (deserialize type msg length etag)))
-                                             (when slot
-                                               (pushnew field rslots)
-                                               (write-slot object slot writer
-                                                           (cons obj (read-slot object slot reader)))))
+                                                  (obj  (deserialize type msg length etag)))
+                                             (pushnew field rslots)
+                                             (write-slot object slot writer
+                                                         (cons obj (read-slot object slot reader))))
                                            (multiple-value-bind (len idx)
                                                (decode-uint32 buffer index)
                                              (setq index idx)
                                              (let ((obj (deserialize type msg (+ index len) 0)))
-                                               (when slot
-                                                 (pushnew field rslots)
-                                                 (write-slot object slot writer
-                                                             (cons obj (read-slot object slot reader))))))))
+                                               (pushnew field rslots)
+                                               (write-slot object slot writer
+                                                           (cons obj (read-slot object slot reader)))))))
                                         ((typep msg 'protobuf-enum)
                                          (multiple-value-bind (val idx)
                                              (deserialize-enum (proto-values msg) buffer index)
                                            (setq index idx)
-                                           (when slot
-                                             (pushnew field rslots)
-                                             (write-slot object slot writer
-                                                         (cons val (read-slot object slot reader))))))))
+                                           (pushnew field rslots)
+                                           (write-slot object slot writer
+                                                       (cons val (read-slot object slot reader)))))))
                                  (t
                                   (cond ((keywordp type)
                                          (multiple-value-bind (val idx)
                                              (deserialize-prim type buffer index)
                                            (setq index idx)
-                                           (when slot
-                                             (write-slot object slot writer val))))
+                                           (write-slot object slot writer val)))
                                         ((typep (setq msg (and type (or (find-message trace type)
                                                                         (find-enum trace type))))
                                                 'protobuf-message)
+                                         ;;--- If there's already a value in the slot, merge messages
                                          (if (eq (proto-message-type msg) :group)
                                            (let* ((etag (make-tag $wire-type-end-group fidx))
-                                                  (obj (deserialize type msg length etag)))
-                                             (when slot
-                                               (write-slot object slot writer obj)))
+                                                  (obj  (deserialize type msg length etag)))
+                                             (write-slot object slot writer obj))
                                            (multiple-value-bind (len idx)
                                                (decode-uint32 buffer index)
                                              (setq index idx)
                                              (let ((obj (deserialize type msg (+ index len) 0)))
-                                               (when slot
-                                                 (write-slot object slot writer obj))))))
+                                               (write-slot object slot writer obj)))))
                                         ((typep msg 'protobuf-enum)
                                          (multiple-value-bind (val idx)
                                              (deserialize-enum (proto-values msg) buffer index)
                                            (setq index idx)
-                                           (when slot
-                                             (write-slot object slot writer val))))))))))))))
+                                           (write-slot object slot writer val)))))))))))))
         (declare (dynamic-extent #'deserialize))
         (deserialize (proto-class message) message length end-tag)))))
 
@@ -349,7 +343,7 @@
     'visited' is a hash table used to cache object sizes.
     The return value is the size of the object in bytes."))
 
-(defmethod object-size (object (type symbol) &optional visited)
+(defmethod object-size (object type &optional visited)
   (let ((message (find-message-for-class type)))
     (assert message ()
             "There is no Protobuf message having the type ~S" type)
@@ -612,19 +606,16 @@
                              (if (eq (proto-message-type msg) :group)
                                `((,(make-tag $wire-type-start-group index))
                                  (multiple-value-bind (,vval idx)
-                                     (deserialize-object ',class ,vbuf ,vidx ,vlen
+                                     (deserialize-object ,msg ,vbuf ,vidx ,vlen
                                                          ,(make-tag $wire-type-end-group index))
                                    (setq ,vidx idx)
                                    (push ,vval ,temp)))
                                `((,(make-tag $wire-type-string index))
-                                 ;; Call 'deserialize-object' with the name of the message
-                                 ;; class so that we preferentially get any optimized version
-                                 ;; of the method
                                  (multiple-value-bind (len idx)
                                      (decode-uint32 ,vbuf ,vidx)
                                    (setq ,vidx idx)
                                    (multiple-value-bind (,vval idx)
-                                       (deserialize-object ',class ,vbuf ,vidx (i+ ,vidx len) 0)
+                                       (deserialize-object ,msg ,vbuf ,vidx (i+ ,vidx len) 0)
                                      (setq ,vidx idx)
                                      (push ,vval ,temp))))))))
                          ((typep msg 'protobuf-enum)
@@ -649,7 +640,7 @@
                            (if (eq (proto-message-type msg) :group)
                              `((,(make-tag $wire-type-start-group index))
                                (multiple-value-bind (,vval idx)
-                                   (deserialize-object ',class ,vbuf ,vidx  ,vlen
+                                   (deserialize-object ,msg ,vbuf ,vidx  ,vlen
                                                        ,(make-tag $wire-type-end-group index))
                                  (setq ,vidx idx)
                                  ,(write-slot vobj field vval)))
@@ -658,7 +649,7 @@
                                    (decode-uint32 ,vbuf ,vidx)
                                  (setq ,vidx idx)
                                  (multiple-value-bind (,vval idx)
-                                     (deserialize-object ',class ,vbuf ,vidx (i+ ,vidx len) 0)
+                                     (deserialize-object ,msg ,vbuf ,vidx (i+ ,vidx len) 0)
                                    (setq ,vidx idx)
                                    ,(write-slot vobj field vval)))))))
                          ((typep msg 'protobuf-enum)

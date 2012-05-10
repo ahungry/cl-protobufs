@@ -150,7 +150,16 @@
                   (skip-whitespace stream)
                   (return (coerce string 'string)))))
 
-(defun parse-int (stream)
+(defun parse-signed-int (stream)
+  "Parse the next token in the stream as an integer, then skip the following whitespace.
+   The returned value is the integer."
+  (let* ((sign (if (eql (peek-char nil stream nil) #\-)
+                 (progn (read-char stream) -1)
+                 1))
+         (int  (parse-unsigned-int stream)))
+    (* int sign)))
+
+(defun parse-unsigned-int (stream)
   "Parse the next token in the stream as an integer, then skip the following whitespace.
    The returned value is the integer."
   (when (digit-char-p (peek-char nil stream nil))
@@ -163,7 +172,8 @@
                     (return (parse-integer (coerce token 'string)))))))
 
 (defun parse-float (stream)
-  "Parse the next token in the stream as a float, then skip the following whitespace.                                     The returned value is the float."
+  "Parse the next token in the stream as a float, then skip the following whitespace.
+   The returned value is the float."
   (when (let ((ch (peek-char nil stream nil)))
             (or (digit-char-p ch) (eql ch #\-)))
     (let ((token (parse-token stream)))
@@ -320,7 +330,7 @@
    Updates the 'protobuf-enum' object to have the enum value."
   (check-type enum protobuf-enum)
   (expect-char stream #\= () "enum")
-  (let* ((idx  (prog1 (parse-int stream)
+  (let* ((idx  (prog1 (parse-signed-int stream)
                  (expect-char stream #\; () "enum")
                  (maybe-skip-comments stream)))
          (value (make-instance 'protobuf-enum-value
@@ -422,7 +432,7 @@
       (parse-proto-group stream message required extended-from)
       (let* ((name (prog1 (parse-token stream)
                      (expect-char stream #\= () "message")))
-             (idx  (parse-int stream))
+             (idx  (parse-unsigned-int stream))
              (opts (prog1 (parse-proto-field-options stream)
                      (expect-char stream #\; () "message")
                      (maybe-skip-comments stream)))
@@ -462,7 +472,7 @@
   (let* ((type (prog1 (parse-token stream)
                  (expect-char stream #\= () "message")))
          (name (slot-name->proto (proto->slot-name type)))
-         (idx  (parse-int stream))
+         (idx  (parse-unsigned-int stream))
          (msg  (parse-proto-message stream message type))
          (class  (proto->class-name type *protobuf-package*))
          (field  (make-instance 'protobuf-field
@@ -495,10 +505,10 @@
 
 (defun parse-proto-extension (stream message)
   (check-type message protobuf-message)
-  (let* ((from  (parse-int stream))
+  (let* ((from  (parse-unsigned-int stream))
          (token (parse-token stream))
          (to    (if (digit-char-p (peek-char nil stream nil))
-                  (parse-int stream)
+                  (parse-unsigned-int stream)
                   (parse-token stream))))
     (expect-char stream #\; () "message")
     (assert (string= token "to") ()

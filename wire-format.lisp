@@ -32,7 +32,7 @@
    return the tag that encodes both of them."
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
     (if (typep type 'fixnum)
-      type
+      (ilogior type (iash index 3))
       (let ((type (ecase type
                     ((:int32 :uint32) $wire-type-varint)
                     ((:int64 :uint64) $wire-type-varint)

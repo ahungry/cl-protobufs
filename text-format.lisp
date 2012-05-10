@@ -25,7 +25,7 @@
 (defmethod print-text-format (object &optional type
                               &key (stream *standard-output*)
                                    (suppress-line-breaks *suppress-line-breaks*))
-  (let* ((type    (or type (class-of object)))
+  (let* ((type    (or type (type-of object)))
          (message (find-message-for-class type)))
     (assert message ()
             "There is no Protobuf message having the type ~S" type)
@@ -200,7 +200,7 @@
                                                 ((:float :double) (parse-float stream))
                                                 ((:string) (parse-string stream))
                                                 ((:bool)   (if (boolean-true-p (parse-token stream)) t nil))
-                                                (otherwise (parse-int stream)))))
+                                                (otherwise (parse-signed-int stream)))))
                                      (when slot
                                        (pushnew slot rslots)
                                        (push val (slot-value object slot)))))
@@ -228,7 +228,7 @@
                                                 ((:float :double) (parse-float stream))
                                                 ((:string) (parse-string stream))
                                                 ((:bool)   (if (boolean-true-p (parse-token stream)) t nil))
-                                                (otherwise (parse-int stream)))))
+                                                (otherwise (parse-signed-int stream)))))
                                      (when slot
                                        (setf (slot-value object slot) val))))
                                   ((typep (setq msg (and type (or (find-message trace type)
