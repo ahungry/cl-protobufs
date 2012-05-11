@@ -11,107 +11,6 @@
 (in-package "PROTO-IMPL")
 
 
-;;; Code generation utilities
-
-;; "class-name" -> "ClassName"
-(defun class-name->proto (x)
-  "Given a Lisp class name, returns a Protobufs message or enum name."
-  (remove-if-not #'alphanumericp
-                 (camel-case (format nil "~A" x) :separators '(#\- #\_ #\/ #\. #\space))))
-
-;; "enum-value" -> "ENUM_VALUE"
-(defun enum-name->proto (x &optional prefix)
-  "Given a Lisp enum value name, returns a Protobufs enum value name."
-  (let* ((x (string-upcase (string x)))
-         (x (if (and prefix (starts-with x prefix)) (subseq x (length prefix)) x)))
-    (remove-if-not #'(lambda (x) (or (alphanumericp x) (eql x #\_)))
-                   (format nil "~{~A~^_~}"
-                           (split-string x :separators '(#\- #\_ #\/ #\. #\space))))))
-
-;; "slot-name" -> "slot_name" or "slotName"
-(defvar *camel-case-field-names* nil)
-(defun slot-name->proto (x)
-  "Given a Lisp slot name, returns a Protobufs field name."
-  (if *camel-case-field-names*
-    (remove-if-not #'alphanumericp
-                   (camel-case-but-one (format nil "~A" x) :separators '(#\- #\_ #\/ #\. #\space)))
-    (let ((x (string-downcase (string x))))
-      (remove-if-not #'(lambda (x) (or (alphanumericp x) (eql x #\_)))
-                     (format nil "~{~A~^_~}"
-                             (split-string x :separators '(#\- #\_ #\/ #\. #\space)))))))
-
-
-;; "ClassName" -> "class-name"
-(defun proto->class-name (x &optional package)
-  "Given a Protobufs message or enum type name, returns a Lisp class or type name."
-  (let ((name (nstring-upcase (uncamel-case x))))
-    (if package (intern name package) (make-symbol name))))
-
-;; "ENUM_VALUE" -> "enum-name"
-(defun proto->enum-name (x &optional package)
-  "Given a Protobufs enum value name, returns a Lisp enum value name."
-  (let ((name (format nil "~{~A~^-~}"
-                      (split-string (string-upcase x) :separators '(#\_)))))
-    (if package (intern name package) (make-symbol name))))
-
-;; "slot_name" or "slotName" -> "slot-name"
-(defun proto->slot-name (x &optional package)
-  "Given a Protobufs field value name, returns a Lisp slot name."
-  (let ((name (format nil "~{~A~^-~}" (split-string (nstring-upcase (uncamel-case x)) :separators '(#\_)))))
-    (if package (intern name package) (make-symbol name))))
-
-
-(defun make-lisp-symbol (string)
-  "Intern a string of the 'package:string' and return the symbol."
-  (let* ((string (string string))
-         (colon  (position #\: string))
-         (pkg    (if colon (subseq string 0 colon) "KEYWORD"))
-         (sym    (if colon (subseq string (+ colon 1)) string)))
-    (intern sym pkg)))
-
-#-quux
-(defun fintern (format-string &rest format-args)
-  "Interns a new symbol in the current package."
-  (declare (dynamic-extent format-args))
-  (intern (nstring-upcase (apply #'format nil format-string format-args))))
-
-#-quux
-(defun kintern (format-string &rest format-args)
-  "Interns a new symbol in the keyword package."
-  (declare (dynamic-extent format-args))
-  (intern (nstring-upcase (apply #'format nil format-string format-args)) "KEYWORD"))
-
-
-(define-condition protobufs-warning (warning simple-condition) ())
-
-(defun protobufs-warn (format-control &rest format-arguments)
-  (warn 'protobufs-warning
-        :format-control format-control
-        :format-arguments format-arguments))
-
-
-#-(or allegro lispworks)
-(defmacro without-redefinition-warnings (() &body body)
-  `(progn ,@body))
-    
-#+allegro
-(defmacro without-redefinition-warnings (() &body body)
-  `(excl:without-redefinition-warnings ,@body))
-
-#+lispworks
-(defmacro without-redefinition-warnings (() &body body)
-  `(let ((dspec:*redefinition-action* :quiet)) ,@body))
-
-
-;; A parameterized list types for repeated fields (not type-checked!)
-(deftype list-of (type)
-  (if (eq type 'null)
-    'null
-    'list))
-
-
-#-quux (progn
-
 ;;; Optimized fixnum arithmetic
 
 (defmacro i+ (&rest fixnums)
@@ -164,18 +63,78 @@
   `(ldb ,bytespec (the fixnum ,value)))
 
 
-;;; Collectors, etc
+;;; String utilities
+
+(defun starts-with (string prefix &key (start 0))
+  "Returns true if 'string' starts with the prefix 'prefix' (case insensitive)."
+  (and (i>= (length string) (i+ start (length prefix)))
+       (string-equal string prefix :start1 start :end1 (i+ start (length prefix)))
+       prefix))
+
+(defun ends-with (string suffix &key (end (length string)))
+  "Returns true if 'string' ends with the prefix 'prefix' (case insensitive)."
+  (and (i>= end (length suffix))
+       (string-equal string suffix :start1 (i- end (length suffix)) :end1 end)
+       suffix))
+
+
+;; (camel-case "camel-case") => "CamelCase"
+(defun camel-case (string &optional (separators '(#\-)))
+  (let ((words (split-string string :separators separators)))
+    (format nil "~{~@(~A~)~}" words)))
+
+;; (camel-case-but-one "camel-case") => "camelCase"
+(defun camel-case-but-one (string &optional (separators '(#\-)))
+  (let ((words (split-string string :separators separators)))
+    (format nil "~(~A~)~{~@(~A~)~}" (car words) (cdr words))))
+
+;; (uncamel-case "CamelCase") => "Camel-Case"
+;; (uncamel-case "TCPConnection") => "Tcp-Connection"
+(defun uncamel-case (string &optional (separator #\-))
+  (format nil (format nil "~~{~~A~~^~C~~}" separator)
+          (cl-ppcre:split "(?<=[a-z])(?=[A-Z])" string)))
+
+
+(defun split-string (line &key (start 0) (end (length line)) (separators '(#\-)))
+  "Given a string 'string', splits it at each of the separators.
+   Returns a list of the string pieces, with empty pieces removed."
+  (unless (i= start end)
+    (loop for this fixnum = start then (i+ next 1)
+          for next fixnum = (or (position-if #'(lambda (ch) (member ch separators)) line
+                                             :start this :end end)
+                                end)
+          for piece = (string-right-trim '(#\space) (subseq line this next))
+          when (not (i= (length piece) 0))
+            collect piece
+          until (i>= next end))))
+
+
+;;; Managing symbols
 
 (defmacro with-gensyms ((&rest bindings) &body body)
   `(let ,(mapcar #'(lambda (b) `(,b (gensym ,(string b)))) bindings)
      ,@body))
 
-(defmacro with-prefixed-accessors (names (prefix object) &body body)
-  `(with-accessors (,@(loop for name in names
-                            collect `(,name ,(fintern "~A~A" prefix name))))
-       ,object
-     ,@body))
+(defun make-lisp-symbol (string)
+  "Intern a string of the 'package:string' and return the symbol."
+  (let* ((string (string string))
+         (colon  (position #\: string))
+         (pkg    (if colon (subseq string 0 colon) "KEYWORD"))
+         (sym    (if colon (subseq string (+ colon 1)) string)))
+    (intern sym pkg)))
 
+(defun fintern (format-string &rest format-args)
+  "Interns a new symbol in the current package."
+  (declare (dynamic-extent format-args))
+  (intern (nstring-upcase (apply #'format nil format-string format-args))))
+
+(defun kintern (format-string &rest format-args)
+  "Interns a new symbol in the keyword package."
+  (declare (dynamic-extent format-args))
+  (intern (nstring-upcase (apply #'format nil format-string format-args)) "KEYWORD"))
+
+
+;;; Collectors, etc
 
 (defmacro with-collectors ((&rest collection-descriptions) &body body)
   (let ((let-bindings  ())
@@ -203,6 +162,12 @@
                 `((declare (dynamic-extent ,@dynamic-extents))))
          ,@body))))
 
+(defmacro with-prefixed-accessors (names (prefix object) &body body)
+  `(with-accessors (,@(loop for name in names
+                            collect `(,name ,(fintern "~A~A" prefix name))))
+       ,object
+     ,@body))
+
 
 ;;; Functional programming, please
 
@@ -224,48 +189,126 @@
          (apply ,function ,(car args) more-args))
     form))
 
+;; A parameterized list types for repeated fields (not type-checked!)
+(deftype list-of (type)
+  (if (eq type 'null)
+    'null
+    'list))
 
-;;; String utilities
+;;; Code generation utilities
 
-(defun starts-with (string prefix &key (start 0))
-  (and (i>= (length string) (i+ start (length prefix)))
-       (string-equal string prefix :start1 start :end1 (i+ start (length prefix)))
-       prefix))
+(defvar *proto-name-separators* '(#\- #\_ #\/ #\space))
+(defvar *camel-case-field-names* nil)
 
-(defun ends-with (string suffix &key (end (length string)))
-  (and (i>= end (length suffix))
-       (string-equal string suffix :start1 (i- end (length suffix)) :end1 end)
-       suffix))
+;; "class-name" -> "ClassName", ("ClassName")
+;; "outer-class.inner-class" -> "InnerClass", ("OuterClass" "InnerClass")
+(defun class-name->proto (x)
+  "Given a Lisp class name, returns a Protobufs message or enum name.
+   The second value is the fully qualified name, as a list."
+  (let* ((xs (split-string (string x) :separators '(#\.)))
+         (ns (loop for x in (butlast xs)
+                   collect (remove-if-not #'alphanumericp
+                                          (camel-case (format nil "~A" x) *proto-name-separators*))))
+         (nx (car (last xs)))
+         (name (remove-if-not #'alphanumericp (camel-case nx *proto-name-separators*))))
+    (values name (append ns (list name)))))
+
+;; "enum-value" -> "ENUM_VALUE", ("ENUM_VALUE")
+;; "class-name.enum-value" -> "ENUM_VALUE", ("ClassName" "ENUM_VALUE")
+(defun enum-name->proto (x &optional prefix)
+  "Given a Lisp enum value name, returns a Protobufs enum value name.
+   The second value is the fully qualified name, as a list."
+  (let* ((xs (split-string (string x) :separators '(#\.)))
+         (ns (loop for x in (butlast xs)
+                   collect (remove-if-not #'alphanumericp
+                                          (camel-case (format nil "~A" x) *proto-name-separators*))))
+         (nx (string-upcase (car (last xs))))
+         (nx (if (and prefix (starts-with nx prefix)) (subseq nx (length prefix)) nx))
+         ;; Keep underscores, they are standards separators in Protobufs enum names
+         (name (remove-if-not #'(lambda (x) (or (alphanumericp x) (eql x #\_)))
+                              (format nil "~{~A~^_~}"
+                                      (split-string nx :separators *proto-name-separators*)))))
+    (values name (append ns (list name)))))
+
+;; "slot-name" -> "slot_name", ("slot_name") or "slotName", ("slotName")
+;; "class-name.slot-name" -> "Class.slot_name", ("ClassName" "slot_name")
+(defun slot-name->proto (x)
+  "Given a Lisp slot name, returns a Protobufs field name.
+   The second value is the fully qualified name, as a list."
+  (let* ((xs (split-string (string x) :separators '(#\.)))
+         (ns (loop for x in (butlast xs)
+                   collect (remove-if-not #'alphanumericp
+                                          (camel-case (format nil "~A" x) *proto-name-separators*))))
+         (nx (string-downcase (car (last xs))))
+         (name (if *camel-case-field-names*
+                 (remove-if-not #'alphanumericp
+                                (camel-case-but-one (format nil "~A" nx) *proto-name-separators*))
+                 ;; Keep underscores, they are standards separators in Protobufs field names
+                 (remove-if-not #'(lambda (x) (or (alphanumericp x) (eql x #\_)))
+                                (format nil "~{~A~^_~}"
+                                        (split-string nx :separators *proto-name-separators*))))))
+    (values name (append ns (list name)))))
 
 
-;; (camel-case "camel-case") => "CamelCase"
-(defun camel-case (string &key (separators '(#\-)))
-  (let ((words (split-string string :separators separators)))
-    (format nil "~{~@(~A~)~}" words)))
+;; "ClassName" -> 'class-name
+;; "cl-user.ClassName" -> 'cl-user::class-name
+;; "cl-user.OuterClass.InnerClass" -> 'cl-user::outer-class.inner-class
+(defun proto->class-name (x &optional package)
+  "Given a Protobufs message or enum type name, returns a Lisp class or type name.
+   This resolves Protobufs qualified names as best as it can."
+  (let* ((xs (split-string (substitute #\- #\_ (string-upcase (uncamel-case x)))
+                           :separators '(#\.)))
+         (pkg (and (cdr xs) (find-package (first xs))))
+         (package (or pkg package))
+         (name (format nil "~{~A~^.~}" (if pkg (cdr xs) xs))))
+    (values (if package (intern name package) (make-symbol name)) package xs)))
 
-;; (camel-case-but-one "camel-case") => "camelCase"
-(defun camel-case-but-one (string &key (separators '(#\-)))
-  (let ((words (split-string string :separators separators)))
-    (format nil "~(~A~)~{~@(~A~)~}" (car words) (cdr words))))
+;; "ENUM_VALUE" -> 'enum-value
+;; "cl-user.ENUM_VALUE" -> 'cl-user::enum-value
+;; "cl-user.OuterClass.ENUM_VALUE" -> 'cl-user::outer-class.enum-value
+(defun proto->enum-name (x &optional package)
+  "Given a Protobufs enum value name, returns a Lisp enum value name.
+   This resolves Protobufs qualified names as best as it can."
+  (let* ((xs (split-string (substitute #\- #\_ (string-upcase (uncamel-case x)))
+                           :separators '(#\.)))
+         (pkg (and (cdr xs) (find-package (first xs))))
+         (package (or pkg package))
+         (name (format nil "~{~A~^.~}" (if pkg (cdr xs) xs))))
+    (values (if package (intern name package) (make-symbol name)) package xs)))
 
-;; (uncamel-case "CamelCase") => "Camel-Case"
-(defun uncamel-case (string &key (separator #\-))
-  (format nil (format nil "~~{~~A~~^~C~~}" separator)
-          (cl-ppcre:split "(?<=[a-z])(?=[A-Z])" string)))
+;; "slot_name" or "slotName" -> 'slot-name
+;; "cl-user.slot_name" or "cl-user.slotName" -> 'cl-user::slot-name
+;; "cl-user.OuterClass.slot_name" -> 'cl-user::outer-class.slot-name
+(defun proto->slot-name (x &optional package)
+  "Given a Protobufs field value name, returns a Lisp slot name.
+   This resolves Protobufs qualified names as best as it can."
+  (let* ((xs (split-string (substitute #\- #\_ (string-upcase (uncamel-case x)))
+                           :separators '(#\.)))
+         (pkg (and (cdr xs) (find-package (first xs))))
+         (package (or pkg package))
+         (name (format nil "~{~A~^.~}" (if pkg (cdr xs) xs))))
+    (values (if package (intern name package) (make-symbol name)) package xs)))
 
 
-(defun split-string (line &key (start 0) (end (length line)) (separators '(#\-)))
-  (unless (i= start end)
-    (loop for this fixnum = start then (i+ next 1)
-          for next fixnum = (or (position-if #'(lambda (ch) (member ch separators)) line
-                                             :start this :end end)
-                                end)
-          for piece = (string-right-trim '(#\space) (subseq line this next))
-          when (not (i= (length piece) 0))
-            collect piece
-          until (i>= next end))))
+(define-condition protobufs-warning (warning simple-condition) ())
 
-)       ;#-quux
+(defun protobufs-warn (format-control &rest format-arguments)
+  (warn 'protobufs-warning
+        :format-control format-control
+        :format-arguments format-arguments))
+
+
+#-(or allegro lispworks)
+(defmacro without-redefinition-warnings (() &body body)
+  `(progn ,@body))
+    
+#+allegro
+(defmacro without-redefinition-warnings (() &body body)
+  `(excl:without-redefinition-warnings ,@body))
+
+#+lispworks
+(defmacro without-redefinition-warnings (() &body body)
+  `(let ((dspec:*redefinition-action* :quiet)) ,@body))
 
 
 ;;; Floating point utilities

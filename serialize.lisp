@@ -274,9 +274,9 @@
                                              (deserialize-prim type buffer index)
                                            (setq index idx)
                                            (pushnew field rslots)
-                                           ;; This "push" will type-check the entire list for
-                                           ;; 'quux:list-of', so avoid using that type in classes
-                                           ;; in Protobufs if performance is an issue
+                                           ;; This "push" could type-check the entire list if
+                                           ;; there's a parameterized list type in effect,
+                                           ;; so you'll want to avoid using such types
                                            ;; We'll reverse the slots at the last minute
                                            (write-slot object slot writer
                                                        (cons val (read-slot object slot reader)))))

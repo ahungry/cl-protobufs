@@ -93,15 +93,8 @@
 
 (defpackage protobufs-implementation
   (:nicknames :proto-impl)
-  (:use :common-lisp #+quux :quux :protobufs)
+  (:use :common-lisp :protobufs)
 
-  #+quux
-  (:shadowing-import-from :protobufs
-   "LIST-OF")
-  #+quux
-  (:shadow "DECLARE-LIST-OF" "%DECLARE-LIST-OF")
-
-  #-quux
   (:import-from :closer-mop
    "CLASS-SLOTS"
    "CLASS-DIRECT-SLOTS"
@@ -208,6 +201,8 @@
    "ZIG-ZAG-ENCODE64"
    "DECODE-UINT32"
    "DECODE-UINT64"
+   "DECODE-INT32"
+   "DECODE-INT64"
    "DECODE-FIXED32"
    "DECODE-FIXED64"
    "DECODE-SINGLE"

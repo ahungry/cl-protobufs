@@ -211,6 +211,7 @@
     (eval (proto-impl:generate-deserializer message))))
 
 (setq test1  (make-instance 'proto-test1 :intval 150))
+(setq test1b (make-instance 'proto-test1 :intval -150))
 (setq test2  (make-instance 'proto-test2 :strval "testing"))
 (setq test2b (make-instance 'proto-test2 :strval "1 2 3"))
 (setq test3  (make-instance 'proto-test3 :recval test1))
@@ -223,6 +224,10 @@
 (setq tser1 (proto:serialize-object-to-stream test1 'proto-test1 :stream nil))
 (equalp tser1 #(#x08 #x96 #x01))
 (describe (proto:deserialize-object 'proto-test1 tser1))
+
+(setq tser1b (proto:serialize-object-to-stream test1b 'proto-test1 :stream nil))
+(equalp tser1b #(#x08 #xEA #xFE #xFF #xFF #x0F))
+(describe (proto:deserialize-object 'proto-test1 tser1b))
 
 (setq tser2 (proto:serialize-object-to-stream test2 'proto-test2 :stream nil))
 (equalp tser2 #(#x12 #x07 #x74 #x65 #x73 #x74 #x69 #x6E #x67))

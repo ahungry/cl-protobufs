@@ -49,6 +49,7 @@
         (ilogior type (iash index 3))))))
 
 (define-compiler-macro make-tag (&whole form type index)
+  (setq type (fold-symbol type))
   (cond ((typep type 'fixnum)
          `(ilogior ,type (iash ,index 3)))
         ((keywordp type)
@@ -67,6 +68,20 @@
                        ((:date :time :datetime :timestamp) $wire-type-64bit))))
            `(ilogior ,type (iash ,index 3))))
         (t form)))
+
+(defun fold-symbol (x)
+  "Given an expression 'x', constant-fold it until it can be foleded no more."
+  (let ((last '#:last))
+    (loop
+      (cond ((eq x last) (return x))
+            ((and (listp x)
+                  (eq (first x) 'quote)
+                  (constantp (second x)))
+             (shiftf last x (second x)))
+            ((and (symbolp x)
+                  (boundp x))
+             (shiftf last x (symbol-value x)))
+            (t (return x))))))
 
 
 (defun zig-zag-encode32 (val)
@@ -130,9 +145,9 @@
       (declare (type fixnum idx))
       (ecase type
         ((:int32 :uint32)
-         (encode-uint32 val buffer idx))
+         (encode-uint32 (ldb (byte 32 0) val) buffer idx))
         ((:int64 :uint64)
-         (encode-uint64 val buffer idx))
+         (encode-uint64 (ldb (byte 64 0) val) buffer idx))
         ((:sint32)
          (encode-uint32 (zig-zag-encode32 val) buffer idx))
         ((:sint64)
@@ -163,9 +178,11 @@
                       (format nil "~A:~A" (package-name (symbol-package val)) (symbol-name val)))))
            (encode-string val buffer idx)))
         ((:date :time :datetime :timestamp)
-         (encode-uint64 val buffer idx))))))
+         (encode-uint64 (ldb (byte 64 0) val) buffer idx))))))
 
 (define-compiler-macro serialize-prim (&whole form val type tag buffer index)
+  (setq type (fold-symbol type)
+        tag  (fold-symbol tag))
   (if (member type '(:int32 :uint32 :int64 :uint64 :sint32 :sint64
                      :fixed32 :sfixed32 :fixed64 :sfixed64
                      :string :bytes :bool :float :double))
@@ -176,9 +193,13 @@
        (let ((idx (encode-uint32 ,tag ,buffer ,index)))
          (declare (type fixnum idx))
          ,(ecase type
-            ((:int32 :uint32)
+            ((:int32 )
+             `(encode-uint32 (ldb (byte 32 0) ,val) ,buffer idx))
+            ((:int64)
+             `(encode-uint64 (ldb (byte 64 0) ,val) ,buffer idx))
+            ((:uint32)
              `(encode-uint32 ,val ,buffer idx))
-            ((:int64 :uint64)
+            ((:uint64)
              `(encode-uint64 ,val ,buffer idx))
             ((:sint32)
              `(encode-uint32 (zig-zag-encode32 ,val) ,buffer idx))
@@ -222,10 +243,10 @@
       (ecase type
         ((:int32 :uint32)
          (dolist (val values idx)
-           (setq idx (encode-uint32 val buffer idx))))
+           (setq idx (encode-uint32 (ldb (byte 32 0) val) buffer idx))))
         ((:int64 :uint64)
          (dolist (val values idx)
-           (setq idx (encode-uint64 val buffer idx))))
+           (setq idx (encode-uint64 (ldb (byte 64 0) val) buffer idx))))
         ((:sint32)
          (dolist (val values idx)
            (setq idx (encode-uint32 (zig-zag-encode32 val) buffer idx))))
@@ -252,11 +273,14 @@
            (setq idx (encode-double val buffer idx))))))))
 
 (define-compiler-macro serialize-packed (&whole form values type tag buffer index)
+  (setq type (fold-symbol type)
+        tag  (fold-symbol tag))
   (if (member type '(:int32 :uint32 :int64 :uint64 :sint32 :sint64
                      :fixed32 :sfixed32 :fixed64 :sfixed64
                      :float :double))
     `(locally (declare (optimize (speed 3) (safety 0) (debug 0))
                        (type (simple-array (unsigned-byte 8)) ,buffer)
+                       ;; 'tag' is a constant, no need to declare its type
                        (type fixnum ,index))
        (let ((idx (encode-uint32 ,tag ,buffer ,index)))
          (declare (type fixnum idx))
@@ -266,9 +290,13 @@
            (setq idx (encode-uint32 len ,buffer idx)))
          (dolist (val ,values idx)
            ,(ecase type
-              ((:int32 :uint32)
+              ((:int32)
+               `(setq idx (encode-uint32 (ldb (byte 32 0) val) ,buffer idx)))
+              ((:int64)
+               `(setq idx (encode-uint64 (ldb (byte 64 0) val) ,buffer idx)))
+              ((:uint32)
                `(setq idx (encode-uint32 val ,buffer idx)))
-              ((:int64 :uint64)
+              ((:uint64)
                `(setq idx (encode-uint64 val ,buffer idx)))
               ((:sint32)
                `(setq idx (encode-uint32 (zig-zag-encode32 val) ,buffer idx)))
@@ -302,7 +330,7 @@
            (idx (encode-uint32 tag buffer index)))
       (declare (type (unsigned-byte 32) val)
                (type fixnum idx))
-      (encode-uint32 val buffer idx))))
+      (encode-uint32 (ldb (byte 32 0) val) buffer idx))))
 
 
 ;;; Deserializers
@@ -317,9 +345,13 @@
            (type fixnum index))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
     (ecase type
-      ((:int32 :uint32)
+      ((:int32)
+       (decode-int32 buffer index))
+      ((:int64)
+       (decode-int64 buffer index))
+      ((:uint32)
        (decode-uint32 buffer index))
-      ((:int64 :uint64)
+      ((:uint64)
        (decode-uint64 buffer index))
       ((:sint32)
        (multiple-value-bind (val idx)
@@ -359,6 +391,7 @@
        (decode-uint64 buffer index)))))
 
 (define-compiler-macro deserialize-prim (&whole form type buffer index)
+  (setq type (fold-symbol type))
   (if (member type '(:int32 :uint32 :int64 :uint64 :sint32 :sint64
                      :fixed32 :sfixed32 :fixed64 :sfixed64
                      :string :bytes :bool :float :double))
@@ -366,9 +399,13 @@
                        (type (simple-array (unsigned-byte 8)) ,buffer)
                        (type fixnum ,index))
        ,(ecase type
-          ((:int32 :uint32)
+          ((:int32)
+           `(decode-int32 ,buffer ,index))
+          ((:int64)
+           `(decode-int64 ,buffer ,index))
+          ((:uint32)
            `(decode-uint32 ,buffer ,index))
-          ((:int64 :uint64)
+          ((:uint64)
            `(decode-uint64 ,buffer ,index))
           ((:sint32)
            `(multiple-value-bind (val idx)
@@ -420,9 +457,13 @@
               (return-from deserialize-packed (values values idx)))
             (multiple-value-bind (val nidx)
                 (ecase type
-                  ((:int32 :uint32)
+                  ((:int32)
+                   (decode-int32 buffer idx))
+                  ((:int64)
+                   (decode-int64 buffer idx))
+                  ((:uint32)
                    (decode-uint32 buffer idx))
-                  ((:int64 :uint64)
+                  ((:uint64)
                    (decode-uint64 buffer idx))
                   ((:sint32)
                    (multiple-value-bind (val idx)
@@ -448,6 +489,7 @@
               (setq idx nidx))))))))
 
 (define-compiler-macro deserialize-packed (&whole form type buffer index)
+  (setq type (fold-symbol type))
   (if (member type '(:int32 :uint32 :int64 :uint64 :sint32 :sint64
                      :fixed32 :sfixed32 :fixed64 :sfixed64
                      :float :double))
@@ -467,9 +509,13 @@
                    (return-from deserialize-packed (values values idx)))
                  (multiple-value-bind (val nidx)
                      ,(ecase type
-                        ((:int32 :uint32)
+                        ((:int32)
+                         `(decode-int32 ,buffer idx))
+                        ((:int64)
+                         `(decode-int64 ,buffer idx))
+                        ((:uint32)
                          `(decode-uint32 ,buffer idx))
-                        ((:int64 :uint64)
+                        ((:uint64)
                          `(decode-uint64 ,buffer idx))
                         ((:sint32)
                          `(multiple-value-bind (val idx)
@@ -504,7 +550,7 @@
            (type fixnum index))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
     (multiple-value-bind (val idx)
-        (decode-uint32 buffer index)
+        (decode-int32 buffer index)
       (let ((val (let ((e (find val values :key #'proto-index)))
                    (and e (proto-value e)))))
         (values val idx)))))
@@ -519,9 +565,9 @@
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
     (ecase type
       ((:int32 :uint32)
-       (i+ (length32 tag) (length32 val)))
+       (i+ (length32 tag) (length32 (ldb (byte 32 0) val))))
       ((:int64 :uint64)
-       (i+ (length32 tag) (length64 val)))
+       (i+ (length32 tag) (length64 (ldb (byte 64 0) val))))
       ((:sint32)
        (i+ (length32 tag) (length32 (zig-zag-encode32 val))))
       ((:sint64)
@@ -552,14 +598,20 @@
        (i+ (length32 tag) 8)))))
 
 (define-compiler-macro prim-size (&whole form val type tag)
+  (setq type (fold-symbol type)
+        tag  (fold-symbol tag))
   (if (member type '(:int32 :uint32 :int64 :uint64 :sint32 :sint64
                      :fixed32 :sfixed32 :fixed64 :sfixed64
                      :string :bytes :bool :float :double))
     `(locally (declare (optimize (speed 3) (safety 0) (debug 0)))
        ,(ecase type
-          ((:int32 :uint32)
+          ((:int32)
+           `(i+ (length32 ,tag) (length32 (ldb (byte 32 0) ,val))))
+          ((:int64)
+           `(i+ (length32 ,tag) (length64 (ldb (byte 64 0) ,val))))
+          ((:uint32)
            `(i+ (length32 ,tag) (length32 ,val)))
-          ((:int64 :uint64)
+          ((:uint64)
            `(i+ (length32 ,tag) (length64 ,val)))
           ((:sint32)
            `(i+ (length32 ,tag) (length32 (zig-zag-encode32 ,val))))
@@ -592,8 +644,8 @@
                  (declare (type fixnum len))
                  (dolist (val values len)
                    (iincf len (ecase type
-                                ((:int32 :uint32) (length32 val))
-                                ((:int64 :uint64) (length64 val))
+                                ((:int32 :uint32) (length32 (ldb (byte 32 0) val)))
+                                ((:int64 :uint64) (length64 (ldb (byte 64 0) val)))
                                 ((:sint32) (length32 (zig-zag-encode32 val)))
                                 ((:sint64) (length64 (zig-zag-encode64 val)))
                                 ((:fixed32 :sfixed32) 4)
@@ -606,6 +658,8 @@
       (values (i+ (length32 tag) (length32 len) len) len))))
 
 (define-compiler-macro packed-size (&whole form values type tag)
+  (setq type (fold-symbol type)
+        tag  (fold-symbol tag))
   (if (member type '(:int32 :uint32 :int64 :uint64 :sint32 :sint64
                      :fixed32 :sfixed32 :fixed64 :sfixed64
                      :float :double))
@@ -614,8 +668,10 @@
                     (declare (type fixnum len))
                     (dolist (val ,values len)
                       (iincf len ,(ecase type
-                                    ((:int32 :uint32) `(length32 val))
-                                    ((:int64 :uint64) `(length64 val))
+                                    ((:int32) `(length32 (ldb (byte 32 0) val)))
+                                    ((:int64) `(length64 (ldb (byte 64 0) val)))
+                                    ((:uint32) `(length32 val))
+                                    ((:uint64) `(length64 val))
                                     ((:sint32) `(length32 (zig-zag-encode32 val)))
                                     ((:sint64) `(length64 (zig-zag-encode64 val)))
                                     ((:fixed32 :sfixed32) `4)
@@ -632,7 +688,7 @@
   (let ((idx (let ((e (find val values :key #'proto-value)))
                (and e (proto-index e)))))
     (assert idx () "There is no enum value for ~S" val)
-    (i+ (length32 tag) (length32 idx))))
+    (i+ (length32 tag) (length32 (ldb (byte 32 0) idx)))))
 
 
 ;;; Wire-level encoders
@@ -849,6 +905,33 @@
         do (setq val (logior val (ash (ildb (byte 7 0) byte) places)))
         until (i< byte 128)
         finally (return (values val index))))
+
+(defun decode-int32 (buffer index)
+  "Decodes the next 32-bit varint integer in the buffer at the given index.
+   Returns both the decoded value and the new index into the buffer.
+   Watch out, this function turns off all type checking and array bounds checking."
+  (declare (optimize (speed 3) (safety 0) (debug 0)))
+  (declare (type (simple-array (unsigned-byte 8)) buffer)
+           (type fixnum index))
+  (multiple-value-bind (val index)
+      (decode-uint32 buffer index)
+    (declare (type fixnum val))
+    (when (i= (ildb (byte 1 31) val) 1)
+      (idecf val #.(ash 1 32)))
+    (values val index)))
+
+(defun decode-int64 (buffer index)
+  "Decodes the next 64-bit varint integer in the buffer at the given index.
+   Returns both the decoded value and the new index into the buffer.
+   Watch out, this function turns off all type checking and array bounds checking."
+  (declare (optimize (speed 3) (safety 0) (debug 0)))
+  (declare (type (simple-array (unsigned-byte 8)) buffer)
+           (type fixnum index))
+  (multiple-value-bind (val index)
+      (decode-uint64 buffer index)
+    (when (i= (ldb (byte 1 63 ) val) 1)
+      (decf val #.(ash 1 64)))
+    (values val index)))
 
 (defun decode-fixed32 (buffer index)
   "Decodes the next 32-bit unsigned fixed integer in the buffer at the given index.

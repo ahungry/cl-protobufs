@@ -251,7 +251,7 @@
                         (values "int32" :int32))
                        ((every #'(lambda (x) (symbolp x)) values)
                         (let ((values (remove-if #'null values)))
-                          (values (class-name->proto type)
+                          (values (class-name->proto (format nil "~A" type))
                                   type
                                   nil           ;don't pack enums
                                   (if enum-filter (funcall enum-filter values) values))))

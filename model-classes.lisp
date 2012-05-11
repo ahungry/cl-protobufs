@@ -501,18 +501,3 @@
 
 (defmethod (setf proto-function) (function (method protobuf-method))
   (setf (proto-function method) function))
-
-
-;; Better type checking for these guys
-#+quux (progn
-
-(quux:declare-list-of protobuf-option)
-(quux:declare-list-of protobuf-enum)
-(quux:declare-list-of protobuf-enum-value)
-(quux:declare-list-of protobuf-message)
-(quux:declare-list-of protobuf-extension)
-(quux:declare-list-of protobuf-field)
-(quux:declare-list-of protobuf-service)
-(quux:declare-list-of protobuf-method)
-
-)       ;#+quux
