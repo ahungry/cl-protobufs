@@ -41,14 +41,17 @@
 
 (defun expect-char (stream char &optional chars within)
   "Expect to see 'char' as the next character in the stream; signal an error if it's not there.
-   Then skip all of the following whitespace."
-  (if (if (listp char)
-        (member (peek-char nil stream nil) char)
-        (eql (peek-char nil stream nil) char))
-    (read-char stream)
-    (error "No '~C' found~@[ within '~A'~] at position ~D"
-           char within (file-position stream)))
-  (maybe-skip-chars stream chars))
+   Then skip all of the following whitespace.
+   The return value is the character that was eaten."
+  (let (ch)
+    (if (if (listp char)
+          (member (peek-char nil stream nil) char)
+          (eql (peek-char nil stream nil) char))
+      (setq ch (read-char stream))
+      (error "No '~C' found~@[ within '~A'~] at position ~D"
+             char within (file-position stream)))
+    (maybe-skip-chars stream chars)
+    ch))
 
 (defun maybe-skip-chars (stream chars)
   "Skip some optional characters in the stream,
@@ -104,14 +107,17 @@
   (skip-whitespace stream))
 
 
-(defun parse-token (stream)
+(defun parse-token (stream &optional additional-chars)
   "Parse the next token in the stream, then skip the following whitespace.
    The returned value is the token."
-  (when (proto-token-char-p (peek-char nil stream nil))
+  (when (let ((ch (peek-char nil stream nil)))
+          (or (proto-token-char-p ch) (member ch additional-chars)))
     (loop for ch = (read-char stream nil)
           for ch1 = (peek-char nil stream nil)
           collect ch into token
-          until (or (null ch1) (not (proto-token-char-p ch1)))
+          until (or (null ch1)
+                    (and (not (proto-token-char-p ch1))
+                         (not (member ch1 additional-chars))))
           finally (progn
                     (skip-whitespace stream)
                     (return (coerce token 'string))))))
@@ -145,10 +151,40 @@
   (loop with ch0 = (read-char stream nil)
         for ch = (read-char stream nil)
         until (or (null ch) (char= ch ch0))
+        when (eql ch #\\)
+          do (setq ch (unescape-char stream))
         collect ch into string
         finally (progn
                   (skip-whitespace stream)
                   (return (coerce string 'string)))))
+
+(defun unescape-char (stream)
+  (let ((ch (read-char stream nil)))
+    (assert (not (null ch)) ()
+            "End of stream reached while reading escaped character")
+    (flet ((make-char (code)
+             (assert (< code char-code-limit))
+             (code-char code)))
+      (case ch
+        ((#\x)
+         (let* ((d1 (digit-char-p (read-char stream) 16))
+                (d2 (digit-char-p (read-char stream) 16)))
+           (code-char (+ (* d1 16) d2))))
+        ((#\0 #\1 #\2 #\3 #\4 #\5 #\6 #\7 #\8 #\9)
+         (if (not (digit-char-p (peek-char nil stream nil)))
+           #\null
+           (let* ((d1 (digit-char-p ch 8))
+                  (d2 (digit-char-p (read-char stream) 8))
+                  (d3 (digit-char-p (read-char stream) 8)))
+             (code-char (+ (* d1 64) (* d2 8) d3)))))
+        ((#\t) #\Tab)
+        ((#\n) #\Newline)
+        ((#\r) #\Return)
+        ((#\f) #\Page)
+        ((#\b) #\Backspace)
+        ((#\a) (code-char 7))
+        ((#\e) (code-char 27))
+        (otherwise ch)))))
 
 (defun parse-signed-int (stream)
   "Parse the next token in the stream as an integer, then skip the following whitespace.
@@ -166,20 +202,34 @@
     (loop for ch = (read-char stream nil)
           for ch1 = (peek-char nil stream nil)
           collect ch into token
-          until (or (null ch1) (not (digit-char-p ch1)))
+          until (or (null ch1) (and (not (digit-char-p ch1)) (not (eql ch #\x))))
           finally (progn
                     (skip-whitespace stream)
-                    (return (parse-integer (coerce token 'string)))))))
+                    (let ((token (coerce token 'string)))
+                      (if (starts-with token "0x")
+                        (let ((*read-base* 16))
+                          (return (parse-integer (subseq token 2))))
+                        (return (parse-integer token))))))))
 
 (defun parse-float (stream)
   "Parse the next token in the stream as a float, then skip the following whitespace.
    The returned value is the float."
+  (let ((number (parse-number stream)))
+    (when number
+      (coerce number 'float))))
+
+(defun parse-number (stream)
   (when (let ((ch (peek-char nil stream nil)))
-            (or (digit-char-p ch) (eql ch #\-)))
-    (let ((token (parse-token stream)))
+          (or (digit-char-p ch) (member ch '(#\- #\+ #\.))))
+    (let ((token (parse-token stream '(#\- #\+ #\.))))
       (when token
         (skip-whitespace stream)
-        (coerce (read-from-string token) 'float)))))
+        (cond ((starts-with token "0x")
+               (parse-integer (subseq token 2) :radix 16))
+              ((starts-with token "-0x")
+               (- (parse-integer (subseq token 3) :radix 16)))
+              (t
+               (read-from-string token)))))))
 
 
 ;;; The parser itself
@@ -276,26 +326,30 @@
     (process-imports import)
     (setf (proto-imports protobuf) (nconc (proto-imports protobuf) (list import)))))
 
-(defun parse-proto-option (stream protobuf &optional (terminator #\;))
+(defun parse-proto-option (stream protobuf &optional (terminators '(#\;)))
   "Parse a Protobufs option line from 'stream'.
    Updates the 'protobuf' (or message, service, method) to have the option."
   (check-type protobuf (or null base-protobuf))
-  (let* ((key (prog1 (parse-parenthesized-token stream)
+  (let* (terminator
+         (key (prog1 (parse-parenthesized-token stream)
                 (expect-char stream #\= () "option")))
-         (val (prog1 (if (eql (peek-char nil stream nil) #\")
-                       (parse-string stream)
-                       (parse-token stream))
-                (expect-char stream terminator () "option")
+         (val (prog1 (let ((ch (peek-char nil stream nil)))
+                       (cond ((eql ch #\")
+                              (parse-string stream))
+                             ((or (digit-char-p ch) (member ch '(#\- #\+ #\.)))
+                              (parse-number stream))
+                             (t (parse-token stream))))
+                (setq terminator (expect-char stream terminators () "option"))
                 (maybe-skip-comments stream)))
          (option (make-instance 'protobuf-option
                    :name  key
                    :value val)))
     (cond (protobuf
            (setf (proto-options protobuf) (nconc (proto-options protobuf) (list option)))
-           option)
+           (values option terminator))
           (t
            ;; If nothing to graft the option into, just return it as the value
-           option))))
+           (values option terminator)))))
 
 
 (defun parse-proto-enum (stream protobuf)
@@ -322,7 +376,7 @@
               (setf (proto-alias-for enum) (make-lisp-symbol alias))))
           (return-from parse-proto-enum enum))
         (if (string= name "option")
-          (parse-proto-option stream enum #\;)
+          (parse-proto-option stream enum)
           (parse-proto-enum-value stream enum name))))))
 
 (defun parse-proto-enum-value (stream enum name)
@@ -375,7 +429,7 @@
               ((member token '("required" "optional" "repeated") :test #'string=)
                (parse-proto-field stream message token))
               ((string= token "option")
-               (parse-proto-option stream message #\;))
+               (parse-proto-option stream message))
               ((string= token "extensions")
                (parse-proto-extension stream message))
               (t
@@ -389,7 +443,7 @@
   (let* ((name (prog1 (parse-token stream)
                  (expect-char stream #\{ () "extend")
                  (maybe-skip-comments stream)))
-         (message (find-message *protobuf* name))
+         (message (find-message protobuf name))
          (extends (and message
                        (make-instance 'protobuf-message
                          :class  (proto->class-name name *protobuf-package*)
@@ -400,6 +454,7 @@
                          :enums    (copy-list (proto-enums message))
                          :messages (copy-list (proto-messages message))
                          :fields   (copy-list (proto-fields message))
+                         :extensions (copy-list (proto-extensions message))
                          :message-type :extends))))     ;this message is an extension
     (loop
       (let ((token (parse-token stream)))
@@ -418,7 +473,7 @@
         (cond ((member token '("required" "optional" "repeated") :test #'string=)
                (parse-proto-field stream extends token message))
               ((string= token "option")
-               (parse-proto-option stream extends #\;))
+               (parse-proto-option stream extends))
               (t
                (error "Unrecognized token ~A at position ~D"
                       token (file-position stream))))))))
@@ -436,7 +491,7 @@
              (opts (prog1 (parse-proto-field-options stream)
                      (expect-char stream #\; () "message")
                      (maybe-skip-comments stream)))
-             (dflt   (find-option opts "default"))
+             (default (find-option opts "default"))
              (packed (find-option opts "packed"))
              (ptype  (if (member type '("int32" "int64" "uint32" "uint64" "sint32" "sint64"
                                         "fixed32" "fixed64" "sfixed32" "sfixed64"
@@ -452,7 +507,7 @@
                        ;; One of :required, :optional or :repeated
                        :required (kintern required)
                        :index idx
-                       :default dflt
+                       :default default
                        :packed  (and packed (boolean-true-p packed))
                        :message-type (proto-message-type message))))
         (when extended-from
@@ -496,22 +551,30 @@
   "Parse any options in a Protobufs field from 'stream'.
    Returns a list of 'protobuf-option' objects."
   (with-collectors ((options collect-option))
-    (loop
-      (unless (eql (peek-char nil stream nil) #\[)
-        (return-from parse-proto-field-options options))
-      (expect-char stream #\[ () "message")
-      (collect-option (parse-proto-option stream nil #\])))
+    (let ((terminator nil))
+      (loop
+        (cond ((eql (peek-char nil stream nil) #\[)
+               (expect-char stream #\[ () "message"))
+              ((eql terminator #\,))
+              (t
+               (return-from parse-proto-field-options options)))
+        (multiple-value-bind (option term)
+            (parse-proto-option stream nil '(#\] #\,))
+          (setq terminator term)
+          (collect-option option))))
     options))
 
 (defun parse-proto-extension (stream message)
   (check-type message protobuf-message)
   (let* ((from  (parse-unsigned-int stream))
          (token (parse-token stream))
-         (to    (if (digit-char-p (peek-char nil stream nil))
-                  (parse-unsigned-int stream)
-                  (parse-token stream))))
+         (to    (let ((ch (peek-char nil stream nil)))
+                  (cond ((digit-char-p (peek-char nil stream nil))
+                         (parse-unsigned-int stream))
+                        ((eql ch #\;) from)
+                        (t (parse-token stream))))))
     (expect-char stream #\; () "message")
-    (assert (string= token "to") ()
+    (assert (or (null token) (string= token "to")) ()
             "Expected 'to' in 'extensions' at position ~D" (file-position stream))
     (assert (or (integerp to) (string= to "max")) ()
             "Extension value is not an integer or 'max' as position ~D" (file-position stream))
@@ -542,7 +605,7 @@
           (setf (proto-services protobuf) (nconc (proto-services protobuf) (list service)))
           (return-from parse-proto-service service))
         (cond ((string= token "option")
-               (parse-proto-option stream service #\;))
+               (parse-proto-option stream service))
               ((string= token "rpc")
                (parse-proto-method stream service))
               (t
@@ -594,7 +657,7 @@
           (return))
         (assert (string= (parse-token stream) "option") ()
                 "Syntax error in 'message' at position ~D" (file-position stream))
-        (collect-option (parse-proto-option stream nil #\;)))
+        (collect-option (parse-proto-option stream nil)))
       (expect-char stream #\} '(#\;) "service")
       (maybe-skip-comments stream)
       options)))

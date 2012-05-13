@@ -352,7 +352,7 @@
                          :input-name "Color"
                          :output-name "Color"
                          :options (list (make-instance 'proto:protobuf-option
-                                          :name "deadline" :value "1.0")))))
+                                          :name "deadline" :value 1.0)))))
        (svcs  (list (make-instance 'proto:protobuf-service
                       :name "ColorWheel"
                       :methods methods)))
@@ -389,7 +389,7 @@
       (:documentation "Get and set colors")
     (get-color (string color))
     (set-color (color color)
-               :options ("deadline" "1.0"))))
+               :options ("deadline" 1.0))))
 
 => (PROGN
      (DEFTYPE COLOR-NAME () '(MEMBER :RED :GREEN :BLUE))
@@ -496,7 +496,7 @@ message Color {
 service ColorWheel {
   rpc GetColor (string) returns (Color);
   rpc SetColor (Color) returns (Color) {
-    option deadline = \"1.0\";
+    option deadline = 1.0;
   }
 }"))
   (with-input-from-string (s ps)
@@ -572,8 +572,10 @@ service ColorWheel {
          (newbuf (proto:serialize-object-to-stream new type :stream nil)))
     (assert (equalp (length buf) (length newbuf)))
     (assert (equalp buf newbuf))
-    (assert (string= (with-output-to-string (s) (proto:print-text-format message))
-                     (with-output-to-string (s) (proto:print-text-format new))))
+    (assert (string= (with-output-to-string (s)
+                       (proto:print-text-format message nil :stream s))
+                     (with-output-to-string (s)
+                       (proto:print-text-format new nil :stream s))))
     new))
 
 (integrity-test (make-instance 'outer :i 4))
@@ -615,10 +617,10 @@ service ColorWheel {
     (color :type color))
   (proto:define-service color-wheel ()
     (get-color (get-color-request color)
-      :options ("deadline" "1.0")
+      :options ("deadline" 1.0)
       :documentation "Look up a color by name")
     (add-color (add-color-request color)
-      :options ("deadline" "1.0")
+      :options ("deadline" 1.0)
       :documentation "Add a new color to the wheel")))
 
 (proto:write-protobuf *color-wheel*)
@@ -688,10 +690,10 @@ message AddColorRequest {
 
 service ColorWheel {
   rpc GetColor (GetColorRequest) returns (Color) {
-    option deadline = \"1.0\";
+    option deadline = 1.0;
   }
   rpc AddColor (AddColorRequest) returns (Color) {
-    option deadline = \"1.0\";
+    option deadline = 1.0;
   }
 }"))
   (with-input-from-string (s ps)

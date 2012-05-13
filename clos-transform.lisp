@@ -72,6 +72,7 @@
 
 (defun class-to-protobuf-message (class protobuf
                                   &key slot-filter type-filter enum-filter value-filter)
+  "Given a CLOS class, return a Protobufs model object for it."
   (let* ((class (find-class class))
          (slots (class-slots class)))
     (with-collectors ((enums  collect-enum)
@@ -104,6 +105,7 @@
 ;; Returns a field, (optionally) an inner message, and (optionally) an inner enum
 (defun slot-to-protobuf-field (class slot index slots
                                &key slot-filter type-filter enum-filter value-filter)
+  "Given a CLOS slot, return a Protobufs model object for it."
   (when (or (null slot-filter)
             (funcall slot-filter slot slots))
     (multiple-value-bind (expanded-type unexpanded-type)
@@ -153,12 +155,13 @@
                                                     (format nil "~A-~A" 
                                                             (class-name class) (slot-definition-name slot)))
                                      reader))
-                        :default (clos-init-to-protobuf-default (slot-definition-initform slot) value-filter)
+                        :default (clos-init-to-protobuf-default
+                                   (slot-definition-initform slot) expanded-type value-filter)
                         :packed  packed)))
           (values field nil enum))))))
 
-;; Given a class and a slot descriptor, find the "best" type definition for the slot
 (defun find-slot-definition-type (class slotd)
+  "Given a class and a slot descriptor, find the \"best\" type definition for the slot."
   (let* ((slot-name    (slot-definition-name slotd))
          (direct-slotd (some #'(lambda (c)
                                  (find slot-name (class-direct-slots c) :key #'slot-definition-name))
@@ -178,17 +181,17 @@
                     (find-if-not #'(lambda (s) (eq s 'null)) (cdr type))))))
       (values (slot-definition-type slotd) nil))))
 
-;; Given a class and a slot descriptor, find the name of a reader method for the slot
 (defun find-slot-definition-reader (class slotd)
+  "Given a class and a slot descriptor, find the name of a reader method for the slot."
   (let* ((slot-name    (slot-definition-name slotd))
          (direct-slotd (some #'(lambda (c)
                                  (find slot-name (class-direct-slots c) :key #'slot-definition-name))
                              (class-precedence-list class))))
     (and direct-slotd (first (slot-definition-readers direct-slotd)))))
 
-;; Returns Protobuf type, a class or primitive type, whether or not to pack the field,
-;; and (optionally) a set of enum values
 (defun clos-type-to-protobuf-type (type &optional type-filter enum-filter)
+  "Given a Lisp type, returns a Protobuf type, a class or primitive type,
+   whether or not to pack the field, and (optionally) a set of enum values."
   (let ((type (if type-filter (funcall type-filter type) type)))
     (flet ((type->protobuf-type (type)
              (case type
@@ -294,12 +297,14 @@
                (error "Don't know how to translate the type ~S" type)))))
         (type->protobuf-type type)))))
 
-(defun packed-type-p (class)
-  (not (null (member class '(:int32 :int64 :uint32 :uint64 :sint32 :sint64
-                             :fixed32 :fixed64 :sfixed32 :sfixed64
-                             :float :double)))))
+(defun packed-type-p (type)
+  "Returns true if the given Protobufs type can use a packed field."
+  (not (null (member type '(:int32 :int64 :uint32 :uint64 :sint32 :sint64
+                            :fixed32 :fixed64 :sfixed32 :sfixed64
+                            :float :double)))))
 
 (defun clos-type-to-protobuf-required (type &optional type-filter)
+  "Given a Lisp type, returns a \"cardinality\": :required, :optional or :repeated."
   (let ((type (if type-filter (funcall type-filter type) type)))
     (if (listp type)
       (destructuring-bind (head &rest tail) type
@@ -326,25 +331,40 @@
            :required)))
       :required)))
 
-(defun clos-init-to-protobuf-default (value &optional value-filter)
+(defun clos-init-to-protobuf-default (value type &optional value-filter)
+  "Given an initform and a Lisp type, returns a plausible default value."
   (let ((value (if value-filter (funcall value-filter value) value)))
-    (and value (constantp value)
-         (format nil "~A" value))))
+    (and (constantp value)
+         (ignore-errors (typep value type))
+         value)))
 
 (defun protobuf-default-to-clos-init (default type)
-  (cond ((or (null default)
-             (and (stringp default) (i= (length default) 0)))
-         nil)
-        ((member type '(:int32 :uint32 :int64 :uint64 :sint32 :sint64
-                        :fixed32 :sfixed32 :fixed64 :sfixed64
-                        :single :double))
-         (read-from-string default))
-        ((eq type :bool)
-         (if (boolean-true-p default) t nil))
-        (t default)))
+  "Given a Protobufs type and default, return a CLOS initform value."
+  (cond ((ignore-errors (typep default type))
+         default)
+        ((symbolp default)
+         (cond ((eq type :bool)
+                (boolean-true-p default))))
+        ((stringp default)
+         (cond ((eq type :bool)
+                (boolean-true-p default))
+               ((member type '(:int32 :uint32 :int64 :uint64 :sint32 :sint64
+                               :fixed32 :sfixed32 :fixed64 :sfixed64))
+                (let ((default (read-from-string default)))
+                  (and (integerp default) default)))
+               ((member type '(:float :double))
+                (let ((default (read-from-string default)))
+                  (and (floatp default) default)))
+               (t default)))))
 
-(defun boolean-true-p (string)
-  (or (string= string "true")
-      (string= string "yes")
-      (string= string "t")
-      (string= string "1")))
+(defun boolean-true-p (x)
+  "Returns t or nil given a value that might be a boolean."
+  (etypecase x
+    ((member t nil) x)
+    (integer   (not (eql x 0)))
+    (character (char-equal x #\t))
+    (string    (or (string-equal x "true")
+                   (string-equal x "yes")
+                   (string-equal x "t")
+                   (string-equal x "1")))
+    (symbol    (string-equal (string x) "true"))))

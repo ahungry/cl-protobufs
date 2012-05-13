@@ -160,8 +160,7 @@
   ((name :type string                           ;the key
          :reader proto-name
          :initarg :name)
-   (value :type (or null string)                ;the value
-          :accessor proto-value
+   (value :accessor proto-value                 ;the (untyped) value
           :initarg :value
           :initform nil)
    (type :type (or null symbol)                 ;(optional) Lisp type,
@@ -194,10 +193,12 @@
          (values (proto-value option) (proto-type option)))))
 
 (defun option-name= (name1 name2)
-  (let ((start1 (if (eql (char name1 0) #\() 1 0))
-        (start2 (if (eql (char name2 0) #\() 1 0))
-        (end1   (if (eql (char name1 0) #\() (- (length name1) 1) (length name1)))
-        (end2   (if (eql (char name2 0) #\() (- (length name2) 1) (length name2))))
+  (let* ((name1  (string name1))
+         (name2  (string name2))
+         (start1 (if (eql (char name1 0) #\() 1 0))
+         (start2 (if (eql (char name2 0) #\() 1 0))
+         (end1   (if (eql (char name1 0) #\() (- (length name1) 1) (length name1)))
+         (end2   (if (eql (char name2 0) #\() (- (length name2) 1) (length name2))))
     (string= name1 name2 :start1 start1 :end1 end1 :start2 start2 :end2 end2)))
 
 
@@ -394,8 +395,7 @@
            :accessor proto-writer               ;when it's a list, it's something like '(setf title)'
            :initarg :writer
            :initform nil)
-   (default :type (or null string)              ;default value, pulled out of the options
-            :accessor proto-default
+   (default :accessor proto-default             ;default value (untyped), pulled out of the options
             :initarg :default
             :initform nil)
    (packed :type (member t nil)                 ;packed, pulled out of the options

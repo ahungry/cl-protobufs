@@ -263,9 +263,9 @@
          (name (format nil "~{~A~^.~}" (if pkg (cdr xs) xs))))
     (values (if package (intern name package) (make-symbol name)) package xs)))
 
-;; "ENUM_VALUE" -> 'enum-value
-;; "cl-user.ENUM_VALUE" -> 'cl-user::enum-value
-;; "cl-user.OuterClass.ENUM_VALUE" -> 'cl-user::outer-class.enum-value
+;; "ENUM_VALUE" -> :enum-value
+;; "cl-user.ENUM_VALUE" -> :enum-value
+;; "cl-user.OuterClass.ENUM_VALUE" -> :enum-value
 (defun proto->enum-name (x &optional package)
   "Given a Protobufs enum value name, returns a Lisp enum value name.
    This resolves Protobufs qualified names as best as it can."
@@ -274,7 +274,7 @@
          (pkg (and (cdr xs) (find-package (first xs))))
          (package (or pkg package))
          (name (format nil "~{~A~^.~}" (if pkg (cdr xs) xs))))
-    (values (if package (intern name package) (make-symbol name)) package xs)))
+    (values (kintern name) package xs)))
 
 ;; "slot_name" or "slotName" -> 'slot-name
 ;; "cl-user.slot_name" or "cl-user.slotName" -> 'cl-user::slot-name

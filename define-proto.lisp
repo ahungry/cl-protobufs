@@ -285,6 +285,7 @@
                          :messages (copy-list (proto-messages message))
                          :fields   (copy-list (proto-fields message))
                          :options  (or options (copy-list (proto-options message)))
+                         :extensions (copy-list (proto-extensions message))
                          :message-type :extends         ;this message is an extension
                          :documentation documentation)))
          (index 0))
@@ -508,7 +509,7 @@
                                             (not (eq pclass :bool)))
                                        `(:initform nil))
                                       (default-p
-                                        `(:initform ,default))))))
+                                        `(:initform ,(protobuf-default-to-clos-init default type)))))))
               (field (make-instance 'protobuf-field
                        :name  (or name (slot-name->proto slot))
                        :type  ptype
@@ -518,7 +519,7 @@
                        :value  slot
                        :reader reader
                        :writer writer
-                       :default (and default (format nil "~A" default))
+                       :default default
                        :packed  (and (eq reqd :repeated)
                                      (packed-type-p pclass))
                        :documentation documentation)))

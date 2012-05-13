@@ -115,13 +115,13 @@
                   (setf (slot-value ,object ,slot) ,value))))
     (dolist (field (proto-fields message))
       (let* ((type    (if (eq (proto-class field) 'boolean) :bool (proto-class field)))
-             (default (protobuf-default-to-clos-init (proto-default field) type))
+             (default (proto-default field))
              (slot    (proto-value field))
              (writer  (proto-writer field)))
         (cond ((null slot))
               ((or (eq (proto-required field) :required)
                    (eq type :bool))
-               (if (proto-default field)
+               (if default
                  (write-slot object slot writer default)
                  (slot-makunbound object slot)))
               (t 
