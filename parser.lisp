@@ -159,32 +159,48 @@
                   (return (coerce string 'string)))))
 
 (defun unescape-char (stream)
+  "Parse the next \"escaped\" character from the stream."
   (let ((ch (read-char stream nil)))
     (assert (not (null ch)) ()
             "End of stream reached while reading escaped character")
-    (flet ((make-char (code)
-             (assert (< code char-code-limit))
-             (code-char code)))
-      (case ch
-        ((#\x)
-         (let* ((d1 (digit-char-p (read-char stream) 16))
-                (d2 (digit-char-p (read-char stream) 16)))
-           (code-char (+ (* d1 16) d2))))
-        ((#\0 #\1 #\2 #\3 #\4 #\5 #\6 #\7 #\8 #\9)
-         (if (not (digit-char-p (peek-char nil stream nil)))
-           #\null
-           (let* ((d1 (digit-char-p ch 8))
-                  (d2 (digit-char-p (read-char stream) 8))
-                  (d3 (digit-char-p (read-char stream) 8)))
-             (code-char (+ (* d1 64) (* d2 8) d3)))))
-        ((#\t) #\Tab)
-        ((#\n) #\Newline)
-        ((#\r) #\Return)
-        ((#\f) #\Page)
-        ((#\b) #\Backspace)
-        ((#\a) (code-char 7))
-        ((#\e) (code-char 27))
-        (otherwise ch)))))
+    (case ch
+      ((#\x)
+       ;; Two hex digits
+       (let* ((d1 (digit-char-p (read-char stream) 16))
+              (d2 (digit-char-p (read-char stream) 16)))
+         (code-char (+ (* d1 16) d2))))
+      ((#\0 #\1 #\2 #\3 #\4 #\5 #\6 #\7 #\8 #\9)
+       (if (not (digit-char-p (peek-char nil stream nil)))
+         #\null
+         ;; Three octal digits
+         (let* ((d1 (digit-char-p ch 8))
+                (d2 (digit-char-p (read-char stream) 8))
+                (d3 (digit-char-p (read-char stream) 8)))
+           (code-char (+ (* d1 64) (* d2 8) d3)))))
+      ((#\t) #\tab)
+      ((#\n) #\newline)
+      ((#\r) #\return)
+      ((#\f) #\page)
+      ((#\b) #\backspace)
+      ((#\a) #\bell)
+      ((#\e) #\esc)
+      (otherwise ch))))
+
+(defun escape-char (ch)
+  "The inverse of 'unescape-char', for printing."
+  (if (and (standard-char-p ch) (graphic-char-p ch))
+    ch
+    (case ch
+      ((#\null)      "\\0")
+      ((#\tab)       "\\t")
+      ((#\newline)   "\\n")
+      ((#\return)    "\\r")
+      ((#\page)      "\\f")
+      ((#\backspace) "\\b")
+      ((#\bell)      "\\a")
+      ((#\esc)       "\\e")
+      (otherwise
+       (format nil "\\x~2,'0X" (char-code ch))))))
 
 (defun parse-signed-int (stream)
   "Parse the next token in the stream as an integer, then skip the following whitespace.
@@ -240,9 +256,11 @@
                    :direction :input
                    :external-format :utf-8
                    :element-type 'character)
-    (parse-protobuf-from-stream stream
-                                :name  (class-name->proto (pathname-name (pathname stream)))
-                                :class (kintern (pathname-name (pathname stream))))))
+    (let ((*compile-file-pathname* (pathname stream))
+          (*compile-file-truename* (truename stream)))
+      (parse-protobuf-from-stream stream
+                                  :name  (class-name->proto (pathname-name (pathname stream)))
+                                  :class (kintern (pathname-name (pathname stream)))))))
 
 ;; The syntax for Protocol Buffers is so simple that it doesn't seem worth
 ;; writing a sophisticated parser
@@ -323,7 +341,7 @@
   (let ((import (prog1 (parse-string stream)
                   (expect-char stream terminator () "package")
                   (maybe-skip-comments stream))))
-    (process-imports import)
+    (process-imports protobuf import)
     (setf (proto-imports protobuf) (nconc (proto-imports protobuf) (list import)))))
 
 (defun parse-proto-option (stream protobuf &optional (terminators '(#\;)))
@@ -455,7 +473,8 @@
                          :messages (copy-list (proto-messages message))
                          :fields   (copy-list (proto-fields message))
                          :extensions (copy-list (proto-extensions message))
-                         :message-type :extends))))     ;this message is an extension
+                         :message-type :extends)))      ;this message is an extension
+         (*protobuf* extends))
     (loop
       (let ((token (parse-token stream)))
         (when (null token)
@@ -471,7 +490,8 @@
               (setf (proto-alias-for extends) (make-lisp-symbol alias))))
           (return-from parse-proto-extend extends))
         (cond ((member token '("required" "optional" "repeated") :test #'string=)
-               (parse-proto-field stream extends token message))
+               (let ((field (parse-proto-field stream extends token message)))
+                 (setf (proto-extended-fields extends) (nconc (proto-extended-fields extends) (list field)))))
               ((string= token "option")
                (parse-proto-option stream extends))
               (t
@@ -509,7 +529,8 @@
                        :index idx
                        :default default
                        :packed  (and packed (boolean-true-p packed))
-                       :message-type (proto-message-type message))))
+                       :message-type (proto-message-type message)
+                       :options opts)))
         (when extended-from
           (assert (index-within-extensions-p idx extended-from) ()
                   "The index ~D is not in range for extending ~S"

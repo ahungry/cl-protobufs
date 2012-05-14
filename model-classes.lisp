@@ -16,13 +16,28 @@
 (defvar *all-protobufs* (make-hash-table :test #'equal)
   "A table mapping names to 'protobuf' schemas.")
 
-(defun find-protobuf (name)
-  "Given a name (a symbol or string), return the 'protobuf' schema having that name."
-  (values (gethash name *all-protobufs*)))
+(defgeneric find-protobuf (name)
+  (:documentation
+   "Given a name (a symbol or string), return the 'protobuf' schema having that name."))
+
+(defmethod find-protobuf ((name symbol))
+  (values (gethash (keywordify name) *all-protobufs*)))
+
+(defmethod find-protobuf ((name string))
+  (values (gethash (string-upcase name) *all-protobufs*)))
+
+(defmethod find-protobuf ((path pathname))
+  "Given a pathname, return the 'protobuf' schema that came from that path."
+  (let ((path (make-pathname :type nil :defaults path)))
+    (values (gethash path *all-protobufs*))))
 
 
 (defvar *all-messages* (make-hash-table :test #'equal)
   "A table mapping Lisp class names to 'protobuf' messages.")
+
+(defgeneric find-message-for-class (class)
+  (:documentation
+   "Given a class or class name, return the message that globally has that name."))
 
 (defmethod find-message-for-class (class)
   "Given the name of a class (a symbol or string), return the 'protobuf-message' for the class."
@@ -76,20 +91,23 @@
              :accessor proto-lisp-package
              :initarg :lisp-package
              :initform nil)
-   (imports :type (list-of string)              ;any imports
+   (imports :type (list-of string)              ;the names of any imported schemas, as strings
             :accessor proto-imports
             :initarg :imports
+            :initform ())
+   (schemas :type (list-of protobuf)            ;the names of any imported schemas, as pathnames
+            :accessor proto-imported-schemas
             :initform ())
    (enums :type (list-of protobuf-enum)         ;the set of enum types
           :accessor proto-enums
           :initarg :enums
           :initform ())
-   (messages :type (list-of protobuf-message)   ;the set of messages
+   (messages :type (list-of protobuf-message)   ;all the messages within this protobuf
              :accessor proto-messages
              :initarg :messages
              :initform ())
-   (extenders :type (list-of protobuf-message)  ;the set of extended messages
-              :accessor proto-extenders
+   (extenders :type (list-of protobuf-message)  ;the 'extend' messages in this protobuf
+              :accessor proto-extenders         ;these precede unextended messages in 'find-message'
               :initarg :extenders
               :initform ())
    (services :type (list-of protobuf-service)
@@ -105,11 +123,16 @@
   (with-slots (class name) protobuf
     (record-protobuf protobuf class name)))
 
-(defmethod record-protobuf ((protobuf protobuf) class name)
-  (when class
-    (setf (gethash class *all-protobufs*) protobuf))
+(defmethod record-protobuf ((protobuf protobuf) symbol name)
+  "Record all the names by which the Protobufs schema might be known."
+  (when symbol
+    (setf (gethash (keywordify symbol) *all-protobufs*) protobuf))
   (when name
-    (setf (gethash name *all-protobufs*) protobuf)))
+    (setf (gethash (string-upcase name) *all-protobufs*) protobuf))
+  (let ((path (or *compile-file-truename* *load-truename*)))
+    (when path
+      ;; Record the file from which the Protobufs schema came, sans file type
+      (setf (gethash (make-pathname :type nil :defaults path) *all-protobufs*) protobuf))))
 
 (defmethod make-load-form ((p protobuf) &optional environment)
   (with-slots (class name) p
@@ -132,15 +155,25 @@
 
 (defmethod find-message ((protobuf protobuf) (type symbol))
   ;; Extended messages "shadow" non-extended ones
-  (or (find type (proto-extenders protobuf) :key #'proto-class)
-      (find type (proto-messages protobuf) :key #'proto-class)))
+  (labels ((find-it (proto)
+             (let ((message (or (find type (proto-extenders proto) :key #'proto-class)
+                                (find type (proto-messages  proto) :key #'proto-class))))
+               (when message
+                 (return-from find-message message))
+               (map () #'find-it (proto-imported-schemas proto)))))
+    (find-it protobuf)))
 
 (defmethod find-message ((protobuf protobuf) (type class))
   (find-message protobuf (class-name type)))
 
-(defmethod find-message ((protobuf protobuf) (type string))
-  (or (find type (proto-extenders protobuf) :key #'proto-name :test #'string=)
-      (find type (proto-messages protobuf) :key #'proto-name :test #'string=)))
+(defmethod find-message ((protobuf protobuf) (name string))
+  (labels ((find-it (proto)
+             (let ((message (or (find name (proto-extenders proto) :key #'proto-name :test #'string=)
+                                (find name (proto-messages  proto) :key #'proto-name :test #'string=))))
+               (when message
+                 (return-from find-message message))
+               (map () #'find-it (proto-imported-schemas proto)))))
+    (find-it protobuf)))
 
 (defgeneric find-enum (protobuf type)
   (:documentation
@@ -148,10 +181,20 @@
     returns the Protobufs enum corresponding to the type."))
 
 (defmethod find-enum ((protobuf protobuf) type)
-  (find type (proto-enums protobuf) :key #'proto-class))
+  (labels ((find-it (proto)
+             (let ((enum (find type (proto-enums protobuf) :key #'proto-class)))
+               (when enum
+                 (return-from find-enum enum))
+               (map () #'find-it (proto-imported-schemas proto)))))
+    (find-it protobuf)))
 
-(defmethod find-enum ((protobuf protobuf) (type string))
-  (find type (proto-enums protobuf) :key #'proto-name :test #'string=))
+(defmethod find-enum ((protobuf protobuf) (name string))
+  (labels ((find-it (proto)
+             (let ((enum (find name (proto-enums protobuf) :key #'proto-name :test #'string=)))
+               (when enum
+                 (return-from find-enum enum))
+               (map () #'find-it (proto-imported-schemas proto)))))
+    (find-it protobuf)))
 
 
 ;; We accept and store any option, but only act on a few: default, packed,
@@ -262,19 +305,22 @@
           :accessor proto-enums
           :initarg :enums
           :initform ())
-   (messages :type (list-of protobuf-message)   ;the embedded messages
+   (messages :type (list-of protobuf-message)   ;all the messages embedded in this one
              :accessor proto-messages
              :initarg :messages
              :initform ())
-   (extenders :type (list-of protobuf-message)  ;the set of extended messages
-              :accessor proto-extenders
+   (extenders :type (list-of protobuf-message)  ;the 'extend' messages embedded in this one
+              :accessor proto-extenders         ;these precede unextended messages in 'find-message'
               :initarg :extenders
               :initform ())
-   (fields :type (list-of protobuf-field)       ;the fields
-           :accessor proto-fields
+   (fields :type (list-of protobuf-field)       ;all the fields of this message
+           :accessor proto-fields               ;this includes local ones and extended ones
            :initarg :fields
            :initform ())
-   (extensions :type (list-of protobuf-extension) ;any extensions
+   (extended-fields :type (list-of protobuf-field) ;the extended fields defined in this message
+                    :accessor proto-extended-fields
+                    :initform ())
+   (extensions :type (list-of protobuf-extension) ;any extension ranges
                :accessor proto-extensions
                :initarg :extensions
                :initform ())
@@ -329,18 +375,18 @@
 (defmethod find-message ((message protobuf-message) (type class))
   (find-message message (class-name type)))
 
-(defmethod find-message ((message protobuf-message) (type string))
-  (or (find type (proto-extenders message) :key #'proto-name :test #'string=)
-      (find type (proto-messages message) :key #'proto-name :test #'string=)
-      (find-message (proto-parent message) type)))
+(defmethod find-message ((message protobuf-message) (name string))
+  (or (find name (proto-extenders message) :key #'proto-name :test #'string=)
+      (find name (proto-messages message) :key #'proto-name :test #'string=)
+      (find-message (proto-parent message) name)))
 
 (defmethod find-enum ((message protobuf-message) type)
   (or (find type (proto-enums message) :key #'proto-class)
       (find-enum (proto-parent message) type)))
 
-(defmethod find-enum ((message protobuf-message) (type string))
-  (or (find type (proto-enums message) :key #'proto-name :test #'string=)
-      (find-enum (proto-parent message) type)))
+(defmethod find-enum ((message protobuf-message) (name string))
+  (or (find name (proto-enums message) :key #'proto-name :test #'string=)
+      (find-enum (proto-parent message) name)))
 
 (defgeneric find-field (message name)
   (:documentation
@@ -364,7 +410,12 @@
 
 (defgeneric has-extension (object slot)
   (:documentation
-   "Returns true iff the there is an extended slot named 'slot' in 'object'"))
+   "Returns true iff the there is an extended slot named 'slot' in 'object'")
+  ;; The only default method is for 'has-extension'
+  ;; It's an error to call the other three functions on a non-extendable object
+  (:method ((object standard-object) slot)
+    (declare (ignore slot))
+    nil))
 
 (defgeneric clear-extension (object slot)
   (:documentation
@@ -427,7 +478,7 @@
             (eq (proto-message-type f) :extends))))
 
 
-;; An extension within a message
+;; An extension range within a message
 (defclass protobuf-extension (abstract-protobuf)
   ((from :type (integer 1 #.(1- (ash 1 29)))    ;the index number for this field
          :accessor proto-extension-from
@@ -436,7 +487,7 @@
        :accessor proto-extension-to
        :initarg :to))
   (:documentation
-   "The model class that represents an extension with a Protobufs message."))
+   "The model class that represents an extension range within a Protobufs message."))
 
 (defmethod make-load-form ((e protobuf-extension) &optional environment)
   (make-load-form-saving-slots e :environment environment))

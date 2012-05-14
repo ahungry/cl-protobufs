@@ -133,6 +133,17 @@
   (declare (dynamic-extent format-args))
   (intern (nstring-upcase (apply #'format nil format-string format-args)) "KEYWORD"))
 
+(defun keywordify (x)
+  "Given a symbol designator 'x', return a keyword whose name is 'x'.
+   If 'x' is nil, this returns nil."
+  (check-type x (or string symbol null))
+  (cond ((null x) nil)
+        ((keywordp x) x)
+        ((symbolp x) (keywordify (symbol-name x)))
+        ((zerop (length x)) nil)
+        ((string-not-equal x "nil")
+         (intern (string-upcase x) (find-package "KEYWORD")))
+        (t nil)))
 
 ;;; Collectors, etc
 

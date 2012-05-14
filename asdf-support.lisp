@@ -49,15 +49,16 @@
 
 
 ;; Process 'import' lines
-(defun process-imports (&rest imports)
+(defun process-imports (protobuf &rest imports)
   "Imports all of the files given by 'imports'.
    If the file is a .proto file, it first parses it and writes a .lisp file.
    The .lisp file is the compiled and loaded."
   (dolist (import imports)
-    (let* ((base-file  (pathname import))
-           (proto-file (make-pathname :type "proto" :defaults base-file))
-           (lisp-file  (make-pathname :name (pathname-name base-file) :type "lisp"
-                                      :defaults (or *compile-file-pathname* base-file)))
+    (let* ((base-path  (if *compile-file-pathname*
+                         (merge-pathnames (pathname import) *compile-file-pathname*)
+                         (pathname import)))
+           (proto-file (make-pathname :type "proto" :defaults base-path))
+           (lisp-file  (make-pathname :type "lisp"  :defaults base-path))
            (fasl-file  (compile-file-pathname lisp-file))
            (proto-date (and (probe-file proto-file)
                             (ignore-errors (file-write-date proto-file))))
@@ -65,23 +66,28 @@
                             (ignore-errors (file-write-date lisp-file))))
            (fasl-date  (and (probe-file fasl-file)
                             (ignore-errors (file-write-date fasl-file)))))
-      (when (string= (pathname-type base-file) "proto")
+      (when (string= (pathname-type base-path) "proto")
         ;; The user asked to import a .proto file
         ;; If there's no .lisp file or an older .lisp file, parse the .proto file now
         (cond ((not proto-date)
-               (warn "Could not find the file to be imported ~A" proto-file))
+               (warn "Could not find the .proto file to be imported: ~A" proto-file))
               ((or (not lisp-date)
                    (< lisp-date proto-date))
                (parse-protobuf-file proto-file lisp-file)
                (setq lisp-date (file-write-date lisp-file)))))
       ;; Compile the .lisp file, if necessary
       (cond ((not lisp-date)
-             (unless (string= (pathname-type base-file) "proto")
-               (warn "Could not find the file to be imported ~A" proto-file)))
+             (unless (string= (pathname-type base-path) "proto")
+               (warn "Could not find the .lisp file to be compiled: ~A" lisp-file)))
             (t
              (when (or (not fasl-date)
                        (< fasl-date lisp-date))
                (setq fasl-file (compile-file lisp-file))
                (setq fasl-date (file-write-date fasl-file)))
              ;; Now we can load the .fasl file
-             (load fasl-file))))))
+             (load fasl-file)))
+      (let ((imported (find-protobuf base-path)))
+        (when imported
+          (setf (proto-imported-schemas protobuf)
+                (nconc (proto-imported-schemas protobuf) (list imported)))))
+      base-path)))

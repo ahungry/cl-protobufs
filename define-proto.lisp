@@ -53,7 +53,7 @@
          (*protobuf-package* (or (find-package lisp-pkg)
                                  (find-package (string-upcase lisp-pkg))
                                  *package*)))
-    (apply #'process-imports imports)
+    (apply #'process-imports protobuf imports)
     (with-collectors ((forms collect-form))
       (dolist (msg messages)
         (assert (and (listp msg)
@@ -65,12 +65,12 @@
         ;; (define-enum, define-message, define-extend, define-service),
         ;; followed by the Lisp model object created by the defining form,
         ;; followed by other defining forms (e.g., deftype, defclass)
-        (destructuring-bind (&optional progn type model definers)
+        (destructuring-bind (&optional progn model-type model definers)
             (macroexpand-1 msg env)
           (assert (eq progn 'progn) ()
                   "The macroexpansion for ~S failed" msg)
           (map () #'collect-form definers)
-          (ecase type
+          (ecase model-type
             ((define-enum)
              (setf (proto-enums protobuf) (nconc (proto-enums protobuf) (list model))))
             ((define-message define-extend)
@@ -184,6 +184,7 @@
          (message (make-instance 'protobuf-message
                     :class type
                     :name  name
+                    :parent *protobuf*
                     :alias-for alias-for
                     :conc-name (and conc-name (string conc-name))
                     :options  options
@@ -195,12 +196,12 @@
       (dolist (field fields)
         (case (car field)
           ((define-enum define-message define-extend define-extension define-group)
-           (destructuring-bind (&optional progn type model definers extra-field extra-slot)
+           (destructuring-bind (&optional progn model-type model definers extra-field extra-slot)
                (macroexpand-1 field env)
              (assert (eq progn 'progn) ()
                      "The macroexpansion for ~S failed" field)
              (map () #'collect-form definers)
-             (ecase type
+             (ecase model-type
                ((define-enum)
                 (setf (proto-enums message) (nconc (proto-enums message) (list model))))
                ((define-message define-extend)
@@ -265,7 +266,6 @@
    'reader' is a Lisp slot reader function to use to get the value, instead of
    using 'slot-value'; this is often used when aliasing an existing class.
    'writer' is a Lisp slot writer function to use to set the value."
-  (declare (ignore env))
   (let* ((name    (or name (class-name->proto type)))
          (options (loop for (key val) on options by #'cddr
                         collect (make-instance 'protobuf-option
@@ -288,6 +288,7 @@
                          :extensions (copy-list (proto-extensions message))
                          :message-type :extends         ;this message is an extension
                          :documentation documentation)))
+         (*protobuf* extends)
          (index 0))
     (assert message ()
             "There is no message named ~A to extend" name)
@@ -297,60 +298,111 @@
     (with-collectors ((forms collect-form))
       (dolist (field fields)
         (assert (not (member (car field)
-                             '(define-enum define-message define-extend define-extension define-group))) ()
-                "The body of ~S can only contain field definitions" 'define-extend)
-        (multiple-value-bind (field slot idx)
-            (process-field field index :conc-name conc-name :alias-for alias-for)
-          (assert (not (find (proto-index field) (proto-fields extends) :key #'proto-index)) ()
-                  "The field ~S overlaps with another field in ~S"
-                  (proto-value field) (proto-class extends))
-          (assert (index-within-extensions-p idx message) ()
-                  "The index ~D is not in range for extending ~S"
-                  idx (proto-class message))
-          (setq index idx)
-          (when slot
-            (let* ((inits  (cdr slot))
-                   (sname  (car slot))
-                   (stable (fintern "~A-VALUES" sname))
-                   (stype  (getf inits :type))
-                   (reader (or (getf inits :accessor)
-                               (getf inits :reader)
-                               (intern (if conc-name (format nil "~A~A" conc-name sname) (symbol-name sname))
-                                       (symbol-package sname))))
-                   (writer (or (getf inits :writer)
-                               (intern (format nil "~A-~A" reader 'setter)
-                                       (symbol-package sname))))
-                   (default (getf inits :initform)))
-              ;; For the extended slots, each slot gets its own table
-              ;; keyed by the object, which lets us avoid having a slot in each
-              ;; instance that holds a table keyed by the slot name
-              ;; Multiple 'define-extends' on the same class in the same image
-              ;; will result in harmless redefinitions, so squelch the warnings
-              (collect-form `(without-redefinition-warnings ()
-                               (let ((,stable (make-hash-table :test #'eq :weak t)))
-                                 (defmethod ,reader ((object ,type))
-                                   (gethash object ,stable ,default))
-                                 (defmethod ,writer ((object ,type) value)
-                                   (declare (type ,stype value))
-                                   (setf (gethash object ,stable) value))
-                                 ;; For Python compatibility
-                                 (defmethod get-extension ((object ,type) (slot (eql ',sname)))
-                                   (values (gethash object ,stable ,default)))
-                                 (defmethod set-extension ((object ,type) (slot (eql ',sname)) value)
-                                   (setf (gethash object ,stable) value))
-                                 (defmethod has-extension ((object ,type) (slot (eql ',sname)))
-                                   (multiple-value-bind (value foundp)
-                                       (gethash object ,stable ,default)
-                                     (declare (ignore value))
-                                     foundp))
-                                 (defmethod clear-extension ((object ,type) (slot (eql ',sname)))
-                                   (remhash object ,stable))
-                                 (defsetf ,reader ,writer))))
-              ;; This so that (de)serialization works
-              (setf (proto-reader field) reader
-                    (proto-writer field) writer)))
-          (setf (proto-message-type field) :extends)    ;this field is an extension
-          (setf (proto-fields extends) (nconc (proto-fields extends) (list field)))))
+                             '(define-enum define-message define-extend define-extension))) ()
+                "The body of ~S can only contain field and group definitions" 'define-extend)
+        (case (car field)
+          ((define-group)
+           (destructuring-bind (&optional progn model-type model definers extra-field extra-slot)
+               (macroexpand-1 field env)
+             (assert (eq progn 'progn) ()
+                     "The macroexpansion for ~S failed" field)
+             (map () #'collect-form definers)
+             (ecase model-type
+               ((define-group)
+                (setf (proto-parent model) extends)
+                (setf (proto-messages extends) (nconc (proto-messages extends) (list model)))
+                (when extra-slot
+                  ;;--- Fix all this duplicated code!
+                  (let* ((inits  (cdr extra-slot))
+                         (sname  (car extra-slot))
+                         (stable (fintern "~A-VALUES" sname))
+                         (stype  (getf inits :type))
+                         (reader (or (getf inits :accessor)
+                                     (getf inits :reader)
+                                     (intern (if conc-name (format nil "~A~A" conc-name sname) (symbol-name sname))
+                                             (symbol-package sname))))
+                         (writer (or (getf inits :writer)
+                                     (intern (format nil "~A-~A" reader 'setter)
+                                             (symbol-package sname))))
+                         (default (getf inits :initform)))
+                    (collect-form `(without-redefinition-warnings ()
+                                     (let ((,stable (make-hash-table :test #'eq :weak t)))
+                                       ,@(and reader `((defmethod ,reader ((object ,type))
+                                                         (gethash object ,stable ,default))))
+                                       ,@(and writer `((defmethod ,writer ((object ,type) value)
+                                                         (declare (type ,stype value))
+                                                         (setf (gethash object ,stable) value))))
+                                       ;; For Python compatibility
+                                       (defmethod get-extension ((object ,type) (slot (eql ',sname)))
+                                         (values (gethash object ,stable ,default)))
+                                       (defmethod set-extension ((object ,type) (slot (eql ',sname)) value)
+                                         (setf (gethash object ,stable) value))
+                                       (defmethod has-extension ((object ,type) (slot (eql ',sname)))
+                                         (multiple-value-bind (value foundp)
+                                             (gethash object ,stable ,default)
+                                           (declare (ignore value))
+                                           foundp))
+                                       (defmethod clear-extension ((object ,type) (slot (eql ',sname)))
+                                         (remhash object ,stable))
+                                       ,@(and writer `((defsetf ,reader ,writer))))))))
+                (setf (proto-message-type extra-field) :extends) ;this field is an extension
+                (setf (proto-fields extends) (nconc (proto-fields extends) (list extra-field)))
+                (setf (proto-extended-fields extends) (nconc (proto-extended-fields extends) (list extra-field)))))))
+          (otherwise
+           (multiple-value-bind (field slot idx)
+               (process-field field index :conc-name conc-name :alias-for alias-for)
+             (assert (not (find (proto-index field) (proto-fields extends) :key #'proto-index)) ()
+                     "The field ~S overlaps with another field in ~S"
+                     (proto-value field) (proto-class extends))
+             (assert (index-within-extensions-p idx message) ()
+                     "The index ~D is not in range for extending ~S"
+                     idx (proto-class message))
+             (setq index idx)
+             (when slot
+               (let* ((inits  (cdr slot))
+                      (sname  (car slot))
+                      (stable (fintern "~A-VALUES" sname))
+                      (stype  (getf inits :type))
+                      (reader (or (getf inits :accessor)
+                                  (getf inits :reader)
+                                  (intern (if conc-name (format nil "~A~A" conc-name sname) (symbol-name sname))
+                                          (symbol-package sname))))
+                      (writer (or (getf inits :writer)
+                                  (intern (format nil "~A-~A" reader 'setter)
+                                          (symbol-package sname))))
+                      (default (getf inits :initform)))
+                 ;; For the extended slots, each slot gets its own table
+                 ;; keyed by the object, which lets us avoid having a slot in each
+                 ;; instance that holds a table keyed by the slot name
+                 ;; Multiple 'define-extends' on the same class in the same image
+                 ;; will result in harmless redefinitions, so squelch the warnings
+                 ;;--- Maybe these methods need to be defined in 'define-message'?
+                 (collect-form `(without-redefinition-warnings ()
+                                  (let ((,stable (make-hash-table :test #'eq :weak t)))
+                                    ,@(and reader `((defmethod ,reader ((object ,type))
+                                                      (gethash object ,stable ,default))))
+                                    ,@(and writer `((defmethod ,writer ((object ,type) value)
+                                                      (declare (type ,stype value))
+                                                      (setf (gethash object ,stable) value))))
+                                    ;; For Python compatibility
+                                    (defmethod get-extension ((object ,type) (slot (eql ',sname)))
+                                      (values (gethash object ,stable ,default)))
+                                    (defmethod set-extension ((object ,type) (slot (eql ',sname)) value)
+                                      (setf (gethash object ,stable) value))
+                                    (defmethod has-extension ((object ,type) (slot (eql ',sname)))
+                                      (multiple-value-bind (value foundp)
+                                          (gethash object ,stable ,default)
+                                        (declare (ignore value))
+                                        foundp))
+                                    (defmethod clear-extension ((object ,type) (slot (eql ',sname)))
+                                      (remhash object ,stable))
+                                    ,@(and writer `((defsetf ,reader ,writer))))))
+                 ;; This so that (de)serialization works
+                 (setf (proto-reader field) reader
+                       (proto-writer field) writer)))
+             (setf (proto-message-type field) :extends)         ;this field is an extension
+             (setf (proto-fields extends) (nconc (proto-fields extends) (list field)))
+             (setf (proto-extended-fields extends) (nconc (proto-extended-fields extends) (list field)))))))
       `(progn
          define-extend
          ,extends
@@ -430,12 +482,12 @@
       (dolist (field fields)
         (case (car field)
           ((define-enum define-message define-extend define-extension define-group)
-           (destructuring-bind (&optional progn type model definers extra-field extra-slot)
+           (destructuring-bind (&optional progn model-type model definers extra-field extra-slot)
                (macroexpand-1 field env)
              (assert (eq progn 'progn) ()
                      "The macroexpansion for ~S failed" field)
              (map () #'collect-form definers)
-             (ecase type
+             (ecase model-type
                ((define-enum)
                 (setf (proto-enums message) (nconc (proto-enums message) (list model))))
                ((define-message define-extend)
