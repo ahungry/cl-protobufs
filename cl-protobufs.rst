@@ -490,7 +490,7 @@ the types of fields. The following type expressions are supported:
  - ``signed-byte`` and ``unsigned-byte``
  - ``single-float`` and ``double-float``
  - ``string``and ``character``
- - ``(simple-array (unsigned-byte 8))``
+ - ``proto:byte-vector`` (equivalent to ``(array (unsigned-byte 8))``)
  - ``boolean``
  - ``(member ...)``, where all the members are symbols or keywords or ``nil``
  - the name of a class that corresponds to another Protobufs message

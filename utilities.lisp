@@ -200,11 +200,17 @@
          (apply ,function ,(car args) more-args))
     form))
 
-;; A parameterized list types for repeated fields (not type-checked!)
+
+;; A parameterized list type for repeated fields
+;; The elements aren't type-checked
 (deftype list-of (type)
   (if (eq type 'null)
     'null
     'list))
+
+;; This corresponds to the :bytes Protobufs type
+(deftype byte-vector () '(array (unsigned-byte 8)))
+
 
 ;;; Code generation utilities
 

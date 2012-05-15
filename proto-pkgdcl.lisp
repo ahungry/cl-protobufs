@@ -16,8 +16,9 @@
 (defpackage protobufs
   (:nicknames :proto)
 
-  ;; For repeated slots
+  ;; Some types useful for defining messages
   (:export
+   "BYTE-VECTOR"
    "LIST-OF")
 
   ;; ASDF module type
@@ -51,8 +52,9 @@
    "DEFINE-GROUP"
    "DEFINE-SERVICE"
 
-   ;; Upgradability testing
+   ;; Upgradability and equality testing
    "PROTOBUF-UPGRADABLE"
+   "PROTOBUFS-EQUAL"
 
    ;; CLOS to Protobufs transformer
    "WRITE-PROTOBUF-SCHEMA-FOR-CLASSES"
