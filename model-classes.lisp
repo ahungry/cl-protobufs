@@ -286,7 +286,7 @@
 
 ;; A protobuf message
 (defclass protobuf-message (base-protobuf)
-  ((parent :type (or protobuf protobuf-message)
+  ((parent :type (or protobuf-schema protobuf-message)
            :accessor proto-parent
            :initarg :parent)
    (conc :type (or null string)                 ;the conc-name used for Lisp accessors
