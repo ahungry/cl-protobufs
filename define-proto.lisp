@@ -32,7 +32,7 @@
          (lisp-pkg (and lisp-package (if (stringp lisp-package) lisp-package (string lisp-package))))
          (options  (loop for (key val) on options by #'cddr
                          collect (make-instance 'protobuf-option
-                                   :name  key
+                                   :name  (if (symbolp key) (slot-name->proto key) key)
                                    :value val)))
          (imports  (if (listp import) import (list import)))
          (protobuf (make-instance 'protobuf
@@ -94,16 +94,19 @@
                                    ',type ',name)
                    (map () #'protobufs-warn warnings))))
              (setq ,var new-proto)
-             ,@(when (eq optimize :speed)
-                 (with-collectors ((messages collect-message))
-                   (labels ((collect-messages (message)
-                              (collect-message message)
-                              (map () #'collect-messages (proto-messages message))))
+             (record-protobuf ,var)
+             ,@(with-collectors ((messages collect-message))
+                 (labels ((collect-messages (message)
+                            (collect-message message)
+                            (map () #'collect-messages (proto-messages message))))
                    (map () #'collect-messages (proto-messages protobuf)))
-                   (append (mapcar #'generate-object-size  messages)
-                           (mapcar #'generate-serializer   messages)
-                           (mapcar #'generate-deserializer messages))))
-             new-proto))))))
+                 (append 
+                   (mapcar #'(lambda (m) `(record-protobuf ,m)) messages)
+                   (when (eq optimize :speed)
+                     (append (mapcar #'generate-object-size  messages)
+                             (mapcar #'generate-serializer   messages)
+                             (mapcar #'generate-deserializer messages)))))
+             ,var))))))
 
 ;; Define an enum type named 'type' and a Lisp 'deftype'
 (defmacro define-enum (type (&key name conc-name alias-for options documentation)
@@ -119,7 +122,7 @@
   (let* ((name    (or name (class-name->proto type)))
          (options (loop for (key val) on options by #'cddr
                         collect (make-instance 'protobuf-option
-                                  :name  key
+                                  :name  (if (symbolp key) (slot-name->proto key) key)
                                   :value val)))
          (index -1)
          (enum  (make-instance 'protobuf-enum
@@ -179,7 +182,7 @@
   (let* ((name    (or name (class-name->proto type)))
          (options (loop for (key val) on options by #'cddr
                         collect (make-instance 'protobuf-option
-                                  :name  key
+                                  :name  (if (symbolp key) (slot-name->proto key) key)
                                   :value val)))
          (message (make-instance 'protobuf-message
                     :class type
@@ -269,7 +272,7 @@
   (let* ((name    (or name (class-name->proto type)))
          (options (loop for (key val) on options by #'cddr
                         collect (make-instance 'protobuf-option
-                                  :name  key
+                                  :name  (if (symbolp key) (slot-name->proto key) key)
                                   :value val)))
          (message   (find-message *protobuf* name))
          (conc-name (and message (proto-conc-name message)))
@@ -320,10 +323,10 @@
                          (reader (or (getf inits :accessor)
                                      (getf inits :reader)
                                      (intern (if conc-name (format nil "~A~A" conc-name sname) (symbol-name sname))
-                                             (symbol-package sname))))
+                                             *protobuf-package*)))
                          (writer (or (getf inits :writer)
                                      (intern (format nil "~A-~A" reader 'setter)
-                                             (symbol-package sname))))
+                                             *protobuf-package*)))
                          (default (getf inits :initform)))
                     (collect-form `(without-redefinition-warnings ()
                                      (let ((,stable (make-hash-table :test #'eq :weak t)))
@@ -366,10 +369,10 @@
                       (reader (or (getf inits :accessor)
                                   (getf inits :reader)
                                   (intern (if conc-name (format nil "~A~A" conc-name sname) (symbol-name sname))
-                                          (symbol-package sname))))
+                                          *protobuf-package*)))
                       (writer (or (getf inits :writer)
                                   (intern (format nil "~A-~A" reader 'setter)
-                                          (symbol-package sname))))
+                                          *protobuf-package*)))
                       (default (getf inits :initform)))
                  ;; For the extended slots, each slot gets its own table
                  ;; keyed by the object, which lets us avoid having a slot in each
@@ -441,11 +444,11 @@
    'writer' is a Lisp slot writer function to use to set the value."
   (check-type index integer)
   (check-type arity (member :required :optional :repeated))
-  (let* ((slot    (or (and name (proto->slot-name name)) type))
+  (let* ((slot    (or (and name (proto->slot-name name *protobuf-package*)) type))
          (name    (or name (class-name->proto type)))
          (options (loop for (key val) on options by #'cddr
                         collect (make-instance 'protobuf-option
-                                  :name  key
+                                  :name  (if (symbolp key) (slot-name->proto key) key)
                                   :value val)))
          (mslot   (unless alias-for
                     `(,slot ,@(case arity
@@ -533,14 +536,26 @@
    Returns a 'proto-field' object, a CLOS slot form and the incremented field index."
   (when (i= index 18999)                                ;skip over the restricted range
     (setq index 19999))
-  (destructuring-bind (slot &key type (default nil default-p) reader writer name documentation) field
+  (destructuring-bind (slot &rest other-options 
+                       &key type reader writer name (default nil default-p) packed
+                            options documentation &allow-other-keys) field
     (let* ((idx  (if (listp slot) (second slot) (iincf index)))
            (slot (if (listp slot) (first slot) slot))
            (reqd (clos-type-to-protobuf-required type))
            (reader (if (eq reader 't)
                      (intern (if conc-name (format nil "~A~A" conc-name slot) (symbol-name slot))
-                             (symbol-package slot))
-                     reader)))
+                             *protobuf-package*)
+                     reader))
+           (options (append
+                     (loop for (key val) on other-options by #'cddr
+                           unless (member key '(:type :reader :writer :name  :default :packed :documentation))
+                             collect (make-instance 'protobuf-option
+                                       :name  (slot-name->proto key)
+                                       :value val))
+                     (loop for (key val) on options by #'cddr
+                         collect (make-instance 'protobuf-option
+                                   :name  (if (symbolp key) (slot-name->proto key) key)
+                                   :value val)))))
       (multiple-value-bind (ptype pclass)
           (clos-type-to-protobuf-type type)
         (let ((slot (unless alias-for
@@ -572,8 +587,9 @@
                        :reader reader
                        :writer writer
                        :default default
-                       :packed  (and (eq reqd :repeated)
-                                     (packed-type-p pclass))
+                       ;; Pack the field only if requested and it actually makes sense
+                       :packed  (and (eq reqd :repeated) packed (packed-type-p pclass))
+                       :options options
                        :documentation documentation)))
           (values field slot idx))))))
 
@@ -590,7 +606,7 @@
   (let* ((name    (or name (class-name->proto type)))
          (options (loop for (key val) on options by #'cddr
                         collect (make-instance 'protobuf-option
-                                  :name  key
+                                  :name  (if (symbolp key) (slot-name->proto key) key)
                                   :value val)))
          (service (make-instance 'protobuf-service
                     :class type
@@ -608,7 +624,7 @@
                  (output-type (if (listp output-type) (car output-type) output-type))
                  (options (loop for (key val) on options by #'cddr
                                 collect (make-instance 'protobuf-option
-                                          :name  key
+                                          :name  (if (symbolp key) (slot-name->proto key) key)
                                           :value val)))
                  (method  (make-instance 'protobuf-method
                             :class function
@@ -621,7 +637,7 @@
                             :documentation documentation)))
             (setf (proto-methods service) (nconc (proto-methods service) (list method)))
             ;; The following are the hooks to CL-Stubby
-            (let* ((package   (symbol-package function))
+            (let* ((package   *protobuf-package*)
                    (client-fn function)
                    (server-fn (intern (format nil "~A-~A" 'do function) package))
                    (vinput    (intern (format nil "~A-~A" (symbol-name input-type) 'in) package))

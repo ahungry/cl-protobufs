@@ -211,6 +211,18 @@
 ;; This corresponds to the :bytes Protobufs type
 (deftype byte-vector () '(array (unsigned-byte 8)))
 
+;; The Protobufs integer types
+(deftype    int32 () '(signed-byte 32))
+(deftype    int64 () '(signed-byte 64))
+(deftype   uint32 () '(unsigned-byte 32))
+(deftype   uint64 () '(unsigned-byte 64))
+(deftype   sint32 () '(signed-byte 32))
+(deftype   sint64 () '(signed-byte 64))
+(deftype  fixed32 () '(signed-byte 32))
+(deftype  fixed64 () '(signed-byte 64))
+(deftype sfixed32 () '(signed-byte 32))
+(deftype sfixed64 () '(signed-byte 64))
+
 
 ;;; Code generation utilities
 

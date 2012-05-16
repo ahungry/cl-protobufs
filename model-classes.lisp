@@ -28,8 +28,7 @@
 
 (defmethod find-protobuf ((path pathname))
   "Given a pathname, return the 'protobuf' schema that came from that path."
-  (let ((path (make-pathname :type nil :defaults path)))
-    (values (gethash path *all-protobufs*))))
+  (values (gethash (make-pathname :type nil :defaults (truename path)) *all-protobufs*)))
 
 
 (defvar *all-messages* (make-hash-table :test #'equal)
@@ -91,12 +90,12 @@
              :accessor proto-lisp-package
              :initarg :lisp-package
              :initform nil)
-   (imports :type (list-of string)              ;the names of any imported schemas, as strings
+   (imports :type (list-of string)              ;the names of schemas to be imported
             :accessor proto-imports
             :initarg :imports
             :initform ())
-   (schemas :type (list-of protobuf)            ;the names of any imported schemas, as pathnames
-            :accessor proto-imported-schemas
+   (schemas :type (list-of protobuf)            ;the schemas that were successfully imported
+            :accessor proto-imported-schemas    ;this gets used for chasing namespaces
             :initform ())
    (enums :type (list-of protobuf-enum)         ;the set of enum types
           :accessor proto-enums
@@ -117,31 +116,28 @@
   (:documentation
    "The model class that represents a Protobufs schema, i.e., one .proto file."))
 
-(defmethod initialize-instance :after ((protobuf protobuf) &rest initargs)
-  (declare (ignore initargs))
-  ;; Record this schema under both its Lisp and its Protobufs name
-  (with-slots (class name) protobuf
-    (record-protobuf protobuf class name)))
-
-(defmethod record-protobuf ((protobuf protobuf) symbol name)
-  "Record all the names by which the Protobufs schema might be known."
-  (when symbol
-    (setf (gethash (keywordify symbol) *all-protobufs*) protobuf))
-  (when name
-    (setf (gethash (string-upcase name) *all-protobufs*) protobuf))
-  (let ((path (or *compile-file-truename* *load-truename*)))
-    (when path
-      ;; Record the file from which the Protobufs schema came, sans file type
-      (setf (gethash (make-pathname :type nil :defaults path) *all-protobufs*) protobuf))))
-
 (defmethod make-load-form ((p protobuf) &optional environment)
   (with-slots (class name) p
     (multiple-value-bind (constructor initializer)
         (make-load-form-saving-slots p :environment environment)
       (values `(let ((p ,constructor))
-                  (record-protobuf p ',class ',name)
+                  (record-protobuf p ',class ',name nil)
                   p)
               initializer))))
+
+(defmethod record-protobuf ((protobuf protobuf) &optional symbol name type)
+  "Record all the names by which the Protobufs schema might be known."
+  (declare (ignore type))
+  (let ((symbol (or symbol (proto-class protobuf)))
+        (name   (or name (proto-name protobuf))))
+    (when symbol
+      (setf (gethash (keywordify symbol) *all-protobufs*) protobuf))
+    (when name
+      (setf (gethash (string-upcase name) *all-protobufs*) protobuf))
+    (let ((path (or *compile-file-pathname* *load-pathname*)))
+      (when path
+        ;; Record the file from which the Protobufs schema came, sans file type
+        (setf (gethash (make-pathname :type nil :defaults (truename path)) *all-protobufs*) protobuf)))))
 
 (defmethod print-object ((p protobuf) stream)
   (print-unreadable-object (p stream :type t :identity t)
@@ -182,7 +178,7 @@
 
 (defmethod find-enum ((protobuf protobuf) type)
   (labels ((find-it (proto)
-             (let ((enum (find type (proto-enums protobuf) :key #'proto-class)))
+             (let ((enum (find type (proto-enums proto) :key #'proto-class)))
                (when enum
                  (return-from find-enum enum))
                (map () #'find-it (proto-imported-schemas proto)))))
@@ -190,7 +186,7 @@
 
 (defmethod find-enum ((protobuf protobuf) (name string))
   (labels ((find-it (proto)
-             (let ((enum (find name (proto-enums protobuf) :key #'proto-name :test #'string=)))
+             (let ((enum (find name (proto-enums proto) :key #'proto-name :test #'string=)))
                (when enum
                  (return-from find-enum enum))
                (map () #'find-it (proto-imported-schemas proto)))))
@@ -334,20 +330,6 @@
     (:documentation
    "The model class that represents a Protobufs message."))
 
-(defmethod initialize-instance :after ((message protobuf-message) &rest initargs)
-  (declare (ignore initargs))
-  ;; Record this message under just its Lisp class name
-  (with-slots (class name message-type) message
-    ;; No need to record an extension, it's already been recorded
-    (when (not (eq message-type :extends))
-      (record-protobuf message class name))))
-
-(defmethod record-protobuf ((message protobuf-message) class name)
-  (when class
-    (setf (gethash class *all-messages*) message))
-  (when name
-    (setf (gethash name *all-messages*) message)))
-
 (defmethod make-load-form ((m protobuf-message) &optional environment)
   (with-slots (class name message-type) m
     (multiple-value-bind (constructor initializer)
@@ -355,9 +337,20 @@
       (values (if (eq message-type :extends)
                 constructor
                 `(let ((m ,constructor))
-                   (record-protobuf m ',class ',name)
+                   (record-protobuf m ',class ',name ',message-type)
                    m))
               initializer))))
+
+(defmethod record-protobuf ((message protobuf-message) &optional class name type)
+  ;; No need to record an extension, it's already been recorded
+  (let ((class (or class (proto-class message)))
+        (name  (or name (proto-name message)))
+        (type  (or type (proto-message-type message))))
+    (unless (eq type :extends)
+      (when class
+        (setf (gethash class *all-messages*) message))
+      (when name
+        (setf (gethash name *all-messages*) message)))))
 
 (defmethod print-object ((m protobuf-message) stream)
   (print-unreadable-object (m stream :type t :identity t)

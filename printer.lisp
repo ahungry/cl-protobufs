@@ -219,7 +219,9 @@
             ((typep msg 'protobuf-enum)
              (let ((default (let ((e (find (proto-default field) (proto-values msg) :key #'proto-name :test #'string=)))
                               (and e (proto-name e)))))
-              (format stream "~&~@[~VT~]~(~A~) ~A ~A = ~D~@[ [default = ~A]~]~@[ [packed = true]~*~]~{ [~:/protobuf-option/]~};~:[~*~*~;~VT// ~A~]~%"
+              (format stream "~&~@[~VT~]~(~A~) ~A ~A = ~D~
+                              ~@[ [default = ~A]~]~@[ [packed = true]~*~]~{ [~:/protobuf-option/]~};~
+                              ~:[~*~*~;~VT// ~A~]~%"
                       (and (not (zerop indentation)) indentation)
                       required type name index default packed options
                       documentation *protobuf-field-comment-column* documentation)))
@@ -230,8 +232,12 @@
                                (proto-default field)))
                     (default (if (stringp default) (escape-string default) default)))
               (format stream (if (eq class :bool)
-                               "~&~@[~VT~]~(~A~) ~A ~A = ~D~@[ [default = ~(~A~)]~]~@[ [packed = true]~*~]~{ [~:/protobuf-option/]~};~:[~*~*~;~VT// ~A~]~%"
-                               "~&~@[~VT~]~(~A~) ~A ~A = ~D~@[ [default = ~S]~]~@[ [packed = true]~*~]~{ [~:/protobuf-option/]~};~:[~*~*~;~VT// ~A~]~%")
+                               "~&~@[~VT~]~(~A~) ~A ~A = ~D~
+                                ~@[ [default = ~(~A~)]~]~@[ [packed = true]~*~]~{ [~:/protobuf-option/]~};~
+                                ~:[~*~*~;~VT// ~A~]~%"
+                               "~&~@[~VT~]~(~A~) ~A ~A = ~D~
+                                ~@[ [default = ~S]~]~@[ [packed = true]~*~]~{ [~:/protobuf-option/]~};~
+                                ~:[~*~*~;~VT// ~A~]~%")
                       (and (not (zerop indentation)) indentation)
                       required type name index default packed options
                       documentation *protobuf-field-comment-column* documentation)))))))
@@ -300,7 +306,8 @@
                        (and opt (cond ((string= opt "SPEED") :speed)
                                       ((string= opt "CODE_SIZE") :space)
                                       (t nil)))))
-           (options  (remove "optimize_for" (proto-options protobuf) :test #'string-equal :key #'proto-name))
+           (options  (remove-if #'(lambda (x) (string= (proto-name x) "optimize_for"))
+                                (proto-options protobuf)))
            (pkg      (and package (if (stringp package) package (string package))))
            (lisp-pkg (and lisp-package (if (stringp lisp-package) lisp-package (string lisp-package))))
            (*show-lisp-enum-indexes* show-enum-indexes)
@@ -313,7 +320,7 @@
         (let ((pkg (string-upcase (or lisp-pkg pkg))))
           (format stream "~&(eval-when (:execute :compile-toplevel :load-toplevel) ~
                           ~%  (unless (find-package \"~A\") ~
-                          ~%    (defpackage ~A))) ~
+                          ~%    (defpackage ~A (:use :COMMON-LISP :PROTOBUFS)))) ~
                           ~%(in-package \"~A\")~%~%"
                   pkg pkg pkg)))
       (when documentation
@@ -496,17 +503,26 @@
 (defparameter *protobuf-slot-comment-column* 56)
 (defmethod write-protobuf-as ((type (eql :lisp)) (field protobuf-field) stream
                               &key (indentation 0) more message)
-  (with-prefixed-accessors (value reader writer required index documentation) (proto- field)
+  (with-prefixed-accessors (value reader writer required index packed documentation) (proto- field)
     (let* ((class (if (eq (proto-class field) 'boolean) :bool (proto-class field)))
            (msg   (and (not (keywordp class))
-                        (or (find-message message class) (find-enum message class))))
+                       (or (find-message message class) (find-enum message class))))
            (type  (let ((cl (case class
-                              ((:int32 :uint32 :int64 :uint64 :sint32 :sint64
-                                :fixed32 :sfixed32 :fixed64 :sfixed64) 'integer)
+                              ((:int32)       'int32)
+                              ((:int64)       'int64)
+                              ((:uint32)     'uint32)
+                              ((:uint64)     'uint64)
+                              ((:sint32)     'sint32)
+                              ((:sint64)     'sint64)
+                              ((:fixed32)   'fixed32)
+                              ((:fixed64)   'fixed64)
+                              ((:sfixed32) 'sfixed32)
+                              ((:sfixed64) 'sfixed64)
                               ((:float)  'float)
                               ((:double) 'double-float)
                               ((:bool)   'boolean)
                               ((:string) 'string)
+                              ((:bytes)  'byte-vector)
                               ((:symbol) 'symbol)
                               (otherwise class))))
                     (cond ((eq required :optional)
@@ -537,14 +553,16 @@
                (format stream (if (and (keywordp class) (not (eq class :bool)))
                                 ;; Keyword means a primitive type, print default with ~S
                                 "~&~@[~VT~](~A :type ~(~S~)~:[~*~; :default ~S~]~
-                                 ~@[ :reader ~(~S~)~]~@[ :writer ~(~S~)~]~@[ :options (~{~@/protobuf-option/~^ ~})~])~
+                                 ~@[ :reader ~(~S~)~]~@[ :writer ~(~S~)~]~@[ :packed ~(~S~)~]~
+                                 ~@[ :options (~{~@/protobuf-option/~^ ~})~])~
                                  ~:[~*~*~;~VT; ~A~]"
                                 ;; Non-keyword must mean an enum type, print default with ~(~S~)
                                 "~&~@[~VT~](~A :type ~(~S~)~:[~*~; :default ~(~S~)~]~
-                                 ~@[ :reader ~(~S~)~]~@[ :writer ~(~S~)~]~@[ :options (~{~@/protobuf-option/~^ ~})~])~
+                                 ~@[ :reader ~(~S~)~]~@[ :writer ~(~S~)~]~@[ :packed ~(~S~)~]~
+                                 ~@[ :options (~{~@/protobuf-option/~^ ~})~])~
                                  ~:[~*~*~;~VT; ~A~]")
                        (and (not (zerop indentation)) indentation)
-                       slot type defaultp default reader writer options
+                       slot type defaultp default reader writer packed options
                        ;; Don't write the comment if we'll insert a close paren after it
                        (and more documentation) *protobuf-slot-comment-column* documentation)))))))
 
@@ -552,7 +570,7 @@
                               &key (indentation 0) more)
   (declare (ignore more))
   (with-prefixed-accessors (from to) (proto-extension- extension)
-    (format stream "~&~@[~VT~](define-extension ~D ~D)"
+    (format stream "~&~@[~VT~](proto:define-extension ~D ~D)"
             (and (not (zerop indentation)) indentation)
             from (if (eql to #.(1- (ash 1 29))) "max" to))))
 

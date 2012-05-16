@@ -18,6 +18,16 @@
 
   ;; Some types useful for defining messages
   (:export
+   "INT32"
+   "INT64"
+   "UINT32"
+   "UINT64"
+   "SINT32"
+   "SINT64"
+   "FIXED32"
+   "FIXED64"
+   "SFIXED32"
+   "SFIXED64"
    "BYTE-VECTOR"
    "LIST-OF")
 

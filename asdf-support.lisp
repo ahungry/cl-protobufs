@@ -86,7 +86,7 @@
                (setq fasl-date (file-write-date fasl-file)))
              ;; Now we can load the .fasl file
              (load fasl-file)))
-      (let ((imported (find-protobuf base-path)))
+      (let* ((imported (find-protobuf base-path)))
         (when imported
           (setf (proto-imported-schemas protobuf)
                 (nconc (proto-imported-schemas protobuf) (list imported)))))

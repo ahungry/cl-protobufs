@@ -195,21 +195,34 @@
   (let ((type (if type-filter (funcall type-filter type) type)))
     (flet ((type->protobuf-type (type)
              (case type
-               ((boolean)
-                (values "bool" :bool))
-               ((integer)
-                (values "int64" :int64))
+               ((int32)    (values "int32" :int32))
+               ((int64)    (values "int64" :int64))
+               ((uint32)   (values "uint32" :uint32))
+               ((uint64)   (values "uint64" :uint64))
+               ((sint32)   (values "sint32" :sint32))
+               ((sint64)   (values "sint64" :sint64))
+               ((fixed32)  (values "fixed32" :fixed32))
+               ((fixed64)  (values "fixed64" :fixed64))
+               ((sfixed32) (values "sfixed32" :sfixed32))
+               ((sfixed64) (values "sfixed64" :sfixed64))
+               ((integer)  (values "int64" :int64))
                ((single-float float)
                 (values "float" :float))
                ((double-float)
                 (values "double" :double))
+               ((boolean)
+                (values "bool" :bool))
                ((symbol keyword)
                 (values "string" :symbol))
                (otherwise
-                (if (ignore-errors
-                      (subtypep type '(or string character)))
-                  (values "string" :string)
-                  (values (class-name->proto type) type))))))
+                (cond ((ignore-errors
+                        (subtypep type '(or string character symbol)))
+                       (values "string" :string))
+                      ((ignore-errors
+                        (subtypep type 'byte-vector))
+                       (values "bytes" :bytes))
+                      (t
+                       (values (class-name->proto type) type)))))))
       (if (listp type)
         (destructuring-bind (head &rest tail) type
           (case head
@@ -291,17 +304,14 @@
             ((float single-float double-float)
              (type->protobuf-type head))
             (otherwise
-             (if (ignore-errors
-                   (subtypep type '(or string character symbol)))
-               (values "string" :string)
-               (error "Don't know how to translate the type ~S" type)))))
+             (type->protobuf-type type))))
         (type->protobuf-type type)))))
 
 (defun packed-type-p (type)
   "Returns true if the given Protobufs type can use a packed field."
   (not (null (member type '(:int32 :int64 :uint32 :uint64 :sint32 :sint64
                             :fixed32 :fixed64 :sfixed32 :sfixed64
-                            :float :double)))))
+                            :bool :float :double)))))
 
 (defun clos-type-to-protobuf-required (type &optional type-filter)
   "Given a Lisp type, returns a \"cardinality\": :required, :optional or :repeated."

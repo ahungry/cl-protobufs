@@ -458,6 +458,15 @@
 (defun generate-serializer (message)
   "Generate a 'serialize-object' method for the given message."
   (with-gensyms (vobj vbuf vidx vval vclass)
+    (when (null (proto-fields message))
+      (return-from generate-serializer
+        `(defmethod serialize-object
+           (,vobj (,vclass (eql ,message)) ,vbuf &optional (,vidx 0) visited)
+         (declare (optimize (speed 3) (safety 0) (debug 0)))
+         (declare (ignorable ,vobj ,vclass visited)
+                  (type (simple-array (unsigned-byte 8)) ,vbuf)
+                  (type fixnum ,vidx))
+         (values ,vbuf ,vidx))))
     (with-collectors ((serializers collect-serializer))
       (dolist (field (proto-fields message))
         (let* ((class  (if (eq (proto-class field) 'boolean) :bool (proto-class field)))
@@ -511,7 +520,7 @@
                            (let ((tag (make-tag class index)))
                              (if (eq class :bool)
                                (if (or (eq (proto-required field) :required)
-                                       (null (proto-value field)))
+                                       reader)
                                  `(let ((,vval ,reader))
                                     (setq ,vidx (serialize-prim ,vval ,class ,tag ,vbuf ,vidx)))
                                  `(let ((,vval (cond ((slot-boundp ,vobj ',(proto-value field))
@@ -563,6 +572,17 @@
 (defun generate-deserializer (message)
   "Generate a 'deserialize-object' method for the given message."
   (with-gensyms (vclass vbuf vidx vlen vendtag vobj vval)
+    (when (null (proto-fields message))
+      (return-from generate-deserializer
+        `(defmethod deserialize-object
+             ((,vclass (eql ,message)) ,vbuf &optional ,vidx ,vlen (,vendtag 0))
+           (declare (optimize (speed 3) (safety 0) (debug 0)))
+           (declare (ignorable ,vclass ,vbuf ,vlen ,vendtag)
+                    (type (simple-array (unsigned-byte 8)) ,vbuf))
+           (let ((,vidx (or ,vidx 0)))
+             (declare (type fixnum ,vidx))
+             (let ((,vobj (make-instance ',(or (proto-alias-for message) (proto-class message)))))
+               (values ,vobj ,vidx))))))
     (with-collectors ((deserializers collect-deserializer)
                       ;; For tracking repeated slots that will need to be reversed
                       (rslots collect-rslot))
@@ -696,6 +716,13 @@
 (defun generate-object-size (message)
   "Generate an 'object-size' method for the given message."
   (with-gensyms (vobj vsize vval vclass)
+    (when (null (proto-fields message))
+      (return-from generate-object-size
+        `(defmethod object-size
+             (,vobj (,vclass (eql ,message)) &optional visited)
+         (declare (optimize (speed 3) (safety 0) (debug 0)))
+         (declare (ignorable ,vobj visited))
+         0)))
     (with-collectors ((sizers collect-sizer))
       (dolist (field (proto-fields message))
         (let* ((class  (if (eq (proto-class field) 'boolean) :bool (proto-class field)))
@@ -747,7 +774,7 @@
                             (collect-sizer
                              (if (eq class :bool)
                                (if (or (eq (proto-required field) :required)
-                                       (null (proto-value field)))
+                                       reader)
                                  `(let ((,vval ,reader))
                                     (declare (ignorable ,vval))
                                     (iincf ,vsize (prim-size ,vval ,class ,tag)))
@@ -787,7 +814,7 @@
                                   (iincf ,vsize (enum-size ,vval '(,@(proto-values msg)) ,tag)))))))))))))
       `(defmethod object-size
            (,vobj (,vclass (eql ,message)) &optional visited)
-           (declare (optimize (speed 3) (safety 0) (debug 0)))
+         (declare (optimize (speed 3) (safety 0) (debug 0)))
          (declare (ignorable visited))
          (let ((,vsize (and visited (gethash ,vobj visited))))
            (when ,vsize
