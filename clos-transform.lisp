@@ -23,54 +23,63 @@
 ;; Doing this can't really work perfectly, there's not enough information
 ;;  - How do we decide if there's an ownership hierarchy that should produce embedded messages?
 ;;  - How do we decide if there are volatile slots that should not be included in the message?
-(defun write-protobuf-schema-for-classes (classes
-                                          &key (stream *standard-output*) (type :proto)
-                                               name package lisp-package
-                                               slot-filter type-filter enum-filter value-filter
-                                               (alias-existing-classes *alias-existing-classes*))
+(defun write-schema-for-classes (classes
+                                 &key (stream *standard-output*) (type :proto)
+                                      name package lisp-package install
+                                      slot-filter type-filter enum-filter value-filter
+                                      (alias-existing-classes *alias-existing-classes*))
   "Given a set of CLOS classes, generates a Protobufs schema for the classes
    and pretty prints the schema to the stream.
    The return value is the schema."
-  (let ((protobuf (generate-protobuf-schema-for-classes classes
-                    :name name
-                    :package package
-                    :lisp-package (or lisp-package package)
-                    :slot-filter slot-filter
-                    :type-filter type-filter
-                    :enum-filter enum-filter
-                    :value-filter value-filter
-                    :alias-existing-classes alias-existing-classes)))
+  (let ((schema (generate-schema-for-classes classes
+                  :name name
+                  :package package
+                  :lisp-package (or lisp-package package)
+                  :install install
+                  :slot-filter slot-filter
+                  :type-filter type-filter
+                  :enum-filter enum-filter
+                  :value-filter value-filter
+                  :alias-existing-classes alias-existing-classes)))
     (fresh-line stream)
-    (write-protobuf protobuf :stream stream :type type)
+    (write-schema schema :stream stream :type type)
     (terpri stream)
-    protobuf))
+    schema))
 
-(defun generate-protobuf-schema-for-classes (classes
-                                             &key name package lisp-package
-                                                  slot-filter type-filter enum-filter value-filter
-                                                  (alias-existing-classes *alias-existing-classes*))
+(defun generate-schema-for-classes (classes
+                                    &key name package lisp-package install
+                                         slot-filter type-filter enum-filter value-filter
+                                         (alias-existing-classes *alias-existing-classes*))
   "Given a set of CLOS classes, generates a Protobufs schema for the classes.
    The return value is the schema."
   (let* ((*alias-existing-classes* alias-existing-classes)
          (package  (and package (if (stringp package) package (string-downcase (string package)))))
          (lisp-pkg (string (or lisp-package package)))
-         (protobuf (make-instance 'protobuf
+         (schema   (make-instance 'protobuf-schema
                      :name name
                      :package package
                      :lisp-package lisp-pkg
                      :syntax "proto2"))
          (messages (mapcar #'(lambda (c)
-                               (class-to-protobuf-message c protobuf
+                               (class-to-protobuf-message c schema
                                 :slot-filter slot-filter
                                 :type-filter type-filter
                                 :enum-filter enum-filter
                                 :value-filter value-filter))
                            classes)))
-    (setf (proto-messages protobuf) messages)
-    protobuf))
+    (setf (proto-messages schema) messages)
+    (when install
+      (record-protobuf schema)
+      (with-collectors ((messages collect-message))
+        (labels ((collect-messages (message)
+                   (collect-message message)
+                   (map () #'collect-messages (proto-messages message))))
+          (map () #'collect-messages (proto-messages schema)))
+        (map () #'record-protobuf messages)))
+    schema))
 
 
-(defun class-to-protobuf-message (class protobuf
+(defun class-to-protobuf-message (class schema
                                   &key slot-filter type-filter enum-filter value-filter)
   "Given a CLOS class, return a Protobufs model object for it."
   (let* ((class (find-class class))
@@ -96,7 +105,7 @@
       (make-instance 'protobuf-message
         :class (class-name class)
         :name  (class-name->proto (class-name class))
-        :parent protobuf
+        :parent schema
         :alias-for (and *alias-existing-classes* (class-name class))
         :enums    (delete-duplicates enums :key #'proto-name :test #'string=)
         :messages (delete-duplicates msgs :key #'proto-name :test #'string=)

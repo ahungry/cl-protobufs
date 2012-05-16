@@ -86,6 +86,8 @@
                    (when (or slot reader)
                      (cond ((eq (proto-required field) :repeated)
                             (cond ((and (proto-packed field) (packed-type-p type))
+                                   ;; This is where we handle packed primitive types
+                                   ;; Packed enums get handled below
                                    (let ((tag (make-tag type (proto-index field))))
                                      (setq index (serialize-packed (read-slot object slot reader)
                                                                    type tag buffer index))))
@@ -118,9 +120,14 @@
                                                (proto-fields msg)))))
                                   ((typep msg 'protobuf-enum)
                                    (let ((tag (make-tag $wire-type-varint (proto-index field))))
-                                     (map () #'(lambda (v)
-                                                 (setq index (serialize-enum v (proto-values msg) tag buffer index)))
-                                             (read-slot object slot reader))))))
+                                     ;; 'proto-packed-p' of enum types returns nil,
+                                     ;; so packed enum fields won't be handled above
+                                     (if (proto-packed field)
+                                       (setq index (serialize-packed-enum (read-slot object slot reader)
+                                                                          (proto-values msg) tag buffer index))
+                                       (map () #'(lambda (v)
+                                                   (setq index (serialize-enum v (proto-values msg) tag buffer index)))
+                                               (read-slot object slot reader)))))))
                            (t
                             (cond ((eq type :bool)
                                    ;; We have to handle optional boolean fields specially
@@ -297,12 +304,17 @@
                                                (write-slot object slot writer
                                                            (cons obj (read-slot object slot reader)))))))
                                         ((typep msg 'protobuf-enum)
-                                         (multiple-value-bind (val idx)
-                                             (deserialize-enum (proto-values msg) buffer index)
-                                           (setq index idx)
-                                           (pushnew field rslots)
-                                           (write-slot object slot writer
-                                                       (cons val (read-slot object slot reader)))))))
+                                         (if (proto-packed field)
+                                           (multiple-value-bind (values idx)
+                                               (deserialize-packed-enum (proto-values msg) buffer index)
+                                             (setq index idx)
+                                             (write-slot object slot writer values))
+                                           (multiple-value-bind (val idx)
+                                               (deserialize-enum (proto-values msg) buffer index)
+                                             (setq index idx)
+                                             (pushnew field rslots)
+                                             (write-slot object slot writer
+                                                         (cons val (read-slot object slot reader))))))))
                                  (t
                                   (cond ((keywordp type)
                                          (multiple-value-bind (val idx)
@@ -401,9 +413,11 @@
                                                  (proto-fields msg))))))
                                   ((typep msg 'protobuf-enum)
                                    (let ((tag (make-tag $wire-type-varint (proto-index field))))
-                                     (map () #'(lambda (v)
-                                                 (iincf size (enum-size v (proto-values msg) tag)))
-                                             (read-slot object slot reader))))))
+                                     (if (proto-packed field)
+                                       (iincf size (packed-enum-size (read-slot object slot reader) type tag))
+                                       (map () #'(lambda (v)
+                                                   (iincf size (enum-size v (proto-values msg) tag)))
+                                               (read-slot object slot reader)))))))
                            (t
                             (cond ((eq type :bool)
                                    (let ((v (cond ((or (eq (proto-required field) :required)
@@ -512,8 +526,11 @@
                          ((typep msg 'protobuf-enum)
                           (collect-serializer
                            (let ((tag (make-tag $wire-type-varint index)))
-                             `(dolist (,vval ,reader)
-                                (setq ,vidx (serialize-enum ,vval '(,@(proto-values msg)) ,tag ,vbuf ,vidx))))))))
+                             (if (proto-packed field)
+                               `(setq ,vidx (serialize-packed-enum ,reader '(,@(proto-values msg)) ,tag ,vbuf ,vidx))
+
+                               `(dolist (,vval ,reader)
+                                  (setq ,vidx (serialize-enum ,vval '(,@(proto-values msg)) ,tag ,vbuf ,vidx)))))))))
                   (t
                    (cond ((keywordp class)
                           (collect-serializer
@@ -639,14 +656,21 @@
                                      (setq ,vidx idx)
                                      (push ,vval ,temp))))))))
                          ((typep msg 'protobuf-enum)
-                          (let ((temp (gensym (string (proto-value field)))))
-                            (collect-rslot (list field temp))
+                          (if (proto-packed field)
                             (collect-deserializer
                              `((,(make-tag $wire-type-varint index))
                                (multiple-value-bind (,vval idx)
-                                   (deserialize-enum '(,@(proto-values msg)) ,vbuf ,vidx)
+                                   (deserialize-packed-enum '(,@(proto-values msg)) ,vbuf ,vidx)
                                  (setq ,vidx idx)
-                                 (push ,vval ,temp))))))))
+                                 ,(write-slot vobj field vval))))
+                            (let ((temp (gensym (string (proto-value field)))))
+                              (collect-rslot (list field temp))
+                              (collect-deserializer
+                               `((,(make-tag $wire-type-varint index))
+                                 (multiple-value-bind (,vval idx)
+                                     (deserialize-enum '(,@(proto-values msg)) ,vbuf ,vidx)
+                                   (setq ,vidx idx)
+                                   (push ,vval ,temp)))))))))
                   (t
                    (cond ((keywordp class)
                           (collect-deserializer
@@ -766,8 +790,10 @@
                          ((typep msg 'protobuf-enum)
                           (let ((tag (make-tag $wire-type-varint index)))
                             (collect-sizer
-                             `(dolist (,vval ,reader)
-                                (iincf ,vsize (enum-size ,vval '(,@(proto-values msg)) ,tag))))))))
+                             (if (proto-packed field)
+                               `(iincf ,vsize (packed-enum-size ,reader '(,@(proto-values msg)) ,tag))
+                               `(dolist (,vval ,reader)
+                                  (iincf ,vsize (enum-size ,vval '(,@(proto-values msg)) ,tag)))))))))
                   (t
                    (cond ((keywordp class)
                           (let ((tag (make-tag class index)))

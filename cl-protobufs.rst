@@ -57,7 +57,7 @@ the Protobufs models, including:
 
  - Parse an existing .proto file into a set of model objects.
  - Convert a set of related CLOS classes into a set of model objects.
- - Compile a ``proto:define-proto`` macro call into a set of model objects.
+ - Compile a ``proto:define-schema`` macro call into a set of model objects.
 
 It also provides two ways to convert the model objects into outputs:
 
@@ -80,7 +80,7 @@ Model classes
 
 ::
 
-  proto:protobuf                                                [Class]
+  proto:protobuf-schema                                         [Class]
 
 The class the represents a Protobufs schema, i.e., one .proto file.
 It has slots for the name, options, enums, messages and services. The
@@ -151,22 +151,22 @@ an ASDF system; or use the Protobufs macros in a Lisp source file.
 
 If you have an existing .proto source file that you would like to
 convert to Lisp classes (more precisely, to the macros defined by the
-Protobufs library), you can use ``proto:parse-protobuf-from-file`` to
-read the .proto file and then use ``proto:write-protobuf`` to write a
+Protobufs library), you can use ``proto:parse-schema-from-file`` to
+read the .proto file and then use ``proto:write-schema`` to write a
 new .lisp file. (This is what that ASDF module type ``:proto`` does.)
 
 ::
 
-  proto:parse-protobuf-from-file (filename)                     [Function]
+  proto:parse-schema-from-file (filename)                       [Function]
 
 Parses the contents of the file given by *filename*, and returns the
-Protobufs model (a set object objects rooted at ``proto:protobuf``)
+Protobufs model (a set object objects rooted at ``proto:protobuf-schema``)
 corresponding to the parsed file. The name of the Protobufs schema is
 generated automatically from the file name.
 
 ::
 
-  proto:parse-protobuf-from-stream (stream &key name class)     [Function]
+  proto:parse-schema-from-stream (stream &key name class)       [Function]
 
 Parses the contents of the stream *stream*, and returns the Protobufs
 schema corresponding to the parsed file. If *name* is supplied, it gives
@@ -175,9 +175,9 @@ Lisp name.
 
 ::
 
-  proto:write-protobuf (protobuf &key stream type)              [Function]
+  proto:write-schema (schema &key stream type)                  [Function]
 
-Pretty-prints the Protobufs schema *protobuf* onto the stream *stream*,
+Pretty-prints the Protobufs schema *schema* onto the stream *stream*,
 which defaults to ``*standard-output*``.
 
 *type* can be either ``:proto`` or ``:lisp``.
@@ -187,7 +187,7 @@ CLOS classes to .proto conversion
 ---------------------------------
 
 If you have an existing set of CLOS classes that you would like to
-convert to a Protobufs schema, you can use ``proto:generate-protobuf-schema-from-classes``.
+convert to a Protobufs schema, you can use ``proto:generate-schema-from-classes``.
 
 Note that the Protobufs schema is an *approximation* of a good schema.
 You should review it and, if necessary, change it (and probably the Lisp
@@ -195,15 +195,15 @@ classes as well) until you have a good Protobufs schema definition.
 
 ::
 
-  proto:generate-protobuf-schema-for-classes (classes           [Function]
-                                              &key name package lisp-package
-                                                   slot-filter type-filter enum-filter value-filter
-                                                   alias-existing-classes)
+  proto:generate-schema-for-classes (classes                    [Function]
+                                     &key name package lisp-package
+                                          slot-filter type-filter enum-filter value-filter
+                                          alias-existing-classes)
 
 Given a list of class names *classes*, this generates a Protobufs schema
 for the classes, generating any necessary enum types that correspond to
 Lisp ``member`` types. The return value is the model, rooted at an instance
-of ``proto:protobuf``.
+of ``proto:protobuf-schema``.
 
 *name* and *package* can be supplied to give the Protobufs name and
 package. *lisp-package* can be supplied to give the name of the Lisp
@@ -242,26 +242,26 @@ with the existing Lisp class.
 
 ::
 
-  proto:write-protobuf-schema-for-classes (classes              [Function]
-                                           &key stream type name package lisp-package
-                                                slot-filter type-filter enum-filter value-filter
-                                                alias-existing-classes)
+  proto:write-schema-for-classes (classes                       [Function]
+                                  &key stream type name package lisp-package
+                                       slot-filter type-filter enum-filter value-filter
+                                       alias-existing-classes)
 
 Given a list of class names *classes*, this generates a Protobufs schema
 for the classes, generating enum types as necessary, and then
 pretty-prints the result onto *stream*. *type* can be either ``:proto``
 (the default) or ``:lisp``; it controls which format the generated
 code will be printed in. The return value is the model, rooted at an
-instance of ``proto:protobuf``.
+instance of ``proto:protobuf-schema``.
 
 *name* and *package* can be supplied to give the Protobufs name and
 package. *lisp-package* can be supplied to give the name of the Lisp
 package, if it is different from *package*.
 
 *slot-filter*, *type-filter*, *enum-filter* and *value-filter* are
-as for ``proto:generate-protobuf-schema-for-classes``.
+as for ``proto:generate-schema-for-classes``.
 
-*alias-existing-classes* is as for ``proto:generate-protobuf-schema-for-classes``.
+*alias-existing-classes* is as for ``proto:generate-schema-for-classes``.
 
 
 Using .proto files directly
@@ -282,7 +282,7 @@ Using the Protobufs macros
 You can define a Protobufs schema entirely within Lisp by using the
 following macros. For example::
 
-  (proto:define-proto color-wheel
+  (proto:define-schema color-wheel
       (:package com.google.colorwheel
        :lisp-package color-wheel)
     (proto:define-message color-wheel
@@ -369,10 +369,10 @@ and Lisp types ``(proto:list-of <T>)`` turn into repeated fields.
 
 ::
 
-  proto:define-proto (type (&key name syntax import             [Macro]
-                                 package lisp-package
-                                 optimize options documentation)
-                      &body messages)
+  proto:define-schema (type (&key name syntax import            [Macro]
+                                  package lisp-package
+                                  optimize options documentation)
+                       &body messages)
 
 Defines a Protobufs "schema" whose name is given by the symbol *type*,
 corresponding to a .proto file of that name. By a "schema", we mean an
@@ -382,7 +382,7 @@ rendition of *type* (e.g., ``color-wheel`` becomes ``ColorWheel``);
 otherwise the Protobufs name is the string *name*.
 
 *imports* is a list of pathname strings to be imported. This corresponds
-to ``import`` in a .proto file. Note that ``proto:define-proto`` can
+to ``import`` in a .proto file. Note that ``proto:define-schema`` can
 import both .proto files and .lisp files containing Protobufs macros,
 but the generated .proto code will convert all of these to imports of
 .proto files.
@@ -437,7 +437,7 @@ in the .proto file.
 or a list of the form ``(name index)``. By default, the indexes start at
 0 and are incremented by 1 for each new enum value.
 
-``proto:define-enum`` can be used only within ``proto:define-proto``
+``proto:define-enum`` can be used only within ``proto:define-schema``
 or ``proto:define-message``.
 
 ::
@@ -487,10 +487,11 @@ Note that the Protobufs does not support full Lisp type expressions in
 the types of fields. The following type expressions are supported:
 
  - ``integer``, optionally with upper and lower bounds
- - ``signed-byte`` and ``unsigned-byte``
- - ``single-float`` and ``double-float``
+ - ``signed-byte``, which correspond to ``proto:int32`` or ``proto:int64``
+ - ``unsigned-byte``, which correspond to ``proto:uint32`` or ``proto:uint64``
+ - ``float`` and ``double-float``
  - ``string``and ``character``
- - ``proto:byte-vector`` (equivalent to ``(array (unsigned-byte 8))``)
+ - ``(array (unsigned-byte 8))``, which corresponds to ``proto:byte-vector``
  - ``boolean``
  - ``(member ...)``, where all the members are symbols or keywords or ``nil``
  - the name of a class that corresponds to another Protobufs message
@@ -501,7 +502,7 @@ the types of fields. The following type expressions are supported:
 a repeated field, and ``(or <T> null)`` to an optional field. The other
 types correspond to the various Protobufs scalar field types.
 
-``proto:define-message`` can be used only within ``proto:define-proto``
+``proto:define-message`` can be used only within ``proto:define-schema``
 or ``proto:define-message``.
 
 ::
@@ -553,7 +554,7 @@ in the .proto file.
 The body *fields* consists only of fields, which take the same form as
 they do for ``proto:define-message``.
 
-``proto:define-extend`` can be used only within ``proto:define-proto``
+``proto:define-extend`` can be used only within ``proto:define-schema``
 or ``proto:define-message``.
 
 ::
@@ -577,7 +578,7 @@ The body is a set of method specs of the form
 *name* is a symbol naming the RPC method. *input-type* and
 *output-type* may either be symbols or a list of the form ``(type &key name)``.
 
-``proto:define-service`` can only be used within ``proto:define-proto``.
+``proto:define-service`` can only be used within ``proto:define-schema``.
 
 
 Serializing and deserializing

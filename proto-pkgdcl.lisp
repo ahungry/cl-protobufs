@@ -38,7 +38,7 @@
   ;; The Protobufs API
   (:export
    ;; Model classes
-   "PROTOBUF"
+   "PROTOBUF-SCHEMA"
    "PROTOBUF-OPTION"
    "PROTOBUF-ENUM"
    "PROTOBUF-ENUM-VALUE"
@@ -49,12 +49,12 @@
    "PROTOBUF-METHOD"
 
    ;; .proto parsing and printing
-   "PARSE-PROTOBUF-FROM-FILE"
-   "PARSE-PROTOBUF-FROM-STREAM"
-   "WRITE-PROTOBUF"
+   "PARSE-SCHEMA-FROM-FILE"
+   "PARSE-SCHEMA-FROM-STREAM"
+   "WRITE-SCHEMA"
 
    ;; Protobuf defining macros
-   "DEFINE-PROTO"
+   "DEFINE-SCHEMA"
    "DEFINE-ENUM"
    "DEFINE-MESSAGE"
    "DEFINE-EXTEND"
@@ -63,12 +63,12 @@
    "DEFINE-SERVICE"
 
    ;; Upgradability and equality testing
-   "PROTOBUF-UPGRADABLE"
-   "PROTOBUFS-EQUAL"
+   "SCHEMA-UPGRADABLE"
+   "SCHEMAS-EQUAL"
 
    ;; CLOS to Protobufs transformer
-   "WRITE-PROTOBUF-SCHEMA-FOR-CLASSES"
-   "GENERATE-PROTOBUF-SCHEMA-FOR-CLASSES"
+   "WRITE-SCHEMA-FOR-CLASSES"
+   "GENERATE-SCHEMA-FOR-CLASSES"
 
    ;; Serialization and deserialization (wire format)
    "SERIALIZE-OBJECT-TO-FILE"
@@ -158,7 +158,9 @@
    "PROTO-WRITER"
 
    ;; Object lookup
-   "FIND-PROTOBUF"
+   "*ALL-SCHEMAS*"
+   "*ALL-MESSAGES*"
+   "FIND-SCHEMA"
    "FIND-MESSAGE-FOR-CLASS"
    "FIND-MESSAGE"
    "FIND-ENUM"
@@ -166,11 +168,11 @@
    "FIND-OPTION"
 
    ;; Printing
-   "WRITE-PROTOBUF-AS"
+   "WRITE-SCHEMA-AS"
 
    ;; Protobuf defining macros
-   "ENSURE-ALL-PROTOBUFS"
-   "ENSURE-PROTOBUF"
+   "ENSURE-ALL-SCHEMAS"
+   "ENSURE-SCHEMA"
 
    ;; CLOS to Protobufs transformer
    "*ALIAS-EXISTING-CLASSES*"

@@ -14,8 +14,9 @@
 ;;; Protocol buffer defining macros
 
 ;; Define a schema named 'type', corresponding to a .proto file of that name
-(defmacro define-proto (type (&key name syntax package lisp-package import optimize options documentation)
-                        &body messages &environment env)
+(defmacro define-schema (type (&key name syntax package lisp-package import optimize
+                                    options documentation)
+                         &body messages &environment env)
   "Define a schema named 'type', corresponding to a .proto file of that name.
    'name' can be used to override the defaultly generated Protobufs name.
    'syntax' and 'package' are as they would be in a .proto file.
@@ -35,7 +36,7 @@
                                    :name  (if (symbolp key) (slot-name->proto key) key)
                                    :value val)))
          (imports  (if (listp import) import (list import)))
-         (protobuf (make-instance 'protobuf
+         (schema   (make-instance 'protobuf-schema
                      :class    type
                      :name     name
                      :syntax   (or syntax "proto2")
@@ -49,17 +50,17 @@
                                                          :type  'symbol)))
                                  options)
                      :documentation documentation))
-         (*protobuf* protobuf)
+         (*protobuf* schema)
          (*protobuf-package* (or (find-package lisp-pkg)
                                  (find-package (string-upcase lisp-pkg))
                                  *package*)))
-    (apply #'process-imports protobuf imports)
+    (apply #'process-imports schema imports)
     (with-collectors ((forms collect-form))
       (dolist (msg messages)
         (assert (and (listp msg)
                      (member (car msg) '(define-enum define-message define-extend define-service))) ()
                 "The body of ~S must be one of ~{~S~^ or ~}"
-                'define-proto '(define-enum define-message define-extend define-service))
+                'define-schema '(define-enum define-message define-extend define-service))
         ;; The macro-expander will return a form that consists
         ;; of 'progn' followed by a symbol naming what we've expanded
         ;; (define-enum, define-message, define-extend, define-service),
@@ -72,34 +73,34 @@
           (map () #'collect-form definers)
           (ecase model-type
             ((define-enum)
-             (setf (proto-enums protobuf) (nconc (proto-enums protobuf) (list model))))
+             (setf (proto-enums schema) (nconc (proto-enums schema) (list model))))
             ((define-message define-extend)
-             (setf (proto-parent model) protobuf)
-             (setf (proto-messages protobuf) (nconc (proto-messages protobuf) (list model)))
+             (setf (proto-parent model) schema)
+             (setf (proto-messages schema) (nconc (proto-messages schema) (list model)))
              (when (eq (proto-message-type model) :extends)
-               (setf (proto-extenders protobuf) (nconc (proto-extenders protobuf) (list model)))))
+               (setf (proto-extenders schema) (nconc (proto-extenders schema) (list model)))))
             ((define-service)
-             (setf (proto-services protobuf) (nconc (proto-services protobuf) (list model)))))))
+             (setf (proto-services schema) (nconc (proto-services schema) (list model)))))))
       (let ((var (intern (format nil "*~A*" type) *protobuf-package*)))
         `(progn
            ,@forms
            (defvar ,var nil)
-           (let* ((old-proto ,var)
-                  (new-proto ,protobuf))
-             (when old-proto
+           (let* ((old-schema ,var)
+                  (new-schema ,schema))
+             (when old-schema
                (multiple-value-bind (upgradable warnings)
-                   (protobuf-upgradable old-proto new-proto)
+                   (schema-upgradable old-schema new-schema)
                  (unless upgradable
                    (protobufs-warn "The old schema for ~S (~A) can't be safely upgraded; proceeding anyway"
                                    ',type ',name)
                    (map () #'protobufs-warn warnings))))
-             (setq ,var new-proto)
+             (setq ,var new-schema)
              (record-protobuf ,var)
              ,@(with-collectors ((messages collect-message))
                  (labels ((collect-messages (message)
                             (collect-message message)
                             (map () #'collect-messages (proto-messages message))))
-                   (map () #'collect-messages (proto-messages protobuf)))
+                   (map () #'collect-messages (proto-messages schema)))
                  (append 
                    (mapcar #'(lambda (m) `(record-protobuf ,m)) messages)
                    (when (eq optimize :speed)
@@ -588,7 +589,7 @@
                        :writer writer
                        :default default
                        ;; Pack the field only if requested and it actually makes sense
-                       :packed  (and (eq reqd :repeated) packed (packed-type-p pclass))
+                       :packed  (and (eq reqd :repeated) packed t)
                        :options options
                        :documentation documentation)))
           (values field slot idx))))))
@@ -682,23 +683,23 @@
 (defvar *undefined-messages*)
 
 ;; A very useful tool during development...
-(defun ensure-all-protobufs ()
+(defun ensure-all-schemas ()
   (let ((protos (sort
                  (delete-duplicates
-                  (loop for p being the hash-values of *all-protobufs*
+                  (loop for p being the hash-values of *all-schemas*
                         collect p))
                  #'string< :key #'proto-name)))
-    (mapcan #'ensure-protobuf protos)))
+    (mapcan #'ensure-schema protos)))
 
-(defmethod ensure-protobuf ((proto protobuf))
-  "Ensure that all of the types are defined in the Protobufs schema 'proto'.
+(defmethod ensure-schema ((schema protobuf-schema))
+  "Ensure that all of the types are defined in the Protobufs schema 'schema'.
    This returns two values:
     - A list whose elements are (<undefined-type> \"message:field\" ...)
     - The accumulated warnings table that has the same information as objects."
   (let ((*undefined-messages* (make-hash-table))
-        (trace (list proto)))
-    (map () (curry #'ensure-message trace) (proto-messages proto))
-    (map () (curry #'ensure-service trace) (proto-services proto))
+        (trace (list schema)))
+    (map () (curry #'ensure-message trace) (proto-messages schema))
+    (map () (curry #'ensure-service trace) (proto-services schema))
     (loop for type being the hash-keys of *undefined-messages*
             using (hash-value things)
           collect (list* type

@@ -16,7 +16,7 @@
 ;;--- Turn these into a test suite
 
 #||
-(setq pnr-schema (proto:write-protobuf-schema-for-classes
+(setq pnr-schema (proto:generate-schema-for-classes
                   '(qres-core::legacy-pnr
                     qres-core::legacy-pnr-pax
                     qres-core::legacy-pnr-segment
@@ -26,14 +26,14 @@
                   :enum-filter #'quake::quake-enum-filter
                   :value-filter #'quake::quake-value-filter))
 
-(proto:write-protobuf pnr-schema)
-(proto:write-protobuf pnr-schema :type :lisp)
+(proto:write-schema pnr-schema)
+(proto:write-schema pnr-schema :type :lisp)
 
 (proto:serialize-object-to-stream pnr 'qres-core::legacy-pnr :stream nil)
 ||#
 
 #||
-(setq sched-schema (proto:write-protobuf-schema-for-classes
+(setq sched-schema (proto:generate-schema-for-classes
                     '(quux::zoned-time
                       sched::scheduled-flight
                       sched::flight-designator
@@ -50,8 +50,8 @@
                     :enum-filter #'quake::quake-enum-filter
                     :value-filter #'quake::quake-value-filter))
 
-(proto:write-protobuf sched-schema)
-(proto:write-protobuf sched-schema :type :lisp)
+(proto:write-schema sched-schema)
+(proto:write-schema sched-schema :type :lisp)
 ||#
 
 #||
@@ -61,7 +61,7 @@
    (cities :type (proto:list-of qres-core::city) :initform () :initarg :cities)
    (airports :type (proto:list-of qres-core::airport) :initform () :initarg :airports)))
 
-(setq bizd-schema (proto:generate-protobuf-schema-for-classes
+(setq bizd-schema (proto:generate-schema-for-classes
                    '(qres-core::country
                      qres-core::region
                      qres-core::region-key
@@ -72,10 +72,11 @@
                      qres-core::currency
                      qres-core::country-currencies
                      qres-core::carrier
-                     geodata)))
+                     geodata)
+                   :install t))
 
-(proto:write-protobuf bizd-schema)
-(proto:write-protobuf bizd-schema :type :lisp)
+(proto:write-schema bizd-schema)
+(proto:write-schema bizd-schema :type :lisp)
 
 (let* ((countries (loop for v being the hash-values of (qres-core::country-business-data) collect (car v)))
        (regions   (loop for v being the hash-values of (qres-core::region-business-data) collect v))
@@ -112,14 +113,14 @@
 ||#
 
 #||
-(setq pschema (proto:generate-protobuf-schema-for-classes
+(setq pschema (proto:generate-schema-for-classes
                '(proto:protobuf proto:protobuf-option
                  proto:protobuf-enum proto:protobuf-enum-value
                  proto:protobuf-message proto:protobuf-field proto:protobuf-extension
                  proto:protobuf-service proto:protobuf-method)))
 
-(proto:write-protobuf pschema)
-(proto:write-protobuf pschema :type :lisp)
+(proto:write-schema pschema)
+(proto:write-schema pschema :type :lisp)
 
 (progn (setq pser (proto:serialize-object-to-stream pschema 'proto:protobuf :stream nil)) nil)
 (describe (proto:deserialize-object 'proto:protobuf pser))
@@ -198,11 +199,12 @@
             :initform ()
             :initarg :recvals)))
 
-(setq test-schema (proto:generate-protobuf-schema-for-classes
-                   '(proto-test1 proto-test2 proto-test3 proto-test4 proto-test5 proto-test6)))
+(setq test-schema (proto:generate-schema-for-classes
+                   '(proto-test1 proto-test2 proto-test3 proto-test4 proto-test5 proto-test6)
+                   :install t))
 
-(proto:write-protobuf test-schema)
-(proto:write-protobuf test-schema :type :lisp)
+(proto:write-schema test-schema)
+(proto:write-schema test-schema :type :lisp)
 
 (dolist (class '(proto-test1 proto-test2 proto-test3 proto-test4 proto-test5 proto-test6))
   (let ((message (proto-impl:find-message test-schema class)))
@@ -362,12 +364,12 @@
                 :enums enums
                 :messages msgs
                 :services svcs)))
-  ;; The output should be example the same as the output of 'write-protobuf' below
-  (proto:write-protobuf proto))
+  ;; The output should be example the same as the output of 'write-schema' below
+  (proto:write-schema proto))
 ||#
 
 #||
-(proto:define-proto color-wheel
+(proto:define-schema color-wheel
     (:package ita.color
      :import "descriptor.proto"
      :documentation "Color wheel example")
@@ -398,7 +400,7 @@
        ((COLOR :TYPE COLOR-NAME :ACCESSOR COLOR-COLOR :INITARG :COLOR)
         (CONTRAST :TYPE (OR NULL CONTRAST-NAME) :ACCESSOR COLOR-CONTRAST :INITARG :CONTRAST :INITFORM :LOW)))
      (DEFVAR *COLOR-WHEEL*
-       (MAKE-INSTANCE 'PROTOBUF
+       (MAKE-INSTANCE 'PROTOBUF-SCHEMA
          :NAME "ColorWheel"
          :CLASS 'COLOR-WHEEL
          :PACKAGE "ita.color"
@@ -461,11 +463,11 @@
                                             :OPTIONS (LIST (MAKE-INSTANCE 'PROTOBUF-OPTION
                                                              :NAME "deadline" :VALUE "1.0")))))))))
 
-;; The output should be example the same as the output of 'write-protobuf' above
-(proto:write-protobuf *color-wheel*)
+;; The output should be example the same as the output of 'write-schema' above
+(proto:write-schema *color-wheel*)
 
 ;; How does the Lisp version look?
-(proto:write-protobuf *color-wheel* :type :lisp)
+(proto:write-schema *color-wheel* :type :lisp)
 
 (setq clr (make-instance 'color :color :red))
 (setq cser (proto:serialize-object-to-stream clr 'color :stream nil))
@@ -500,14 +502,14 @@ service ColorWheel {
   }
 }"))
   (with-input-from-string (s ps)
-    (setq ppp (proto:parse-protobuf-from-stream s))))
+    (setq ppp (proto:parse-schema-from-stream s))))
 
-(proto:write-protobuf ppp)
-(proto:write-protobuf ppp :type :lisp)
+(proto:write-schema ppp)
+(proto:write-schema ppp :type :lisp)
 ||#
 
 #||
-(proto:define-proto typed-list ()
+(proto:define-schema typed-list ()
   (proto:define-message typed-list ()
     (string-car  :type (or null string)  :reader string-car)
     (symbol-car  :type (or null string)  :reader symbol-car)
@@ -557,7 +559,7 @@ service ColorWheel {
 ||#
 
 #||
-(proto:define-proto integrity-test ()
+(proto:define-schema integrity-test ()
   (proto:define-message inner ()
     (i :type (or null integer)))
   (proto:define-message outer ()
@@ -591,7 +593,7 @@ service ColorWheel {
 ;;; Stubby examples
 
 #||
-(proto:define-proto color-wheel
+(proto:define-schema color-wheel
     (:package color-wheel
      :optimize :speed
      :documentation "Color wheel example")
@@ -623,8 +625,8 @@ service ColorWheel {
       :options ("deadline" 1.0)
       :documentation "Add a new color to the wheel")))
 
-(proto:write-protobuf *color-wheel*)
-(proto:write-protobuf *color-wheel* :type :lisp)
+(proto:write-schema *color-wheel*)
+(proto:write-schema *color-wheel* :type :lisp)
 
 (progn ;with-rpc-channel (rpc)
   (let* ((wheel  (make-instance 'color-wheel :name "Colors"))
@@ -697,9 +699,9 @@ service ColorWheel {
   }
 }"))
   (with-input-from-string (s ps)
-    (setq cw (proto:parse-protobuf-from-stream s))))
+    (setq cw (proto:parse-schema-from-stream s))))
 
-(proto:define-proto color-wheel1
+(proto:define-schema color-wheel1
     (:package color-wheel
      ;; :optimize :speed
      :documentation "Color wheel example, with nested")
@@ -720,7 +722,7 @@ service ColorWheel {
     (wheel :type color-wheel1)
     (color :type color1)))
 
-(proto:define-proto color-wheel2
+(proto:define-schema color-wheel2
     (:package color-wheel
      ;; :optimize :speed
      :documentation "Color wheel example, with group")
@@ -742,8 +744,8 @@ service ColorWheel {
     (wheel :type color-wheel2)
     (color :type color2)))
 
-(proto:write-protobuf *color-wheel1*)
-(proto:write-protobuf *color-wheel2*)
+(proto:write-schema *color-wheel1*)
+(proto:write-schema *color-wheel2*)
 
 (progn ;with-rpc-channel (rpc)
   (let* ((meta1  (make-instance 'metadata1 :revision "1.0"))

@@ -40,16 +40,16 @@
     (load (parse-protobuf-file (asdf:component-pathname c) lisp-file))))
 
 (defun parse-protobuf-file (proto-file lisp-file)
-  (let ((protobuf (parse-protobuf-from-file proto-file)))
+  (let ((protobuf (parse-schema-from-file proto-file)))
     (with-open-file (stream lisp-file
                      :direction :output
                      :if-exists :supersede)
-      (write-protobuf protobuf :stream stream :type :lisp)))
+      (write-schema protobuf :stream stream :type :lisp)))
   lisp-file)
 
 
 ;; Process 'import' lines
-(defun process-imports (protobuf &rest imports)
+(defun process-imports (schema &rest imports)
   "Imports all of the files given by 'imports'.
    If the file is a .proto file, it first parses it and writes a .lisp file.
    The .lisp file is the compiled and loaded."
@@ -86,8 +86,8 @@
                (setq fasl-date (file-write-date fasl-file)))
              ;; Now we can load the .fasl file
              (load fasl-file)))
-      (let* ((imported (find-protobuf base-path)))
+      (let* ((imported (find-schema base-path)))
         (when imported
-          (setf (proto-imported-schemas protobuf)
-                (nconc (proto-imported-schemas protobuf) (list imported)))))
+          (setf (proto-imported-schemas schema)
+                (nconc (proto-imported-schemas schema) (list imported)))))
       base-path)))

@@ -321,21 +321,42 @@
                `(setq idx (encode-double val ,buffer idx)))))))
     form))
 
-(defun serialize-enum (val values tag buffer index)
+(defun serialize-enum (val enum-values tag buffer index)
   "Serializes a Protobufs enum value into the buffer at the given index.
-   The value is given by 'val', the enum values are in 'values'.
+   The value is given by 'val', the enum values are in 'enum-values'.
    Modifies the buffer in place, and returns the new index into the buffer.
    Watch out, this function turns off most type checking and all array bounds checking."
   (declare (type (simple-array (unsigned-byte 8)) buffer)
            (type (unsigned-byte 32) tag)
            (type fixnum index))
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
-    (let* ((val (let ((e (find val values :key #'proto-value)))
+    (let* ((val (let ((e (find val enum-values :key #'proto-value)))
                   (and e (proto-index e))))
            (idx (encode-uint32 tag buffer index)))
       (declare (type (unsigned-byte 32) val)
                (type fixnum idx))
       (encode-uint32 (ldb (byte 32 0) val) buffer idx))))
+
+(defun serialize-packed-enum (values enum-values tag buffer index)
+  "Serializes Protobufs enum values into the buffer at the given index.
+   The values are given by 'values', the enum values are in 'enum-values'.
+   Modifies the buffer in place, and returns the new index into the buffer.
+   Watch out, this function turns off most type checking and all array bounds checking."
+  (declare (type (simple-array (unsigned-byte 8)) buffer)
+           (type (unsigned-byte 32) tag)
+           (type fixnum index))
+  (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
+    (let ((idx (encode-uint32 tag buffer index)))
+      (declare (type fixnum idx))
+      (multiple-value-bind (full-len len)
+          (packed-enum-size values enum-values tag)
+        (declare (type fixnum len) (ignore full-len))
+        (setq idx (encode-uint32 len buffer idx)))
+      (dolist (val values idx)
+        (let ((val (let ((e (find val enum-values :key #'proto-value)))
+                     (and e (proto-index e)))))
+          (declare (type (unsigned-byte 32) val))
+          (setq idx (encode-uint32 (ldb (byte 32 0) val) buffer idx)))))))
 
 
 ;;; Deserializers
@@ -554,8 +575,8 @@
                    (setq idx nidx))))))))
     form))
 
-(defun deserialize-enum (values buffer index)
-  "Deserializes the next enum value take from 'values'.
+(defun deserialize-enum (enum-values buffer index)
+  "Deserializes the next enum value take from 'enum-values'.
    Deserializes from the byte vector 'buffer' starting at 'index'.
    Returns the value and and the new index into the buffer.
    Watch out, this function turns off most type checking and all array bounds checking."
@@ -564,9 +585,34 @@
   (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
     (multiple-value-bind (val idx)
         (decode-int32 buffer index)
-      (let ((val (let ((e (find val values :key #'proto-index)))
+      (let ((val (let ((e (find val enum-values :key #'proto-index)))
                    (and e (proto-value e)))))
         (values val idx)))))
+
+(defun deserialize-packed-enum (enum-values buffer index)
+  "Deserializes the next packed enum values given in 'enum-values'.
+   Deserializes from the byte vector 'buffer' starting at 'index'.
+   Returns the value and and the new index into the buffer.
+   Watch out, this function turns off most type checking and all array bounds checking."
+  (declare (type (simple-array (unsigned-byte 8)) buffer)
+           (type fixnum index))
+  (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
+    (multiple-value-bind (len idx)
+        (decode-uint32 buffer index)
+      (declare (type (unsigned-byte 32) len)
+               (type fixnum idx))
+      (let ((end (i+ idx len)))
+        (declare (type (unsigned-byte 32) end))
+        (with-collectors ((values collect-value))
+          (loop
+            (when (>= idx end)
+              (return-from deserialize-packed-enum (values values idx)))
+            (multiple-value-bind (val nidx)
+                (decode-int32 buffer idx)
+              (let ((val (let ((e (find val enum-values :key #'proto-index)))
+                           (and e (proto-value e)))))
+                (collect-value val)
+                (setq idx nidx)))))))))
 
 
 ;;; Object sizing
@@ -697,13 +743,27 @@
          (values (i+ (length32 (the (unsigned-byte 32) ,tag)) (length32 len) len) len)))
     form))
 
-(defun enum-size (val values tag)
+(defun enum-size (val enum-values tag)
   "Returns the size in bytes that the enum object will take when serialized."
   (declare (type (unsigned-byte 32) tag))
-  (let ((idx (let ((e (find val values :key #'proto-value)))
+  (let ((idx (let ((e (find val enum-values :key #'proto-value)))
                (and e (proto-index e)))))
     (assert idx () "There is no enum value for ~S" val)
     (i+ (length32 tag) (length32 (ldb (byte 32 0) idx)))))
+
+(defun packed-enum-size (values enum-values tag)
+  "Returns the size in bytes that the enum values will take when serialized."
+  (let ((len (let ((len 0))
+               (declare (type fixnum len))
+               (dolist (val values len)
+                 (let ((idx (let ((e (find val enum-values :key #'proto-value)))
+                              (and e (proto-index e)))))
+                   (assert idx () "There is no enum value for ~S" val)
+                   (iincf len (length32 (ldb (byte 32 0) val))))))))
+    (declare (type (unsigned-byte 32) len))
+    ;; Two value: the full size of the packed object, and the size
+    ;; of just the payload
+    (values (i+ (length32 tag) (length32 len) len) len)))
 
 
 ;;; Wire-level encoders

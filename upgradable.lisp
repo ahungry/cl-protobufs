@@ -13,7 +13,7 @@
 
 ;;; Can a version of a Protobufs schema be upgraded to a new version
 
-(defgeneric protobuf-upgradable (old new &optional old-parent new-parent)
+(defgeneric schema-upgradable (old new &optional old-parent new-parent)
   (:documentation
    "Returns true if and only if the old Protobufs schema can be upgraded to
     the new schema.
@@ -36,8 +36,8 @@
                             ,@(if name (list name vold vnew) (list vold vnew)))
                     *upgrade-warnings*))))))
 
-(defmethod protobuf-upgradable ((old protobuf) (new protobuf)
-                                &optional old-parent new-parent)
+(defmethod schema-upgradable ((old protobuf-schema) (new protobuf-schema)
+                              &optional old-parent new-parent)
   (declare (ignore old-parent new-parent))
   (let ((*upgrade-warnings* ()))
     (and
@@ -50,31 +50,31 @@
      (loop for old-enum in (proto-enums old)
            as new-enum = (find (proto-name old-enum) (proto-enums new)
                                :key #'proto-name :test #'string=)
-           always (and new-enum (protobuf-upgradable old-enum new-enum old new)))
+           always (and new-enum (schema-upgradable old-enum new-enum old new)))
      ;; Is every message in 'old' upgradable to a message in 'new'?
      (loop for old-msg in (proto-messages old)
            as new-msg = (find (proto-name old-msg) (proto-messages new)
                               :key #'proto-name :test #'string=)
-           always (and new-msg (protobuf-upgradable old-msg new-msg old new)))
+           always (and new-msg (schema-upgradable old-msg new-msg old new)))
      ;; Is every service in 'old' upgradable to a service in 'new'?
      (loop for old-svc in (proto-services old)
            as new-svc = (find (proto-name old-svc) (proto-services new)
                               :key #'proto-name :test #'string=)
-           always (and new-svc (protobuf-upgradable old-svc new-svc old new))))
+           always (and new-svc (schema-upgradable old-svc new-svc old new))))
     (values (null *upgrade-warnings*) (nreverse *upgrade-warnings*))))
 
 
-(defmethod protobuf-upgradable ((old protobuf-enum) (new protobuf-enum)
-                                &optional old-parent new-parent)
+(defmethod schema-upgradable ((old protobuf-enum) (new protobuf-enum)
+                              &optional old-parent new-parent)
   (declare (ignore old-parent new-parent))
   ;; No need to check that the names are equal, our caller did that already
   (loop for old-val in (proto-values old)
         as new-val = (find (proto-name old-val) (proto-values new)
                            :key #'proto-name :test #'string=)
-        always (and new-val (protobuf-upgradable old-val new-val old new))))
+        always (and new-val (schema-upgradable old-val new-val old new))))
 
-(defmethod protobuf-upgradable ((old protobuf-enum-value) (new protobuf-enum-value)
-                                &optional old-enum new-enum)
+(defmethod schema-upgradable ((old protobuf-enum-value) (new protobuf-enum-value)
+                              &optional old-enum new-enum)
   (declare (ignore new-enum))
   ;; No need to check that the names are equal, our caller did that already
   ;; Do they have the same index?
@@ -83,8 +83,8 @@
                 (format nil "~A.~A" (proto-name old-enum) (proto-name old))))
 
 
-(defmethod protobuf-upgradable ((old protobuf-message) (new protobuf-message)
-                                &optional old-parent new-parent)
+(defmethod schema-upgradable ((old protobuf-message) (new protobuf-message)
+                              &optional old-parent new-parent)
   (declare (ignore old-parent new-parent))
   ;; No need to check that the names are equal, our caller did that already
   (and
@@ -92,27 +92,27 @@
    (loop for old-enum in (proto-enums old)
          as new-enum = (find (proto-name old-enum) (proto-enums new)
                              :key #'proto-name :test #'string=)
-         always (and new-enum (protobuf-upgradable old-enum new-enum old new)))
+         always (and new-enum (schema-upgradable old-enum new-enum old new)))
    ;; Is every message in 'old' upgradable to a message in 'new'?
    (loop for old-msg in (proto-messages old)
          as new-msg = (find (proto-name old-msg) (proto-messages new)
                             :key #'proto-name :test #'string=)
-         always (and new-msg (protobuf-upgradable old-msg new-msg old new)))
+         always (and new-msg (schema-upgradable old-msg new-msg old new)))
    ;; Is every required field in 'old' upgradable to a field in 'new'?
    ;; (Optional fields are safe to remove)
    (loop for old-fld in (proto-fields old)
          as new-fld = (find (proto-name old-fld) (proto-fields new)
                             :key #'proto-name :test #'string=)
          always (if new-fld
-                  (protobuf-upgradable old-fld new-fld old new)
+                  (schema-upgradable old-fld new-fld old new)
                   ;; If there's no new field, the old one must not be required
                   (or (member (proto-required old-fld) '(:optional :repeated))
                       (push (format nil "Old field '~A.~A' was required, and is now missing"
                                     (proto-name old) (proto-name old-fld))
                             *upgrade-warnings*))))))
 
-(defmethod protobuf-upgradable ((old protobuf-field) (new protobuf-field)
-                                &optional old-message new-message)
+(defmethod schema-upgradable ((old protobuf-field) (new protobuf-field)
+                              &optional old-message new-message)
   (flet ((arity-upgradable (old-arity new-arity)
            (or (eq old-arity new-arity)
                (not (eq new-arity :required))
@@ -157,18 +157,18 @@
                    (format nil  "~A.~A" (proto-name old-message) (proto-name old))))))
 
 
-(defmethod protobuf-upgradable ((old protobuf-service) (new protobuf-service)
-                                &optional old-parent new-parent)
+(defmethod schema-upgradable ((old protobuf-service) (new protobuf-service)
+                              &optional old-parent new-parent)
   (declare (ignore old-parent new-parent))
   ;; No need to check that the names are equal, our caller did that already
   ;; Is every method in 'old' upgradable to a method in 'new'?
   (loop for old-method in (proto-methods old)
         as new-method = (find (proto-name old-method) (proto-methods new)
                               :key #'proto-name :test #'string=)
-        always (and new-method (protobuf-upgradable old-method new-method old new))))
+        always (and new-method (schema-upgradable old-method new-method old new))))
 
-(defmethod protobuf-upgradable ((old protobuf-method) (new protobuf-method)
-                                &optional old-service new-service)
+(defmethod schema-upgradable ((old protobuf-method) (new protobuf-method)
+                              &optional old-service new-service)
   (declare (ignore new-service))
   ;; No need to check that the names are equal, our caller did that already
   (and
@@ -181,52 +181,52 @@
                  (format nil  "~A.~A" (proto-name old-service) (proto-name old)))))
 
 
-;;; Are two protobufs equal?
+;;; Are two protobuf schemas equal?
 
 ;; This is useful for testing purposes, but not much else
-(defgeneric protobufs-equal (proto1 proto2)
+(defgeneric schemas-equal (schema1 proto2)
   (:documentation
    "Returns true if and only if the two Protobufs schemas are equal."))
 
-;; These methods are pretty similar to the 'protobuf-upgradable' methods above
-(defmethod protobufs-equal ((proto1 protobuf) (proto2 protobuf))
+;; These methods are pretty similar to the 'schema-upgradable' methods above
+(defmethod schemas-equal ((schema1 protobuf-schema) (schema2 protobuf-schema))
   (and
-   (eql    (proto-class proto1) (proto-class proto2))
-   (equalp (proto-name proto1) (proto-name proto2))
-   (equalp (proto-syntax proto1) (proto-syntax proto2))
-   (equalp (proto-package proto1) (proto-package proto2))
-   (equalp (proto-lisp-package proto1) (proto-lisp-package proto2))
-   (equalp (proto-imports proto1) (proto-imports proto2))
-   (= (length (proto-options proto1)) (length (proto-options proto2)))
-   (loop for option1 in (proto-options proto1)
-         as option2 = (find (proto-name option1) (proto-options proto2)
+   (eql    (proto-class schema1) (proto-class schema2))
+   (equalp (proto-name schema1) (proto-name schema2))
+   (equalp (proto-syntax schema1) (proto-syntax schema2))
+   (equalp (proto-package schema1) (proto-package schema2))
+   (equalp (proto-lisp-package schema1) (proto-lisp-package schema2))
+   (equalp (proto-imports schema1) (proto-imports schema2))
+   (= (length (proto-options schema1)) (length (proto-options schema2)))
+   (loop for option1 in (proto-options schema1)
+         as option2 = (find (proto-name option1) (proto-options schema2)
                             :key #'proto-name :test #'string=)
-         always (and option2 (protobufs-equal option1 option2)))
-   (= (length (proto-enums proto1)) (length (proto-enums proto2)))
-   (loop for enum1 in (proto-enums proto1)
-         as enum2 = (find (proto-name enum1) (proto-enums proto2)
+         always (and option2 (schemas-equal option1 option2)))
+   (= (length (proto-enums schema1)) (length (proto-enums schema2)))
+   (loop for enum1 in (proto-enums schema1)
+         as enum2 = (find (proto-name enum1) (proto-enums schema2)
                           :key #'proto-name :test #'string=)
-         always (and enum2 (protobufs-equal enum1 enum2)))
-   (= (length (proto-messages proto1)) (length (proto-messages proto2)))
-   (loop for msg1 in (proto-messages proto1)
+         always (and enum2 (schemas-equal enum1 enum2)))
+   (= (length (proto-messages schema1)) (length (proto-messages schema2)))
+   (loop for msg1 in (proto-messages schema1)
          as msg2 = (find-if #'(lambda (msg2)
                                 (and (string= (proto-name msg1) (proto-name msg2))
                                      (eql (proto-message-type msg1) (proto-message-type msg2))))
-                            (proto-messages proto2))
-         always (and msg2 (protobufs-equal msg1 msg2)))
-   (= (length (proto-services proto1)) (length (proto-services proto2)))
-   (loop for svc1 in (proto-services proto1)
-         as svc2 = (find (proto-name svc1) (proto-services proto2)
+                            (proto-messages schema2))
+         always (and msg2 (schemas-equal msg1 msg2)))
+   (= (length (proto-services schema1)) (length (proto-services schema2)))
+   (loop for svc1 in (proto-services schema1)
+         as svc2 = (find (proto-name svc1) (proto-services schema2)
                          :key #'proto-name :test #'string=)
-         always (and svc2 (protobufs-equal svc1 svc2)))))
+         always (and svc2 (schemas-equal svc1 svc2)))))
 
-(defmethod protobufs-equal ((option1 protobuf-option) (option2 protobuf-option))
+(defmethod schemas-equal ((option1 protobuf-option) (option2 protobuf-option))
   (and
    (string= (proto-name option1) (proto-name option2))
    (equalp  (proto-value option1) (proto-value option2))
    (equalp  (proto-type option1) (proto-type option2))))
 
-(defmethod protobufs-equal ((enum1 protobuf-enum) (enum2 protobuf-enum))
+(defmethod schemas-equal ((enum1 protobuf-enum) (enum2 protobuf-enum))
   (and
    (eql    (proto-class enum1) (proto-class enum2))
    (equalp (proto-name enum1) (proto-name enum2))
@@ -235,21 +235,21 @@
    (loop for option1 in (proto-options enum1)
          as option2 = (find (proto-name option1) (proto-options enum2)
                             :key #'proto-name :test #'string=)
-         always (and option2 (protobufs-equal option1 option2)))
+         always (and option2 (schemas-equal option1 option2)))
    (= (length (proto-values enum1)) (length (proto-values enum2)))
    (loop for val1 in (proto-values enum1)
          as val2 = (find (proto-name val1) (proto-values enum2)
                          :key #'proto-name :test #'string=)
-         always (and val2 (protobufs-equal val1 val2)))))
+         always (and val2 (schemas-equal val1 val2)))))
 
-(defmethod protobufs-equal ((value1 protobuf-enum-value) (value2 protobuf-enum-value))
+(defmethod schemas-equal ((value1 protobuf-enum-value) (value2 protobuf-enum-value))
   (and 
    (eql    (proto-class value1) (proto-class value2))
    (equalp (proto-name value1) (proto-name value2))
    (eql    (proto-index value1) (proto-index value2))
    (equalp (proto-value value1) (proto-value value2))))
 
-(defmethod protobufs-equal ((message1 protobuf-message) (message2 protobuf-message))
+(defmethod schemas-equal ((message1 protobuf-message) (message2 protobuf-message))
   (and
    (eql    (proto-class message1) (proto-class message2))
    (equalp (proto-name message1) (proto-name message2))
@@ -259,30 +259,30 @@
    (loop for option1 in (proto-options message1)
          as option2 = (find (proto-name option1) (proto-options message2)
                             :key #'proto-name :test #'string=)
-         always (and option2 (protobufs-equal option1 option2)))
+         always (and option2 (schemas-equal option1 option2)))
    (= (length (proto-enums message1)) (length (proto-enums message2)))
    (loop for enum1 in (proto-enums message1)
          as enum2 = (find (proto-name enum1) (proto-enums message2)
                           :key #'proto-name :test #'string=)
-         always (and enum2 (protobufs-equal enum1 enum2)))
+         always (and enum2 (schemas-equal enum1 enum2)))
    (= (length (proto-messages message1)) (length (proto-messages message2)))
    (loop for msg1 in (proto-messages message1)
          as msg2 = (find-if #'(lambda (msg2)
                                 (and (string= (proto-name msg1) (proto-name msg2))
                                      (eql (proto-message-type msg1) (proto-message-type msg2))))
                             (proto-messages message2))
-         always (and msg2 (protobufs-equal msg1 msg2)))
+         always (and msg2 (schemas-equal msg1 msg2)))
    (= (length (proto-fields message1)) (length (proto-fields message2)))
    (loop for fld1 in (proto-fields message1)
          as fld2 = (find (proto-name fld1) (proto-fields message2)
                          :key #'proto-name :test #'string=)
-         always (and fld2 (protobufs-equal fld1 fld2)))
+         always (and fld2 (schemas-equal fld1 fld2)))
    (= (length (proto-extensions message1)) (length (proto-extensions message2)))
    (loop for ext1 in (proto-extensions message1)
          for ext2 in (proto-extensions message2)
-         always (protobufs-equal ext1 ext2))))
+         always (schemas-equal ext1 ext2))))
 
-(defmethod protobufs-equal ((field1 protobuf-field) (field2 protobuf-field))
+(defmethod schemas-equal ((field1 protobuf-field) (field2 protobuf-field))
   (and
    (eql    (proto-class field1) (proto-class field2))
    (equalp (proto-name field1) (proto-name field2))
@@ -299,14 +299,14 @@
    (loop for option1 in (proto-options field1)
          as option2 = (find (proto-name option1) (proto-options field2)
                             :key #'proto-name :test #'string=)
-         always (and option2 (protobufs-equal option1 option2)))))
+         always (and option2 (schemas-equal option1 option2)))))
 
-(defmethod protobufs-equal ((extension1 protobuf-extension) (extension2 protobuf-extension))
+(defmethod schemas-equal ((extension1 protobuf-extension) (extension2 protobuf-extension))
   (and
    (eql (proto-extension-from extension1) (proto-extension-from extension2))
    (eql (proto-extension-to extension1) (proto-extension-to extension2))))
 
-(defmethod protobufs-equal ((service1 protobuf-service) (service2 protobuf-service))
+(defmethod schemas-equal ((service1 protobuf-service) (service2 protobuf-service))
   (and
    (eql    (proto-class service1) (proto-class service2))
    (equalp (proto-name service1) (proto-name service2))
@@ -314,14 +314,14 @@
    (loop for option1 in (proto-options service1)
          as option2 = (find (proto-name option1) (proto-options service2)
                             :key #'proto-name :test #'string=)
-         always (and option2 (protobufs-equal option1 option2)))
+         always (and option2 (schemas-equal option1 option2)))
    (= (length (proto-methods service1)) (length (proto-methods service2)))
    (loop for method1 in (proto-methods service1)
          as method2 = (find (proto-name method1) (proto-methods service2)
                             :key #'proto-name :test #'string=)
-         always (and method2 (protobufs-equal method1 method2)))))
+         always (and method2 (schemas-equal method1 method2)))))
 
-(defmethod protobufs-equal ((method1 protobuf-method) (method2 protobuf-method))
+(defmethod schemas-equal ((method1 protobuf-method) (method2 protobuf-method))
   (and
    (eql    (proto-class method1) (proto-class method2))
    (equalp (proto-name method1) (proto-name method2))
@@ -333,4 +333,4 @@
    (loop for option1 in (proto-options method1)
          as option2 = (find (proto-name option1) (proto-options method2)
                             :key #'proto-name :test #'string=)
-         always (and option2 (protobufs-equal option1 option2)))))
+         always (and option2 (schemas-equal option1 option2)))))

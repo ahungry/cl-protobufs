@@ -13,26 +13,26 @@
 
 ;;; Protol buffers model classes
 
-(defvar *all-protobufs* (make-hash-table :test #'equal)
-  "A table mapping names to 'protobuf' schemas.")
+(defvar *all-schemas* (make-hash-table :test #'equal)
+  "A table mapping names to 'protobuf-schema' objects.")
 
-(defgeneric find-protobuf (name)
+(defgeneric find-schema (name)
   (:documentation
-   "Given a name (a symbol or string), return the 'protobuf' schema having that name."))
+   "Given a name (a symbol or string), return the 'protobuf-schema' object having that name."))
 
-(defmethod find-protobuf ((name symbol))
-  (values (gethash (keywordify name) *all-protobufs*)))
+(defmethod find-schema ((name symbol))
+  (values (gethash (keywordify name) *all-schemas*)))
 
-(defmethod find-protobuf ((name string))
-  (values (gethash (string-upcase name) *all-protobufs*)))
+(defmethod find-schema ((name string))
+  (values (gethash (string-upcase name) *all-schemas*)))
 
-(defmethod find-protobuf ((path pathname))
-  "Given a pathname, return the 'protobuf' schema that came from that path."
-  (values (gethash (make-pathname :type nil :defaults (truename path)) *all-protobufs*)))
+(defmethod find-schema ((path pathname))
+  "Given a pathname, return the 'protobuf-schema' object that came from that path."
+  (values (gethash (make-pathname :type nil :defaults (truename path)) *all-schemas*)))
 
 
 (defvar *all-messages* (make-hash-table :test #'equal)
-  "A table mapping Lisp class names to 'protobuf' messages.")
+  "A table mapping Lisp class names to 'protobuf-message' objects.")
 
 (defgeneric find-message-for-class (class)
   (:documentation
@@ -47,7 +47,7 @@
 
 
 ;; A few things (the pretty printer) want to keep track of the current schema
-(defvar *protobuf* nil)
+(defvar *protobuf* nil)                         ;this can be schema, a message, ...
 (defvar *protobuf-package* nil)
 
 
@@ -76,8 +76,8 @@
    "The base class for all Protobufs model classes."))
 
 
-;; The protobuf, corresponds to one .proto file
-(defclass protobuf (base-protobuf)
+;; A protobuf schema, corresponds to one .proto file
+(defclass protobuf-schema (base-protobuf)
   ((syntax :type (or null string)               ;syntax, passed on but otherwise ignored
            :accessor proto-syntax
            :initarg :syntax
@@ -94,7 +94,7 @@
             :accessor proto-imports
             :initarg :imports
             :initform ())
-   (schemas :type (list-of protobuf)            ;the schemas that were successfully imported
+   (schemas :type (list-of protobuf-schema)     ;the schemas that were successfully imported
             :accessor proto-imported-schemas    ;this gets used for chasing namespaces
             :initform ())
    (enums :type (list-of protobuf-enum)         ;the set of enum types
@@ -116,81 +116,81 @@
   (:documentation
    "The model class that represents a Protobufs schema, i.e., one .proto file."))
 
-(defmethod make-load-form ((p protobuf) &optional environment)
-  (with-slots (class name) p
+(defmethod make-load-form ((s protobuf-schema) &optional environment)
+  (with-slots (class name) s
     (multiple-value-bind (constructor initializer)
-        (make-load-form-saving-slots p :environment environment)
-      (values `(let ((p ,constructor))
-                  (record-protobuf p ',class ',name nil)
-                  p)
+        (make-load-form-saving-slots s :environment environment)
+      (values `(let ((s ,constructor))
+                  (record-protobuf s ',class ',name nil)
+                  s)
               initializer))))
 
-(defmethod record-protobuf ((protobuf protobuf) &optional symbol name type)
+(defmethod record-protobuf ((schema protobuf-schema) &optional symbol name type)
   "Record all the names by which the Protobufs schema might be known."
   (declare (ignore type))
-  (let ((symbol (or symbol (proto-class protobuf)))
-        (name   (or name (proto-name protobuf))))
+  (let ((symbol (or symbol (proto-class schema)))
+        (name   (or name (proto-name schema))))
     (when symbol
-      (setf (gethash (keywordify symbol) *all-protobufs*) protobuf))
+      (setf (gethash (keywordify symbol) *all-schemas*) schema))
     (when name
-      (setf (gethash (string-upcase name) *all-protobufs*) protobuf))
+      (setf (gethash (string-upcase name) *all-schemas*) schema))
     (let ((path (or *compile-file-pathname* *load-pathname*)))
       (when path
         ;; Record the file from which the Protobufs schema came, sans file type
-        (setf (gethash (make-pathname :type nil :defaults (truename path)) *all-protobufs*) protobuf)))))
+        (setf (gethash (make-pathname :type nil :defaults (truename path)) *all-schemas*) schema)))))
 
-(defmethod print-object ((p protobuf) stream)
-  (print-unreadable-object (p stream :type t :identity t)
+(defmethod print-object ((s protobuf-schema) stream)
+  (print-unreadable-object (s stream :type t :identity t)
     (format stream "~@[~S~]~@[ (package ~A)~]"
-            (proto-class p) (proto-package p))))
+            (proto-class s) (proto-package s))))
 
 (defgeneric find-message (protobuf type)
   (:documentation
    "Given a protobuf schema or message and a type name or class name,
     returns the Protobufs message corresponding to the type."))
 
-(defmethod find-message ((protobuf protobuf) (type symbol))
+(defmethod find-message ((schema protobuf-schema) (type symbol))
   ;; Extended messages "shadow" non-extended ones
-  (labels ((find-it (proto)
-             (let ((message (or (find type (proto-extenders proto) :key #'proto-class)
-                                (find type (proto-messages  proto) :key #'proto-class))))
+  (labels ((find-it (schema)
+             (let ((message (or (find type (proto-extenders schema) :key #'proto-class)
+                                (find type (proto-messages  schema) :key #'proto-class))))
                (when message
                  (return-from find-message message))
-               (map () #'find-it (proto-imported-schemas proto)))))
-    (find-it protobuf)))
+               (map () #'find-it (proto-imported-schemas schema)))))
+    (find-it schema)))
 
-(defmethod find-message ((protobuf protobuf) (type class))
-  (find-message protobuf (class-name type)))
+(defmethod find-message ((schema protobuf-schema) (type class))
+  (find-message schema (class-name type)))
 
-(defmethod find-message ((protobuf protobuf) (name string))
-  (labels ((find-it (proto)
-             (let ((message (or (find name (proto-extenders proto) :key #'proto-name :test #'string=)
-                                (find name (proto-messages  proto) :key #'proto-name :test #'string=))))
+(defmethod find-message ((schema protobuf-schema) (name string))
+  (labels ((find-it (schema)
+             (let ((message (or (find name (proto-extenders schema) :key #'proto-name :test #'string=)
+                                (find name (proto-messages  schema) :key #'proto-name :test #'string=))))
                (when message
                  (return-from find-message message))
-               (map () #'find-it (proto-imported-schemas proto)))))
-    (find-it protobuf)))
+               (map () #'find-it (proto-imported-schemas schema)))))
+    (find-it schema)))
 
 (defgeneric find-enum (protobuf type)
   (:documentation
    "Given a protobuf schema or message and the name of an enum type,
     returns the Protobufs enum corresponding to the type."))
 
-(defmethod find-enum ((protobuf protobuf) type)
-  (labels ((find-it (proto)
-             (let ((enum (find type (proto-enums proto) :key #'proto-class)))
+(defmethod find-enum ((schema protobuf-schema) type)
+  (labels ((find-it (schema)
+             (let ((enum (find type (proto-enums schema) :key #'proto-class)))
                (when enum
                  (return-from find-enum enum))
-               (map () #'find-it (proto-imported-schemas proto)))))
-    (find-it protobuf)))
+               (map () #'find-it (proto-imported-schemas schema)))))
+    (find-it schema)))
 
-(defmethod find-enum ((protobuf protobuf) (name string))
-  (labels ((find-it (proto)
-             (let ((enum (find name (proto-enums proto) :key #'proto-name :test #'string=)))
+(defmethod find-enum ((schema protobuf-schema) (name string))
+  (labels ((find-it (schema)
+             (let ((enum (find name (proto-enums schema) :key #'proto-name :test #'string=)))
                (when enum
                  (return-from find-enum enum))
-               (map () #'find-it (proto-imported-schemas proto)))))
-    (find-it protobuf)))
+               (map () #'find-it (proto-imported-schemas schema)))))
+    (find-it schema)))
 
 
 ;; We accept and store any option, but only act on a few: default, packed,
