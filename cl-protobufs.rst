@@ -23,6 +23,7 @@ Protobufs for Common Lisp
       2.2  CLOS classes to .proto conversion
       2.3  Using .proto files directly
       2.4  Using the Protobufs macros
+        2.4.1  Protobufs types
     3  Serializing and deserializing
       3.1  Wire format
       3.2  Text format
@@ -579,6 +580,35 @@ The body is a set of method specs of the form
 *output-type* may either be symbols or a list of the form ``(type &key name)``.
 
 ``proto:define-service`` can only be used within ``proto:define-schema``.
+
+
+Protobufs types
+---------------
+
+The following types are defined in the ``protobufs`` package:
+
+ - ``proto:int32``, which corresponds to the Protobufs ``int32`` type
+ - ``proto:int64``, which corresponds to the Protobufs ``int64`` type
+ - ``proto:uint32``, which corresponds to the Protobufs ``uint32`` type
+ - ``proto:uint64``, which corresponds to the Protobufs ``uint64`` type
+ - ``proto:sint32``, which corresponds to the Protobufs ``sint32`` type
+ - ``proto:sint64``, which corresponds to the Protobufs ``sint64`` type
+ - ``proto:fixed32``, which corresponds to the Protobufs ``fixed32`` type
+ - ``proto:fixed64``, which corresponds to the Protobufs ``fixed64`` type
+ - ``proto:sfixed32``, which corresponds to the Protobufs ``sfixed32`` type
+ - ``proto:sfixed64``, which corresponds to the Protobufs ``sfixed32`` type
+ - ``proto:byte-vector``, which corresponds to the Protobufs ``bytes`` type
+ - ``proto:list-of``, which corresponds to a repeated field
+
+The following existing Lisp type correspond to other Protobufs types:
+
+ - ``string`` is the Protobufs UTF-8 encoded ``string`` type
+ - ``boolean``  is the Protobufs ``bool`` type
+ - ``float``  is the Protobufs ``float`` type
+ - ``double-float``  is the Protobufs ``double`` type
+ - ``member`` of a set of keywords generates a Protobufs ``enum`` type
+
+Note that ``(or <T> null)`` corresponds to an optional field.
 
 
 Serializing and deserializing
