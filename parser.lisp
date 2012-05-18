@@ -240,12 +240,15 @@
     (let ((token (parse-token stream '(#\- #\+ #\.))))
       (when token
         (skip-whitespace stream)
-        (cond ((starts-with token "0x")
-               (parse-integer (subseq token 2) :radix 16))
-              ((starts-with token "-0x")
-               (- (parse-integer (subseq token 3) :radix 16)))
-              (t
-               (read-from-string token)))))))
+        (parse-numeric-string token)))))
+
+(defun parse-numeric-string (string)
+  (cond ((starts-with string "0x")
+         (parse-integer (subseq string 2) :radix 16))
+        ((starts-with string "-0x")
+         (- (parse-integer (subseq string 3) :radix 16)))
+        (t
+         (read-from-string string))))
 
 
 ;;; The parser itself
@@ -278,6 +281,7 @@
       (maybe-skip-comments stream)
       (let ((char (peek-char nil stream nil)))
         (cond ((null char)
+               (remove-options schema "lisp_package")
                (return-from parse-schema-from-stream schema))
               ((proto-token-char-p char)
                (let ((token (parse-token stream)))
@@ -356,7 +360,7 @@
                               (parse-string stream))
                              ((or (digit-char-p ch) (member ch '(#\- #\+ #\.)))
                               (parse-number stream))
-                             (t (parse-token stream))))
+                             (t (kintern (parse-token stream)))))
                 (setq terminator (expect-char stream terminators () "option"))
                 (maybe-skip-comments stream)))
          (option (make-instance 'protobuf-option
@@ -530,7 +534,7 @@
                        :default default
                        :packed  (and packed (boolean-true-p packed))
                        :message-type (proto-message-type message)
-                       :options opts)))
+                       :options (remove-options opts "default" "packed"))))
         (when extended-from
           (assert (index-within-extensions-p idx extended-from) ()
                   "The index ~D is not in range for extending ~S"

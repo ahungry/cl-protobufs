@@ -231,6 +231,25 @@
     (and option
          (values (proto-value option) (proto-type option)))))
 
+(defgeneric remove-option (protobuf names)
+  (:documentation
+   "Given a protobuf schema, message, enum, etc and a set of option names,
+    remove all of those options from the set of options."))
+
+(defmethod remove-options ((protobuf base-protobuf) &rest names)
+  (dolist (name names)
+    (let ((option (find name (proto-options protobuf) :key #'proto-name :test #'option-name=)))
+      (when option
+        ;; This side-effects 'proto-options'
+        (setf (proto-options protobuf) (remove option (proto-options protobuf)))))))
+
+(defmethod remove-options ((options list) &rest names)
+  (dolist (name names)
+    (let ((option (find name options :key #'proto-name :test #'option-name=)))
+      (when option
+        ;; This does not side-effect the list of options
+        (remove option options)))))
+
 (defun option-name= (name1 name2)
   (let* ((name1  (string name1))
          (name2  (string name2))

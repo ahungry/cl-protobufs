@@ -31,17 +31,19 @@
   (let* ((name     (or name (class-name->proto type)))
          (package  (and package (if (stringp package) package (string-downcase (string package)))))
          (lisp-pkg (and lisp-package (if (stringp lisp-package) lisp-package (string lisp-package))))
-         (options  (loop for (key val) on options by #'cddr
-                         collect (make-instance 'protobuf-option
-                                   :name  (if (symbolp key) (slot-name->proto key) key)
-                                   :value val)))
+         (options  (remove-options
+                     (loop for (key val) on options by #'cddr
+                           collect (make-instance 'protobuf-option
+                                     :name  (if (symbolp key) (slot-name->proto key) key)
+                                     :value val))
+                     "optimize_for" "lisp_package"))
          (imports  (if (listp import) import (list import)))
          (schema   (make-instance 'protobuf-schema
                      :class    type
                      :name     name
                      :syntax   (or syntax "proto2")
                      :package  package
-                     :lisp-package (or lisp-pkg package)
+                     :lisp-package (or lisp-pkg (substitute #\- #\_ package))
                      :imports  imports
                      :options  (if optimize
                                  (append options (list (make-instance 'protobuf-option
@@ -191,7 +193,7 @@
                     :parent *protobuf*
                     :alias-for alias-for
                     :conc-name (and conc-name (string conc-name))
-                    :options  options
+                    :options   (remove-options options "default" "packed")
                     :documentation documentation))
          (index 0)
          (*protobuf* message))
@@ -283,12 +285,13 @@
                          :class  type
                          :name   name
                          :parent (proto-parent message)
-                         :conc-name conc-name
                          :alias-for alias-for
+                         :conc-name conc-name
                          :enums    (copy-list (proto-enums message))
                          :messages (copy-list (proto-messages message))
                          :fields   (copy-list (proto-fields message))
-                         :options  (or options (copy-list (proto-options message)))
+                         :options  (remove-options
+                                     (or options (copy-list (proto-options message))) "default" "packed")
                          :extensions (copy-list (proto-extensions message))
                          :message-type :extends         ;this message is an extension
                          :documentation documentation)))
@@ -445,7 +448,7 @@
    'writer' is a Lisp slot writer function to use to set the value."
   (check-type index integer)
   (check-type arity (member :required :optional :repeated))
-  (let* ((slot    (or (and name (proto->slot-name name *protobuf-package*)) type))
+  (let* ((slot    (or type (and name (proto->slot-name name *protobuf-package*))))
          (name    (or name (class-name->proto type)))
          (options (loop for (key val) on options by #'cddr
                         collect (make-instance 'protobuf-option
@@ -476,7 +479,7 @@
                     :name  name
                     :alias-for alias-for
                     :conc-name (and conc-name (string conc-name))
-                    :options  options
+                    :options   (remove-options options "default" "packed")
                     :message-type :group                ;this message is a group
                     :documentation documentation))
          (index 0)
@@ -549,7 +552,7 @@
                      reader))
            (options (append
                      (loop for (key val) on other-options by #'cddr
-                           unless (member key '(:type :reader :writer :name  :default :packed :documentation))
+                           unless (member key '(:type :reader :writer :name :default :packed :documentation))
                              collect (make-instance 'protobuf-option
                                        :name  (slot-name->proto key)
                                        :value val))

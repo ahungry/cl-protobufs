@@ -11,11 +11,10 @@
 (in-package "CL-USER")
 
 
-(defsystem :protobufs
+(asdf:defsystem :protobufs
     :name "Protobufs"
     :author "Scott McKay"
-    :version "0.1"
-    :maintainer '("Scott McKay")
+    :version "1.0"
     :licence "
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;                                                                  ;;;
@@ -26,30 +25,54 @@
 ;;; Original author: Scott McKay                                     ;;;
 ;;;                                                                  ;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;"
+    :maintainer '("Scott McKay")
     :description      "Protobufs for Common Lisp"
     :long-description "Protobufs for Common Lisp"
-    :depends-on (:cl-ppcre
-                 :closer-mop
-                 :split-sequence
-                 :drakma
-                 :cl-unicode)
+    :depends-on (:cl-ppcre :closer-mop :split-sequence :drakma :cl-unicode)
     :serial t
     :components
-      ((:module "protobufs"
+      ((:module "packages"
                 :serial t
-                :components ((:file "proto-pkgdcl")
-                             (:file "utilities")
-                             (:file "model-classes")
-                             (:file "printer")
-                             (:file "parser")
-                             (:file "define-proto")
-                             (:file "upgradable")
-                             (:file "clos-transform")
-                             (:file "wire-format")
-                             (:file "text-format")
-                             (:file "serialize")
-                             (:file "api")
-                             (:file "asdf-support")
-                             (:file "examples")))))
+                :pathname #p""
+                :components
+                 ((:file "pkgdcl")))
+       (:module "models"
+                :serial t
+                :pathname #p""
+                :depends-on ("packages")
+                :components
+                  ((:file "utilities")
+                   (:file "model-classes")))
+       (:module "parsing"
+                :serial t
+                :pathname #p""
+                :depends-on ("models")
+                :components
+                  ((:file "printer")
+                   (:file "parser")))
+       (:module "schema"
+                :serial t
+                :pathname #p""
+                :depends-on ("models")
+                :components
+                  ((:file "define-proto")
+                   (:file "upgradable")
+                   (:file "clos-transform")))
+       (:module "serialization"
+                :serial t
+                :pathname #p""
+                :depends-on ("models")
+                :components
+                  ((:file "text-format")
+                   (:file "wire-format")
+                   (:file "serialize")))
+       (:module "misc"
+                :serial t
+                :pathname #p""
+                :depends-on ("models" "parsing" "schema" "serialization")
+                :components
+                  ((:file "api")
+                   (:file "asdf-support")
+                   (:file "examples")))))
 
 

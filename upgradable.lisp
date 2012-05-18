@@ -191,8 +191,11 @@
 ;; These methods are pretty similar to the 'schema-upgradable' methods above
 (defmethod schemas-equal ((schema1 protobuf-schema) (schema2 protobuf-schema))
   (and
-   (eql    (proto-class schema1) (proto-class schema2))
-   (equalp (proto-name schema1) (proto-name schema2))
+   ;; If the name(s) are null, don't worry about them
+   (or (null (proto-class schema1)) (null (proto-class schema2))
+       (eql (proto-class schema1) (proto-class schema2)))
+   (or (null (proto-name schema1)) (null (proto-name schema2))
+        (equalp (proto-name schema1) (proto-name schema2)))
    (equalp (proto-syntax schema1) (proto-syntax schema2))
    (equalp (proto-package schema1) (proto-package schema2))
    (equalp (proto-lisp-package schema1) (proto-lisp-package schema2))

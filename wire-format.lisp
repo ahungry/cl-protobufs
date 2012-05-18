@@ -1024,6 +1024,21 @@
           do (setq val (ilogior val (iash byte places))))
     (values val index)))
 
+(defun decode-fixed64 (buffer index)
+  "Decodes the next unsigned 64-bit fixed integer in the buffer at the given index.
+   Returns both the decoded value and the new index into the buffer.
+   Watch out, this function turns off all type checking and array bounds checking."
+  (declare (optimize (speed 3) (safety 0) (debug 0)))
+  (declare (type (simple-array (unsigned-byte 8)) buffer)
+           (type fixnum index))
+  ;; Eight bits at a time, least significant bits first
+  (let ((val 0))
+    (loop repeat 8
+          for places fixnum upfrom 0 by 8
+          for byte fixnum = (prog1 (aref buffer index) (iincf index))
+          do (setq val (logior val (ash byte places))))
+    (values val index)))
+
 (defun decode-sfixed32 (buffer index)
   "Decodes the next 32-bit signed fixed integer in the buffer at the given index.
    Returns both the decoded value and the new index into the buffer.
@@ -1040,21 +1055,6 @@
           do (setq val (ilogior val (iash byte places))))
     (when (i= (ldb (byte 1 31) val) 1)              ;sign bit set, so negative value
       (decf val #.(ash 1 32)))
-    (values val index)))
-
-(defun decode-fixed64 (buffer index)
-  "Decodes the next unsigned 64-bit fixed integer in the buffer at the given index.
-   Returns both the decoded value and the new index into the buffer.
-   Watch out, this function turns off all type checking and array bounds checking."
-  (declare (optimize (speed 3) (safety 0) (debug 0)))
-  (declare (type (simple-array (unsigned-byte 8)) buffer)
-           (type fixnum index))
-  ;; Eight bits at a time, least significant bits first
-  (let ((val 0))
-    (loop repeat 8
-          for places fixnum upfrom 0 by 8
-          for byte fixnum = (prog1 (aref buffer index) (iincf index))
-          do (setq val (logior val (ash byte places))))
     (values val index)))
 
 (defun decode-sfixed64 (buffer index)

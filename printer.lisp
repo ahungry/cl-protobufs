@@ -94,7 +94,7 @@
 
 (defun cl-user::protobuf-option (stream option colon-p atsign-p)
   (let ((type (or (second (find (proto-name option) *option-types* :key #'first :test #'string=))
-                  'string)))
+                  (proto-type option))))
     (cond (colon-p                              ;~:/protobuf-option/ -- .proto format
            (let ((fmt-control
                   (cond ((find (proto-name option) *lisp-options* :key #'first :test #'string=)
@@ -103,9 +103,11 @@
                          (if (eq type 'symbol) "~A~@[ = ~A~]" "~A~@[ = ~S~]")))))
              (format stream fmt-control (proto-name option) (proto-value option))))
           (atsign-p                             ;~@/protobuf-option/ -- .lisp format
-           (format stream "~S ~S" (proto-name option) (proto-value option)))
+           (let ((fmt-control (if (eq type 'symbol) "~(~S~) ~A" "~(~S~) ~S")))
+             (format stream fmt-control (proto-name option) (proto-value option))))
           (t                                    ;~/protobuf-option/  -- keyword/value format
-           (format stream "~(:~A~) ~S" (proto-name option) (proto-value option))))))
+           (let ((fmt-control (if (eq type 'symbol) "~(:~A~) ~A" "~(:~A~) ~S")))
+             (format stream fmt-control (proto-name option) (proto-value option)))))))
 
 (defmethod write-schema-as ((type (eql :proto)) (enum protobuf-enum) stream
                             &key (indentation 0) more)
@@ -204,20 +206,18 @@
 (defmethod write-schema-as ((type (eql :proto)) (field protobuf-field) stream
                             &key (indentation 0) more message)
   (declare (ignore more))
-  (with-prefixed-accessors (name documentation required type index packed) (proto- field)
+  (with-prefixed-accessors (name documentation required type index packed options) (proto- field)
     (let* ((class (if (eq (proto-class field) 'boolean) :bool (proto-class field)))
            (msg   (and (not (keywordp class))
-                       (or (find-message message class) (find-enum message class))))
-           (options (remove-if #'(lambda (x) (or (string= (proto-name x) "default")
-                                                 (string= (proto-name x) "packed")))
-                               (proto-options field))))
+                       (or (find-message message class) (find-enum message class)))))
       (cond ((and (typep msg 'protobuf-message)
                   (eq (proto-message-type msg) :group))
              (format stream "~&~@[~VT~]~(~A~) "
                      (and (not (zerop indentation)) indentation) required)
              (write-schema-as :proto msg stream :indentation indentation :index index :arity required))
             ((typep msg 'protobuf-enum)
-             (let ((default (let ((e (find (proto-default field) (proto-values msg) :key #'proto-name :test #'string=)))
+             (let ((default (let ((e (find (proto-default field) (proto-values msg)
+                                           :key #'proto-name :test #'string=)))
                               (and e (proto-name e)))))
               (format stream "~&~@[~VT~]~(~A~) ~A ~A = ~D~
                               ~@[ [default = ~A]~]~@[ [packed = true]~*~]~{ [~:/protobuf-option/]~};~
@@ -503,7 +503,7 @@
 (defparameter *protobuf-slot-comment-column* 56)
 (defmethod write-schema-as ((type (eql :lisp)) (field protobuf-field) stream
                             &key (indentation 0) more message)
-  (with-prefixed-accessors (value reader writer required index packed documentation) (proto- field)
+  (with-prefixed-accessors (value reader writer required index packed options documentation) (proto- field)
     (let* ((class (if (eq (proto-class field) 'boolean) :bool (proto-class field)))
            (msg   (and (not (keywordp class))
                        (or (find-message message class) (find-enum message class))))
@@ -529,10 +529,7 @@
                            `(or null ,cl))
                           ((eq required :repeated)
                            `(list-of ,cl))
-                          (t cl))))
-           (options (remove-if #'(lambda (x) (or (string= (proto-name x) "default")
-                                                 (string= (proto-name x) "packed")))
-                               (proto-options field))))
+                          (t cl)))))
       (cond ((and (typep msg 'protobuf-message)
                   (eq (proto-message-type msg) :group))
              (write-schema-as :lisp msg stream :indentation indentation :index index :arity required))
@@ -541,7 +538,8 @@
                     (defaultp (not (null default)))
                     (default 
                       (cond ((and (typep msg 'protobuf-enum) (stringp default))
-                             (let ((e (find default (proto-values msg) :key #'proto-name :test #'string=)))
+                             (let ((e (find default (proto-values msg)
+                                            :key #'proto-name :test #'string=)))
                                (and e (proto-value e))))
                             ((and (eq class :bool) defaultp)
                              (boolean-true-p default))

@@ -138,6 +138,7 @@
                                         (every #'(lambda (name) (starts-with name prefix)) names))
                                (setq names (mapcar #'(lambda (name) (subseq name (length prefix))) names)))
                              (unless (and unexpanded-type (symbolp unexpanded-type))
+                               #+ignore         ;this happens constantly, the warning is not useful
                                (protobufs-warn "Use DEFTYPE to define a MEMBER type instead of directly using ~S"
                                                expanded-type))
                              (make-instance 'protobuf-enum
@@ -225,7 +226,8 @@
                 (values "string" :symbol))
                (otherwise
                 (cond ((ignore-errors
-                        (subtypep type '(or string character symbol)))
+                        (or (eql type 'symbol)
+                            (subtypep type '(or string character))))
                        (values "string" :string))
                       ((ignore-errors
                         (subtypep type 'byte-vector))
@@ -238,7 +240,7 @@
             ((or)
              (when (or (> (length tail) 2)
                        (not (member 'null tail)))
-               (protobufs-warn "The OR type ~S is too complicated" type))
+               (protobufs-warn "The OR type ~S is too complicated, proceeding anyway" type))
              (if (eq (first tail) 'null)
                (clos-type-to-protobuf-type (second tail))
                (clos-type-to-protobuf-type (first tail))))
@@ -258,7 +260,7 @@
                    (t
                     (let ((new-tail (remove-if #'(lambda (x) (and (listp x) (eq (car x) 'satisfies))) tail)))
                       (when (> (length new-tail) 1)
-                        (protobufs-warn "The AND type ~S is too complicated" type))
+                        (protobufs-warn "The AND type ~S is too complicated, proceeding anyway" type))
                       (type->protobuf-type (first tail))))))
             ((member)                           ;maybe generate an enum type
              (if (or (equal type '(member t nil))
@@ -363,7 +365,10 @@
          default)
         ((symbolp default)
          (cond ((eq type :bool)
-                (boolean-true-p default))))
+                (boolean-true-p default))
+               ;; If we've got a symbol, it must be to initialize an enum type
+               ;; whose values are represented by keywords in Lisp
+               (t (kintern (symbol-name default)))))
         ((stringp default)
          (cond ((eq type :bool)
                 (boolean-true-p default))

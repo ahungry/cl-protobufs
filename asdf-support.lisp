@@ -13,8 +13,8 @@
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
 
-(defclass proto-file (asdf:cl-source-file)
-  ((asdf::type :initform "proto"))
+(defclass protobuf-file (asdf:cl-source-file)
+  ((asdf::type :initform "protobuf"))
   (:documentation
    "This ASDF component defines COMPILE-OP and LOAD-OP operations
     that compiles the .proto file into a .lisp file, and the compiles
@@ -22,29 +22,29 @@
 
 )       ;eval-when
 
-(defmethod asdf:output-files ((op asdf:compile-op) (c proto-file))
+(defmethod asdf:output-files ((op asdf:compile-op) (c protobuf-file))
   (append (call-next-method)
           (make-pathname :type "lisp" :defaults (asdf:component-pathname c))))
 
-(defmethod asdf:perform ((op asdf:compile-op) (c proto-file))
+(defmethod asdf:perform ((op asdf:compile-op) (c protobuf-file))
   (destructuring-bind (fasl-file lisp-file)
       (asdf:output-files op c)
     (funcall asdf::*compile-op-compile-file-function*
              (parse-protobuf-file (asdf:component-pathname c) lisp-file)
              :output-file fasl-file)))
 
-(defmethod asdf:perform ((op asdf:load-source-op) (c proto-file))
+(defmethod asdf:perform ((op asdf:load-source-op) (c protobuf-file))
   (destructuring-bind (fasl-file lisp-file)
       (asdf:output-files op c)
     (declare (ignore fasl-file))
     (load (parse-protobuf-file (asdf:component-pathname c) lisp-file))))
 
-(defun parse-protobuf-file (proto-file lisp-file)
-  (let ((protobuf (parse-schema-from-file proto-file)))
+(defun parse-protobuf-file (protobuf-file lisp-file)
+  (let ((schema (parse-schema-from-file protobuf-file)))
     (with-open-file (stream lisp-file
                      :direction :output
                      :if-exists :supersede)
-      (write-schema protobuf :stream stream :type :lisp)))
+      (write-schema schema :stream stream :type :lisp)))
   lisp-file)
 
 
