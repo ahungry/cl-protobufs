@@ -33,7 +33,7 @@
 
   ;; ASDF module type
   (:export
-   "PROTO-FILE")
+   "PROTOBUF-FILE")
   
   ;; The Protobufs API
   (:export
