@@ -211,6 +211,9 @@
 ;; This corresponds to the :bytes Protobufs type
 (deftype byte-vector () '(array (unsigned-byte 8)))
 
+(defun make-byte-vector (size)
+  (make-array size :element-type '(unsigned-byte 8)))
+
 ;; The Protobufs integer types
 (deftype    int32 () '(signed-byte 32))
 (deftype    int64 () '(signed-byte 64))

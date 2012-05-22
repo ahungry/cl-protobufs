@@ -48,7 +48,7 @@
       (dolist (import imports)
         (format stream "~&import \"~A\";~%" import))
       (terpri stream))
-    (write-schema-header type stream)
+    (write-schema-header type schema stream)
     (when options
       (dolist (option options)
         (format stream "~&option ~:/protobuf-option/;~%" option))
@@ -85,12 +85,29 @@
                          ("py_generic_services"   symbol)
                          ("ctype"                 symbol)))
 
-(defmethod write-schema-header ((type (eql :proto)) stream)
-  (format stream "~&import \"net/proto2/proto/descriptor.proto\";~%~%")
-  (format stream "~&extend proto2.MessageOptions {~%")
-  (loop for (option type index) in *lisp-options* doing
-    (format stream "~&  optional ~(~A~) ~A = ~D;~%" type option index))
-  (format stream "~&}~%~%"))
+(defmethod write-schema-header ((type (eql :proto)) (schema protobuf-schema) stream)
+  (when (any-lisp-option schema)
+    (format stream "~&import \"net/proto2/proto/descriptor.proto\";~%~%")
+    (format stream "~&extend proto2.MessageOptions {~%")
+    (loop for (option type index) in *lisp-options* doing
+      (format stream "~&  optional ~(~A~) ~A = ~D;~%" type option index))
+    (format stream "~&}~%~%")))
+
+(defmethod any-lisp-option ((schema protobuf-schema))
+  (labels ((find-one (protobuf)
+             (dolist (enum (proto-enums protobuf))
+               (with-prefixed-accessors (name class alias-for) (proto- enum)
+                 (when (or alias-for
+                           (and class (not (string-equal name (class-name->proto class))) class))
+                   (return-from any-lisp-option t))))
+             (dolist (msg (proto-messages protobuf))
+               (with-prefixed-accessors (name class alias-for) (proto- msg)
+                 (when (or alias-for
+                           (and class (not (string-equal name (class-name->proto class))) class))
+                   (return-from any-lisp-option t))))
+             (map () #'find-one (proto-messages protobuf))))
+    (find-one schema)
+    nil))
 
 (defun cl-user::protobuf-option (stream option colon-p atsign-p)
   (let ((type (or (second (find (proto-name option) *option-types* :key #'first :test #'string=))
@@ -117,7 +134,7 @@
       (write-schema-documentation type documentation stream :indentation indentation))
     (format stream "~&~@[~VT~]enum ~A {~%"
             (and (not (zerop indentation)) indentation) name)
-    (let ((other (and class (not (string= name (class-name->proto class))) class)))
+    (let ((other (and class (not (string-equal name (class-name->proto class))) class)))
       (when other
         (format stream "~&~VToption (lisp_name) = \"~A:~A\";~%"
                 (+ indentation 2) (package-name (symbol-package class)) (symbol-name class))))
@@ -149,7 +166,7 @@
            ;; If we've got a group, the printer for fields has already
            ;; printed a partial line (nice modularity, huh?)
            (format stream "group ~A = ~D {~%" name index)
-           (let ((other (and class (not (string= name (class-name->proto class))) class)))
+           (let ((other (and class (not (string-equal name (class-name->proto class))) class)))
              (when other
                (format stream "~&~VToption (lisp_name) = \"~A:~A\";~%"
                        (+ indentation 2) (package-name (symbol-package class)) (symbol-name class))))
@@ -172,7 +189,7 @@
            (format stream "~&~@[~VT~]~A ~A {~%"
                    (and (not (zerop indentation)) indentation)
                    (if (eq message-type :message) "message" "extend") name)
-           (let ((other (and class (not (string= name (class-name->proto class))) class)))
+           (let ((other (and class (not (string-equal name (class-name->proto class))) class)))
              (when other
                (format stream "~&~VToption (lisp_name) = \"~A:~A\";~%"
                        (+ indentation 2) (package-name (symbol-package class)) (symbol-name class))))
@@ -215,32 +232,32 @@
              (format stream "~&~@[~VT~]~(~A~) "
                      (and (not (zerop indentation)) indentation) required)
              (write-schema-as :proto msg stream :indentation indentation :index index :arity required))
-            ((typep msg 'protobuf-enum)
-             (let ((default (let ((e (find (proto-default field) (proto-values msg)
-                                           :key #'proto-name :test #'string=)))
-                              (and e (proto-name e)))))
-              (format stream "~&~@[~VT~]~(~A~) ~A ~A = ~D~
-                              ~@[ [default = ~A]~]~@[ [packed = true]~*~]~{ [~:/protobuf-option/]~};~
-                              ~:[~*~*~;~VT// ~A~]~%"
-                      (and (not (zerop indentation)) indentation)
-                      required type name index default packed options
-                      documentation *protobuf-field-comment-column* documentation)))
             (t
-             (let* ((default (if (eq class :bool)
-                               (and (proto-default field)
-                                    (if (boolean-true-p (proto-default field)) "true" "false"))
-                               (proto-default field)))
-                    (default (if (stringp default) (escape-string default) default)))
-              (format stream (if (eq class :bool)
-                               "~&~@[~VT~]~(~A~) ~A ~A = ~D~
-                                ~@[ [default = ~(~A~)]~]~@[ [packed = true]~*~]~{ [~:/protobuf-option/]~};~
-                                ~:[~*~*~;~VT// ~A~]~%"
-                               "~&~@[~VT~]~(~A~) ~A ~A = ~D~
-                                ~@[ [default = ~S]~]~@[ [packed = true]~*~]~{ [~:/protobuf-option/]~};~
-                                ~:[~*~*~;~VT// ~A~]~%")
-                      (and (not (zerop indentation)) indentation)
-                      required type name index default packed options
-                      documentation *protobuf-field-comment-column* documentation)))))))
+             (let* ((defaultp (not (empty-default-p field)))
+                    (default  (proto-default field))
+                    (default  (and defaultp
+                                   (cond ((and (typep msg 'protobuf-enum)
+                                               (or (stringp default) (symbolp default)))
+                                          (let ((e (find default (proto-values msg)
+                                                         :key #'proto-name :test #'string=)))
+                                            (and e (proto-name e))))
+                                         ((eq class :bool)
+                                          (if (boolean-true-p default) "true" "false"))
+                                         (t default))))
+                    (default  (and defaultp
+                                   (if (stringp default) (escape-string default) default))))
+               (format stream (if (and (keywordp class) (not (eq class :bool)))
+                                ;; Keyword class means a primitive type, print default with ~S
+                                "~&~@[~VT~]~(~A~) ~A ~A = ~D~
+                                 ~:[~*~; [default = ~S]~]~@[ [packed = true]~*~]~{ [~:/protobuf-option/]~};~
+                                 ~:[~*~*~;~VT// ~A~]~%"
+                                ;; Non-keyword class means an enum type, print default with ~A"
+                                "~&~@[~VT~]~(~A~) ~A ~A = ~D~
+                                 ~:[~*~; [default = ~A]~]~@[ [packed = true]~*~]~{ [~:/protobuf-option/]~};~
+                                 ~:[~*~*~;~VT// ~A~]~%")
+                       (and (not (zerop indentation)) indentation)
+                       required type name index defaultp default packed options
+                       documentation *protobuf-field-comment-column* documentation)))))))
 
 (defun escape-string (string)
   (if (every #'(lambda (ch) (and (standard-char-p ch) (graphic-char-p ch))) string)
@@ -376,7 +393,7 @@
       (format stream "~&~@[~VT~];; ~A~%"
               (and (not (zerop indentation)) indentation) line))))
 
-(defmethod write-schema-header ((type (eql :lisp)) stream)
+(defmethod write-schema-header ((type (eql :lisp)) (schema protobuf-schema) stream)
   (declare (ignorable type stream))
   nil)
 
@@ -389,7 +406,7 @@
       (write-schema-documentation type documentation stream :indentation indentation))
     (format stream "~@[~VT~](proto:define-enum ~(~S~)"
             (and (not (zerop indentation)) indentation) class)
-    (let ((other (and name (not (string= name (class-name->proto class))) name)))
+    (let ((other (and name (not (string-equal name (class-name->proto class))) name)))
       (cond ((or other alias-for documentation)
              (format stream "~%~@[~VT~](~:[~*~*~;:name ~(~S~)~@[~%~VT~]~]~
                                         ~:[~*~*~;:alias-for ~(~S~)~@[~%~VT~]~]~
@@ -426,7 +443,7 @@
              (write-schema-documentation type documentation stream :indentation indentation))
            (format stream "~&~@[~VT~](proto:define-group ~(~S~)"
                    (and (not (zerop indentation)) indentation) class)
-           (let ((other (and name (not (string= name (class-name->proto class))) name)))
+           (let ((other (and name (not (string-equal name (class-name->proto class))) name)))
              (format stream "~%~@[~VT~](:index ~D~@[~%~VT~]~
                                         :arity ~(~S~)~@[~%~VT~]~
                                         ~:[~*~*~;:name ~(~S~)~@[~%~VT~]~]~
@@ -456,7 +473,7 @@
            (format stream "~&~@[~VT~](proto:define-~A ~(~S~)"
                    (and (not (zerop indentation)) indentation)
                    (if (eq message-type :message) "message" "extend") class)
-           (let ((other (and name (not (string= name (class-name->proto class))) name)))
+           (let ((other (and name (not (string-equal name (class-name->proto class))) name)))
              (cond ((eq message-type :extends)
                     (format stream " ()"))
                    ((or other alias-for conc-name documentation)
@@ -503,7 +520,7 @@
 (defparameter *protobuf-slot-comment-column* 56)
 (defmethod write-schema-as ((type (eql :lisp)) (field protobuf-field) stream
                             &key (indentation 0) more message)
-  (with-prefixed-accessors (value reader writer required index packed options documentation) (proto- field)
+  (with-prefixed-accessors (value required index packed options documentation) (proto- field)
     (let* ((class (if (eq (proto-class field) 'boolean) :bool (proto-class field)))
            (msg   (and (not (keywordp class))
                        (or (find-message message class) (find-enum message class))))
@@ -534,33 +551,37 @@
                   (eq (proto-message-type msg) :group))
              (write-schema-as :lisp msg stream :indentation indentation :index index :arity required))
             (t
-             (let* ((default (proto-default field))
-                    (defaultp (not (null default)))
-                    (default 
-                      (cond ((and (typep msg 'protobuf-enum) (stringp default))
-                             (let ((e (find default (proto-values msg)
-                                            :key #'proto-name :test #'string=)))
-                               (and e (proto-value e))))
-                            ((and (eq class :bool) defaultp)
-                             (boolean-true-p default))
-                            (t default)))
-                    (default (if (stringp default) (escape-string default) default))
-                    (slot (if *show-lisp-field-indexes*
-                            (format nil "(~(~S~) ~D)" value index)
-                            (format nil "~(~S~)" value))))
+             (let* ((defaultp (not (empty-default-p field)))
+                    (default  (proto-default field))
+                    (default  (and defaultp
+                                   (cond ((and (typep msg 'protobuf-enum)
+                                               (or (stringp default) (symbolp default)))
+                                          (let ((e (find default (proto-values msg)
+                                                         :key #'proto-name :test #'string=)))
+                                            (and e (proto-value e))))
+                                         ((eq class :bool)
+                                          (boolean-true-p default))
+                                         (t default))))
+                    (default  (and defaultp
+                                   (if (stringp default) (escape-string default) default)))
+                    (reader (unless (eq (proto-reader field) value) (proto-reader field)))
+                    (writer (unless (eq (proto-writer field) value) (proto-writer field)))
+                    (slot-name (if *show-lisp-field-indexes*
+                                 (format nil "(~(~S~) ~D)" value index)
+                                 (format nil "~(~S~)" value))))
                (format stream (if (and (keywordp class) (not (eq class :bool)))
-                                ;; Keyword means a primitive type, print default with ~S
+                                ;; Keyword class means a primitive type, print default with ~S
                                 "~&~@[~VT~](~A :type ~(~S~)~:[~*~; :default ~S~]~
                                  ~@[ :reader ~(~S~)~]~@[ :writer ~(~S~)~]~@[ :packed ~(~S~)~]~
                                  ~@[ :options (~{~@/protobuf-option/~^ ~})~])~
                                  ~:[~*~*~;~VT; ~A~]"
-                                ;; Non-keyword must mean an enum type, print default with ~(~S~)
+                                ;; Non-keyword class means an enum type, print default with ~(~S~)
                                 "~&~@[~VT~](~A :type ~(~S~)~:[~*~; :default ~(~S~)~]~
                                  ~@[ :reader ~(~S~)~]~@[ :writer ~(~S~)~]~@[ :packed ~(~S~)~]~
                                  ~@[ :options (~{~@/protobuf-option/~^ ~})~])~
                                  ~:[~*~*~;~VT; ~A~]")
                        (and (not (zerop indentation)) indentation)
-                       slot type defaultp default reader writer packed options
+                       slot-name type defaultp default reader writer packed options
                        ;; Don't write the comment if we'll insert a close paren after it
                        (and more documentation) *protobuf-slot-comment-column* documentation)))))))
 

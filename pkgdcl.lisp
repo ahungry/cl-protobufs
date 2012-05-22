@@ -28,8 +28,9 @@
    "FIXED64"
    "SFIXED32"
    "SFIXED64"
+   "LIST-OF"
    "BYTE-VECTOR"
-   "LIST-OF")
+   "MAKE-BYTE-VECTOR")
 
   ;; ASDF module type
   (:export
@@ -83,25 +84,32 @@
    "PARSE-TEXT-FORMAT"
    "PRINT-TEXT-FORMAT")
 
-  ;; Miscellaneous bits of the API
+  ;; Extensions
   (:export
    "GET-EXTENSION"
    "SET-EXTENSION"
    "HAS-EXTENSION"
-   "CLEAR-EXTENSION"
-   "OBJECT-INITIALIZED-P"
-   "SLOT-INITIALIZED-P"
-   "REINITIALIZE-OBJECT")
+   "CLEAR-EXTENSION")
 
   ;; The Python "compatibility" API
   (:export
+   "IS-INITIALIZED"
    "CLEAR"
    "HAS-FIELD"
-   "IS-INITIALIZED"
+   "CLEAR-FIELD"
    "OCTET-SIZE"
    "SERIALIZE"
    "MERGE-FROM-ARRAY"
-   "MERGE-FROM-MESSAGE"))
+   "MERGE-FROM-MESSAGE")
+
+  ;; Miscellany
+  (:export
+   "OBJECT-INITIALIZED-P"
+   "SLOT-INITIALIZED-P"
+   "REINITIALIZE-OBJECT"
+   "REINITIALIZE-FIELD"
+   "REINITIALIZE-SLOT"))
+
 
 (defpackage protobufs-implementation
   (:nicknames :proto-impl)
@@ -114,7 +122,9 @@
    "SLOT-DEFINITION-NAME"
    "SLOT-DEFINITION-TYPE"
    "SLOT-DEFINITION-INITFORM"
-   "SLOT-DEFINITION-READERS")
+   "SLOT-DEFINITION-INITFUNCTION"
+   "SLOT-DEFINITION-READERS"
+   "SLOT-DEFINITION-WRITERS")
 
   (:export
    ;; Model class protocol

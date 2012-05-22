@@ -127,6 +127,7 @@
                         collect (make-instance 'protobuf-option
                                   :name  (if (symbolp key) (slot-name->proto key) key)
                                   :value val)))
+         (conc-name (and conc-name (string conc-name)))
          (index -1)
          (enum  (make-instance 'protobuf-enum
                   :class  type
@@ -187,12 +188,13 @@
                         collect (make-instance 'protobuf-option
                                   :name  (if (symbolp key) (slot-name->proto key) key)
                                   :value val)))
+         (conc-name (and conc-name (string conc-name)))
          (message (make-instance 'protobuf-message
                     :class type
                     :name  name
                     :parent *protobuf*
                     :alias-for alias-for
-                    :conc-name (and conc-name (string conc-name))
+                    :conc-name conc-name
                     :options   (remove-options options "default" "packed")
                     :documentation documentation))
          (index 0)
@@ -226,7 +228,7 @@
           (otherwise
            (multiple-value-bind (field slot idx)
                (process-field field index :conc-name conc-name :alias-for alias-for)
-             (assert (not (find (proto-index field) (proto-fields message) :key #'proto-index)) ()
+             (assert (not (find-field message (proto-index field))) ()
                      "The field ~S overlaps with another field in ~S"
                      (proto-value field) (proto-class message))
              (setq index idx)
@@ -256,7 +258,7 @@
         :to   (if (eq to 'max) #.(1- (ash 1 29)) to))
      ()))
 
-(defmacro define-extend (type (&key name options documentation)
+(defmacro define-extend (type (&key name conc-name options documentation)
                          &body fields &environment env)
   "Define an extension to the message named 'type'.
    'name' can be used to override the defaultly generated Protobufs message name.
@@ -278,7 +280,8 @@
                                   :name  (if (symbolp key) (slot-name->proto key) key)
                                   :value val)))
          (message   (find-message *protobuf* name))
-         (conc-name (and message (proto-conc-name message)))
+         (conc-name (or (and conc-name (string conc-name))
+                        (and message (proto-conc-name message))))
          (alias-for (and message (proto-alias-for message)))
          (extends (and message
                        (make-instance 'protobuf-message
@@ -329,8 +332,7 @@
                                      (intern (if conc-name (format nil "~A~A" conc-name sname) (symbol-name sname))
                                              *protobuf-package*)))
                          (writer (or (getf inits :writer)
-                                     (intern (format nil "~A-~A" reader 'setter)
-                                             *protobuf-package*)))
+                                     (intern (format nil "~A-~A" 'set reader) *protobuf-package*)))
                          (default (getf inits :initform)))
                     (collect-form `(without-redefinition-warnings ()
                                      (let ((,stable (make-hash-table :test #'eq :weak t)))
@@ -339,6 +341,7 @@
                                        ,@(and writer `((defmethod ,writer ((object ,type) value)
                                                          (declare (type ,stype value))
                                                          (setf (gethash object ,stable) value))))
+                                       ,@(and writer `((defsetf ,reader ,writer)))
                                        ;; For Python compatibility
                                        (defmethod get-extension ((object ,type) (slot (eql ',sname)))
                                          (values (gethash object ,stable ,default)))
@@ -346,19 +349,18 @@
                                          (setf (gethash object ,stable) value))
                                        (defmethod has-extension ((object ,type) (slot (eql ',sname)))
                                          (multiple-value-bind (value foundp)
-                                             (gethash object ,stable ,default)
+                                             (gethash object ,stable)
                                            (declare (ignore value))
                                            foundp))
                                        (defmethod clear-extension ((object ,type) (slot (eql ',sname)))
-                                         (remhash object ,stable))
-                                       ,@(and writer `((defsetf ,reader ,writer))))))))
+                                         (remhash object ,stable)))))))
                 (setf (proto-message-type extra-field) :extends) ;this field is an extension
                 (setf (proto-fields extends) (nconc (proto-fields extends) (list extra-field)))
                 (setf (proto-extended-fields extends) (nconc (proto-extended-fields extends) (list extra-field)))))))
           (otherwise
            (multiple-value-bind (field slot idx)
                (process-field field index :conc-name conc-name :alias-for alias-for)
-             (assert (not (find (proto-index field) (proto-fields extends) :key #'proto-index)) ()
+             (assert (not (find-field extends (proto-index field))) ()
                      "The field ~S overlaps with another field in ~S"
                      (proto-value field) (proto-class extends))
              (assert (index-within-extensions-p idx message) ()
@@ -375,8 +377,7 @@
                                   (intern (if conc-name (format nil "~A~A" conc-name sname) (symbol-name sname))
                                           *protobuf-package*)))
                       (writer (or (getf inits :writer)
-                                  (intern (format nil "~A-~A" reader 'setter)
-                                          *protobuf-package*)))
+                                  (intern (format nil "~A-~A" 'set reader) *protobuf-package*)))
                       (default (getf inits :initform)))
                  ;; For the extended slots, each slot gets its own table
                  ;; keyed by the object, which lets us avoid having a slot in each
@@ -391,6 +392,7 @@
                                     ,@(and writer `((defmethod ,writer ((object ,type) value)
                                                       (declare (type ,stype value))
                                                       (setf (gethash object ,stable) value))))
+                                    ,@(and writer `((defsetf ,reader ,writer)))
                                     ;; For Python compatibility
                                     (defmethod get-extension ((object ,type) (slot (eql ',sname)))
                                       (values (gethash object ,stable ,default)))
@@ -398,12 +400,11 @@
                                       (setf (gethash object ,stable) value))
                                     (defmethod has-extension ((object ,type) (slot (eql ',sname)))
                                       (multiple-value-bind (value foundp)
-                                          (gethash object ,stable ,default)
+                                          (gethash object ,stable)
                                         (declare (ignore value))
                                         foundp))
                                     (defmethod clear-extension ((object ,type) (slot (eql ',sname)))
-                                      (remhash object ,stable))
-                                    ,@(and writer `((defsetf ,reader ,writer))))))
+                                      (remhash object ,stable)))))
                  ;; This so that (de)serialization works
                  (setf (proto-reader field) reader
                        (proto-writer field) writer)))
@@ -422,7 +423,7 @@
                    (i<= index (proto-extension-to ext))))
           extensions)))
 
-(defmacro define-group (type (&key index arity name conc-name alias-for options documentation)
+(defmacro define-group (type (&key index arity name conc-name alias-for reader options documentation)
                         &body fields &environment env)
   "Define a message named 'type' and a Lisp 'defclass', *and* a field named type.
    This is deprecated in Protobufs, but if you have to use it, you must give
@@ -454,6 +455,11 @@
                         collect (make-instance 'protobuf-option
                                   :name  (if (symbolp key) (slot-name->proto key) key)
                                   :value val)))
+         (conc-name (and conc-name (string conc-name)))
+         (reader  (or reader
+                      (let ((msg-conc (proto-conc-name *protobuf*)))
+                        (and msg-conc
+                             (intern (format nil "~A~A" msg-conc slot) *protobuf-package*)))))
          (mslot   (unless alias-for
                     `(,slot ,@(case arity
                                 (:required
@@ -464,21 +470,23 @@
                                 (:repeated
                                  `(:type (list-of ,type)
                                    :initform ())))
+                            ,@(and reader
+                                   `(:reader ,reader))
                             :initarg ,(kintern (symbol-name slot)))))
          (mfield  (make-instance 'protobuf-field
                     :name  (slot-name->proto slot)
-                    :value slot
                     :type  name
                     :class type
-                    ;; One of :required, :optional or :repeated
                     :required arity
                     :index index
+                    :value slot
+                    :reader reader
                     :message-type :group))
          (message (make-instance 'protobuf-message
                     :class type
                     :name  name
                     :alias-for alias-for
-                    :conc-name (and conc-name (string conc-name))
+                    :conc-name conc-name
                     :options   (remove-options options "default" "packed")
                     :message-type :group                ;this message is a group
                     :documentation documentation))
@@ -513,7 +521,7 @@
           (otherwise
            (multiple-value-bind (field slot idx)
                (process-field field index :conc-name conc-name :alias-for alias-for)
-             (assert (not (find (proto-index field) (proto-fields message) :key #'proto-index)) ()
+             (assert (not (find-field message (proto-index field))) ()
                      "The field ~S overlaps with another field in ~S"
                      (proto-value field) (proto-class message))
              (setq index idx)
@@ -546,10 +554,9 @@
     (let* ((idx  (if (listp slot) (second slot) (iincf index)))
            (slot (if (listp slot) (first slot) slot))
            (reqd (clos-type-to-protobuf-required type))
-           (reader (if (eq reader 't)
-                     (intern (if conc-name (format nil "~A~A" conc-name slot) (symbol-name slot))
-                             *protobuf-package*)
-                     reader))
+           (reader (or reader
+                       (and conc-name
+                            (intern (format nil "~A~A" conc-name slot) *protobuf-package*))))
            (options (append
                      (loop for (key val) on other-options by #'cddr
                            unless (member key '(:type :reader :writer :name :default :packed :documentation))
@@ -585,12 +592,13 @@
                        :name  (or name (slot-name->proto slot))
                        :type  ptype
                        :class pclass
+                       ;; One of :required, :optional or :repeated
                        :required reqd
                        :index  idx
                        :value  slot
                        :reader reader
                        :writer writer
-                       :default default
+                       :default (if default-p default $empty-default)
                        ;; Pack the field only if requested and it actually makes sense
                        :packed  (and (eq reqd :repeated) packed t)
                        :options options

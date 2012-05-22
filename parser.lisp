@@ -253,7 +253,8 @@
 
 ;;; The parser itself
 
-(defun parse-schema-from-file (filename)
+(defvar *protobuf-conc-name* nil)
+(defun parse-schema-from-file (filename &key name class (conc-name ""))
   "Parses the named file as a .proto file, and returns the Protobufs schema."
   (with-open-file (stream filename
                    :direction :input
@@ -262,20 +263,22 @@
     (let ((*compile-file-pathname* (pathname stream))
           (*compile-file-truename* (truename stream)))
       (parse-schema-from-stream stream
-                                  :name  (class-name->proto (pathname-name (pathname stream)))
-                                  :class (kintern (pathname-name (pathname stream)))))))
+                                  :name  (or name (class-name->proto (pathname-name (pathname stream))))
+                                  :class (or class (kintern (pathname-name (pathname stream))))
+                                  :conc-name conc-name))))
 
 ;; The syntax for Protocol Buffers is so simple that it doesn't seem worth
 ;; writing a sophisticated parser
 ;; Note that we don't put the result into *all-schemas*; that's done in 'define-schema'
-(defun parse-schema-from-stream (stream &key name class)
+(defun parse-schema-from-stream (stream &key name class (conc-name ""))
   "Parses a top-level .proto file from the stream 'stream'.
    Returns the protobuf schema that describes the .proto file."
   (let* ((schema (make-instance 'protobuf-schema
                    :class class
                    :name  name))
          (*protobuf* schema)
-         (*protobuf-package* *package*))
+         (*protobuf-package* *package*)
+         (*protobuf-conc-name* conc-name))
     (loop
       (skip-whitespace stream)
       (maybe-skip-comments stream)
@@ -427,7 +430,9 @@
          (message (make-instance 'protobuf-message
                     :class (proto->class-name name *protobuf-package*)
                     :name name
-                    :parent protobuf))
+                    :parent protobuf
+                    ;; Force accessors for all slots
+                    :conc-name *protobuf-conc-name*))
          (*protobuf* message))
     (loop
       (let ((token (parse-token stream)))
@@ -515,7 +520,6 @@
              (opts (prog1 (parse-proto-field-options stream)
                      (expect-char stream #\; () "message")
                      (maybe-skip-comments stream)))
-             (default (find-option opts "default"))
              (packed (find-option opts "packed"))
              (ptype  (if (member type '("int32" "int64" "uint32" "uint64" "sint32" "sint64"
                                         "fixed32" "fixed64" "sfixed32" "sfixed64"
@@ -523,15 +527,22 @@
                        (kintern type)
                        type))
              (class  (if (keywordp ptype) ptype (proto->class-name type *protobuf-package*)))
+             (slot   (proto->slot-name name *protobuf-package*))
              (field  (make-instance 'protobuf-field
                        :name  name
-                       :value (proto->slot-name name *protobuf-package*)
                        :type  type
                        :class class
                        ;; One of :required, :optional or :repeated
                        :required (kintern required)
                        :index idx
-                       :default default
+                       :value slot
+                       ;; Fields parsed from .proto files usually get an accessor
+                       :reader (and *protobuf-conc-name*
+                                    (intern (format nil "~A~A" *protobuf-conc-name* slot) *protobuf-package*))
+                       :default (multiple-value-bind (default type default-p)
+                                    (find-option opts "default")
+                                  (declare (ignore type))
+                                  (if default-p default $empty-default))
                        :packed  (and packed (boolean-true-p packed))
                        :message-type (proto-message-type message)
                        :options (remove-options opts "default" "packed"))))
@@ -554,16 +565,19 @@
          (name (slot-name->proto (proto->slot-name type)))
          (idx  (parse-unsigned-int stream))
          (msg  (parse-proto-message stream message type))
-         (class  (proto->class-name type *protobuf-package*))
-         (field  (make-instance 'protobuf-field
-                   :name  name
-                   :value (proto->slot-name name *protobuf-package*)
-                   :type  type
-                   :class class
-                   ;; One of :required, :optional or :repeated
-                   :required (kintern required)
-                   :index idx
-                   :message-type :group)))
+         (class (proto->class-name type *protobuf-package*))
+         (slot  (proto->slot-name name *protobuf-package*))
+         (field (make-instance 'protobuf-field
+                  :name  name
+                  :type  type
+                  :class class
+                  :required (kintern required)
+                  :index idx
+                  :value slot
+                  ;; Groups parsed from .proto files always get an accessor
+                  :reader (and *protobuf-conc-name*
+                               (intern (format nil "~A~A" *protobuf-conc-name* slot) *protobuf-package*))
+                  :message-type :group)))
     (setf (proto-message-type msg) :group)
     (when extended-from
       (assert (index-within-extensions-p idx extended-from) ()

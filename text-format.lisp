@@ -187,7 +187,7 @@
                      (setf (slot-value object slot) (nreverse (slot-value object slot))))
                    (return-from deserialize object))
                  (let* ((name  (parse-token stream))
-                        (field (and name (find name (proto-fields message) :key #'proto-name :test #'string=)))
+                        (field (and name (find-field message name)))
                         (type  (and field (if (eq (proto-class field) 'boolean) :bool (proto-class field))))
                         (slot  (and field (proto-value field)))
                         msg)

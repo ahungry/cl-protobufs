@@ -219,17 +219,20 @@
 (defgeneric find-option (protobuf name)
   (:documentation
    "Given a protobuf schema, message, enum, etc and the name of an option,
-    returns the value of the option and its (Lisp) type."))
+    returns the value of the option and its (Lisp) type. The third value is
+    true if an option was found, otherwise it is false."))
 
 (defmethod find-option ((protobuf base-protobuf) (name string))
   (let ((option (find name (proto-options protobuf) :key #'proto-name :test #'option-name=)))
-    (and option
-         (values (proto-value option) (proto-type option)))))
+    (if option
+      (values (proto-value option) (proto-type option) t)
+      (values nil nil nil))))
 
 (defmethod find-option ((options list) (name string))
   (let ((option (find name options :key #'proto-name :test #'option-name=)))
-    (and option
-         (values (proto-value option) (proto-type option)))))
+    (if option
+      (values (proto-value option) (proto-type option) t)
+      (values nil nil nil))))
 
 (defgeneric remove-option (protobuf names)
   (:documentation
@@ -402,7 +405,7 @@
 
 (defgeneric find-field (message name)
   (:documentation
-   "Given a protobuf message and a slot name or field name,
+   "Given a protobuf message and a slot name, field name or index,
     returns the Protobufs field having that name."))
 
 (defmethod find-field ((message protobuf-message) (name symbol))
@@ -410,6 +413,10 @@
 
 (defmethod find-field ((message protobuf-message) (name string))
   (find name (proto-fields message) :key #'proto-name :test #'string=))
+
+(defmethod find-field ((message protobuf-message) (index integer))
+  (find index (proto-fields message) :key #'proto-index))
+
 
 ;; Extensions protocol
 (defgeneric get-extension (object slot)
@@ -433,6 +440,9 @@
   (:documentation
    "Clears the value of the extended slot 'slot' from 'object'"))
 
+
+(defconstant $empty-default 'empty-default
+  "The marker used in 'proto-default' used to indicate that there is no default value.")
 
 ;; A protobuf field within a message
 ;;--- Support the 'deprecated' option (have serialization ignore such fields?)
@@ -460,7 +470,7 @@
            :initform nil)
    (default :accessor proto-default             ;default value (untyped), pulled out of the options
             :initarg :default
-            :initform nil)
+            :initform $empty-default)
    (packed :type (member t nil)                 ;packed, pulled out of the options
            :accessor proto-packed
            :initarg :packed
@@ -488,6 +498,9 @@
             (proto-value f) (proto-class f) (proto-index f)
             (eq (proto-message-type f) :group)
             (eq (proto-message-type f) :extends))))
+
+(defmethod empty-default-p (field)
+  (eq (proto-default field) $empty-default))
 
 
 ;; An extension range within a message

@@ -151,23 +151,26 @@
                                                        :name name
                                                        :index index
                                                        :value val))))))
-               (reqd  (clos-type-to-protobuf-required (find-slot-definition-type class slot) type-filter))
-               (field (make-instance 'protobuf-field
-                        :name  (slot-name->proto (slot-definition-name slot))
-                        :type  (if enum (class-name->proto ename) type)
-                        :class (if enum etype pclass)
-                        :required reqd
-                        :index index
-                        :value   (slot-definition-name slot)
-                        :reader  (let ((reader (find-slot-definition-reader class slot)))
-                                   ;; Only use the reader if it is "interesting"
-                                   (unless (string= (symbol-name reader)
-                                                    (format nil "~A-~A" 
-                                                            (class-name class) (slot-definition-name slot)))
-                                     reader))
-                        :default (clos-init-to-protobuf-default
-                                   (slot-definition-initform slot) expanded-type value-filter)
-                        :packed  packed)))
+               (reqd    (clos-type-to-protobuf-required (find-slot-definition-type class slot) type-filter))
+               (default (if (slot-definition-initfunction slot)
+                          (clos-init-to-protobuf-default
+                           (slot-definition-initform slot) expanded-type value-filter)
+                          $empty-default))
+               (field   (make-instance 'protobuf-field
+                          :name  (slot-name->proto (slot-definition-name slot))
+                          :type  (if enum (class-name->proto ename) type)
+                          :class (if enum etype pclass)
+                          :required reqd
+                          :index index
+                          :value   (slot-definition-name slot)
+                          :reader  (let ((reader (find-slot-definition-reader class slot)))
+                                     ;; Only use the reader if it is "interesting"
+                                     (unless (string= (symbol-name reader)
+                                                      (format nil "~A-~A" 
+                                                              (class-name class) (slot-definition-name slot)))
+                                       reader))
+                          :default default
+                          :packed  packed)))
           (values field nil enum))))))
 
 (defun find-slot-definition-type (class slotd)
@@ -353,14 +356,16 @@
       :required)))
 
 (defun clos-init-to-protobuf-default (value type &optional value-filter)
-  "Given an initform and a Lisp type, returns a plausible default value."
+  "Given an initform and a Lisp type, returns a plausible default value.
+   Don't call this if the default is empty, because that will confuse 'nil' with 'unbound'."
   (let ((value (if value-filter (funcall value-filter value) value)))
     (and (constantp value)
          (ignore-errors (typep value type))
-         value)))
+         (values value t))))
 
 (defun protobuf-default-to-clos-init (default type)
-  "Given a Protobufs type and default, return a CLOS initform value."
+  "Given a Protobufs type and default, return a CLOS initform value.
+   Don't call this if the default is empty, because that will confuse 'nil' with 'unbound'."
   (cond ((ignore-errors (typep default type))
          default)
         ((symbolp default)

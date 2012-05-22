@@ -29,7 +29,7 @@
                     (clrhash v)
                     v))
          (size    (object-size object type visited))
-         (buffer  (make-array size :element-type '(unsigned-byte 8))))
+         (buffer  (make-byte-vector size)))
     (serialize-object object type buffer 0 visited)
     (when stream
       (write-sequence buffer stream))
@@ -182,7 +182,7 @@
    Lisp class) or a 'protobuf-message'.
    The return value is the object."
   (let* ((size    (file-length stream))
-         (buffer  (make-array size :element-type '(unsigned-byte 8))))
+         (buffer  (make-byte-vector size)))
     (read-sequence buffer stream)
     (deserialize-object type buffer 0 size)))
 

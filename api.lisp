@@ -109,24 +109,29 @@
     (reinitialize-object object message)))
 
 (defmethod reinitialize-object (object (message protobuf-message))
+  (dolist (field (proto-fields message))
+    (reinitialize-field object field message))
+  object)
+
+(defmethod reinitialize-field (object field (message protobuf-message))
   (macrolet ((write-slot (object slot writer value)
                `(if ,writer
                   (funcall ,writer ,object ,value)
                   (setf (slot-value ,object ,slot) ,value))))
-    (dolist (field (proto-fields message))
-      (let* ((type    (if (eq (proto-class field) 'boolean) :bool (proto-class field)))
-             (default (proto-default field))
-             (slot    (proto-value field))
-             (writer  (proto-writer field)))
-        (cond ((null slot))
-              ((or (eq (proto-required field) :required)
-                   (eq type :bool))
-               (if default
-                 (write-slot object slot writer default)
-                 (slot-makunbound object slot)))
-              (t 
-               (write-slot object slot writer default))))))
-  object)
+    (let ((default (proto-default field))
+          (slot    (proto-value field))
+          (writer  (proto-writer field)))
+      (cond ((null slot)
+             (unless (empty-default-p field)
+               (write-slot object slot writer default)))
+            (t
+             (if (empty-default-p field)
+               (slot-makunbound object slot)
+               (write-slot object slot writer default)))))))
+
+(defmethod reinitialize-slot (object slot (message protobuf-message))
+  (let ((field (find slot (proto-fields message) :key #'proto-value)))
+    (reinitialize-field object field message)))
 
 
 ;;; A Python-like, Protobufs2-compatible API
@@ -141,6 +146,16 @@
               "There is no Protobufs message for the class ~S" class)
       (object-initialized-p object message))))
 
+(defgeneric clear (object)
+  (:documentation
+   "Initialize all of the fields of 'object' to their default values.")
+  (:method ((object standard-object))
+    (let* ((class   (type-of object))
+           (message (find-message-for-class class)))
+      (assert message ()
+              "There is no Protobufs message for the class ~S" class)
+      (reinitialize-object object message))))
+
 (defgeneric has-field (object slot)
   (:documentation
    "Returns true iff the field 'slot' in 'object' is initialized.")
@@ -151,15 +166,15 @@
               "There is no Protobufs message for the class ~S" class)
       (slot-initialized-p object message slot))))
 
-(defgeneric clear (object)
+(defgeneric clear-field (object slot)
   (:documentation
-   "Initialize all of the fields of 'object' to their default values.")
-  (:method ((object standard-object))
+   "Initialize the field 'slot' of 'object' to its default value.")
+  (:method ((object standard-object) slot)
     (let* ((class   (type-of object))
            (message (find-message-for-class class)))
       (assert message ()
               "There is no Protobufs message for the class ~S" class)
-      (reinitialize-object object message))))
+      (reinitialize-slot object message slot))))
 
 ;; This is simpler than 'object-size', but doesn't fully support aliasing
 (defgeneric octet-size (object)
@@ -191,7 +206,7 @@
       (let* ((visited (make-hash-table))
              (size    (object-size object type visited))
              (start   (or start 0))
-             (buffer  (or buffer (make-array size :element-type '(unsigned-byte 8)))))
+             (buffer  (or buffer (make-byte-vector size))))
         (assert (>= (length buffer) size) ()
                 "The buffer ~S is not large enough to hold ~S" buffer object)
         (serialize-object object type buffer start visited)
