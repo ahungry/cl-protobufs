@@ -18,9 +18,9 @@
   (:nicknames :proto-test))
 
 (defpackage protobuf-unittest
-  (:use :common-lisp :protobufs))
+  (:use :common-lisp :protobufs)
+  (:nicknames :pbtest))
 
 (defpackage protobuf-unittest-import
-  (:use :common-lisp :protobufs))
-
-
+  (:use :common-lisp :protobufs)
+  (:nicknames :pbtestimp))

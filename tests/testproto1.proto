@@ -29,6 +29,8 @@
 
 syntax = "proto2";      // for compatibility with internal Google compiler
 
+package protobuf_unittest;
+
 // dummy message to include in other messages.
 message Test1Msg {
   optional int32 foo = 1;

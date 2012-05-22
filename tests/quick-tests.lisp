@@ -14,151 +14,125 @@
 
 ;;; Bob Brown's functionality unit tests
 
-(qtest:define-test TEST-NAME ()
+(defvar *golden-directory*
+  #.(make-pathname
+     :directory (pathname-directory (or *compile-file-truename* *load-truename*))))
 
-(qtest:define-test-suite SUITE-NAME ()
-  (TEST-NAME)
-  ...)
+(defvar *golden-pathname* (merge-pathnames "golden.data" *golden-directory*)
+(defvar *serial-pathname* (merge-pathnames "serialized.data" *golden-directory*)
 
-(qtest:register-test 'SUITE-NAME)
+(qtest:define-test default-and-clear ()
+  ;; Check that required strings are made unbound by 'clear'
+  (let ((p (make-instance 'pbtest::test-protocol)))
+    (qtest:assert-false (slot-boundp p 'pbtest::zero))
+    (setf (pbtest::zero p) "x")
+    (qtest:assert-true (string-equal (pbtest::zero p) "x"))
+    (proto:clear p)
+    (qtest:assert-false (slot-boundp p 'pbtest::zero)))
 
+  ;; Check that optional strings are set to their default value by 'clear'
+  (let ((p (make-instance 'pbtest::test-protocol)))
+    (qtest:assert-true (string-equal (pbtest::opt-string p) "opt"))
+    (setf (pbtest::opt-string p) "x")
+    (qtest:assert-true (string-equal (pbtest::opt-string p) "x"))
+    (proto:clear p)
+    (qtest:assert-true (string-equal (pbtest::opt-string p) "opt"))
+    (setf (pbtest::opt-string p) "x")
+    (proto:clear p)
+    (qtest:assert-true (string-equal (pbtest::opt-string p) "opt"))
+    (setf (pbtest::opt-string p) "x")
+    (proto:clear-field p 'opt-string)
+    (qtest:assert-true (string-equal (pbtest::opt-string p) "opt"))))
 
-(defconst +pwd+ #.(make-pathname
-                   :directory (pathname-directory
-                               (or *compile-file-truename* *load-truename*))))
+(qtest:define-test test-pb-write ()
+  (let ((p (make-instance 'pbtest::test1-proto)))
+    ;; Default settings
+    (qtest:assert-equal (pbtest::d-int32 p) 12)
+    (qtest:assert-true (string-equal (pbtest::d-string p) "foo"))
+    (qtest:assert-equal (pbtest::d-bool p) t)
 
-(defconst +golden-file-name+ (merge-pathnames "golden.data" +pwd+)
-  "Pathname of a file containing correct protocol buffer data.")
+    ;; Test is-initialized
+    (qtest:assert-false (pbtest::is-initialized p))
+    (setf (pbtest::o-a p) 20)
+    (qtest:assert-true (pbtest::is-initialized p))
 
-(defconst +test-file-name+ (merge-pathnames "test-output-file.data" +pwd+)
-  "Pathname of file to which we write protocol buffer data.")
+    ;; Set some unrepeated things
+    (setf (pbtest::u-int32 p) 20)
+    (setf (pbtest::u-int64 p) -20)
+    (setf (pbtest::u-uint64 p) 12345678900)
+    (setf (pbtest::u-fixed32 p) 100)
+    (setf (pbtest::u-fixed64 p) 12345678900)
+    (setf (pbtest::u-bool p) t)
+    (setf (pbtest::u-float p) 3.14159f0)
+    (setf (pbtest::u-double p) 3.14159265d0)
+    (setf (pbtest::u-string p) "foo")
+    (setf (pbtest::u-vardata p) "bar")
+    (setf (pbtest::foo (pbtest::u-msg p)) 12)
 
-(defmacro assert-string-equal ((field protobuf) string)
-  (let* ((field-name (symbol-name field))
-         (field-octets (intern (concatenate 'string field-name "-OCTETS")
-                               "PROTOCOL-BUFFER")))
-    `(progn (assert (equalp (,field ,protobuf) ,string))
-            (assert (equalp (,field-octets ,protobuf)
-                            (base:string-to-utf8-octets ,string))))))
+    ;; Set some repeated things
+    (PUSH -20 (pbtest::r-int32 p))
+    (PUSH -30 (pbtest::r-int32 p))
+    (PUSH 20 (pbtest::r-int64 p))
+    (PUSH 30 (pbtest::r-int64 p))
+    (PUSH 12345678900 (pbtest::r-uint64 p))
+    (PUSH 98765432100 (pbtest::r-uint64 p))
+    (PUSH 12345 (pbtest::r-fixed32 p))
+    (PUSH 23456 (pbtest::r-fixed32 p))
+    (PUSH 12345678900 (pbtest::r-fixed64 p))
+    (PUSH 98765432100 (pbtest::r-fixed64 p))
+    (PUSH nil (pbtest::r-bool p))
+    (PUSH t (pbtest::r-bool p))
+    (PUSH 1.5f0 (pbtest::r-float p))
+    (PUSH -1.75f0 (pbtest::r-float p))
+    (PUSH 3.3d0 (pbtest::r-double p))
+    (PUSH -1.2d0 (pbtest::r-double p))
+    (PUSH "foo" (pbtest::r-string p))
+    (PUSH "bar" (pbtest::r-string p))
+    (PUSH "ping" (pbtest::r-vardata p))
+    (PUSH "pong" (pbtest::r-vardata p))
 
-(defun correctness-tests ()
-  ;; Check that required strings are cleared by CLEAR.
-  (let ((p (make-instance 'pb:TestProtocol)))
-    (assert-string-equal (pb:zero p) "")
-    (setf (pb:zero p) "x")
-    (assert-string-equal (pb:zero p) "x")
-    (pb:clear p)
-    (assert-string-equal (pb:zero p) ""))
+    (let ((x (make-instance 'pbtest::test1-msg))
+          (y (make-instance 'pbtest::test1-msg)))
+      (setf (pbtest::foo x) 12)
+      (setf (pbtest::foo y) 13)
+      (PUSH x (pbtest::r-msg p))
+      (PUSH y (pbtest::r-msg p)))
 
-  ;; Check that optional strings are set to their default value by CLEAR.
-  (let ((p (make-instance 'pb:TestProtocol)))
-    (assert-string-equal (pb:optstring p) "opt")
-    (setf (pb:optstring p) "x")
-    (assert-string-equal (pb:optstring p) "x")
-    (pb:clear p)
-    (assert-string-equal (pb:optstring p) "opt")
-    (setf (pb:optstring p) "x")
-    (pb:clear p)
-    (assert-string-equal (pb:optstring p) "opt")
-    (setf (pb:optstring p) "x")
-    (pb:clear-optstring p)
-    (assert-string-equal (pb:optstring p) "opt"))
-  (values))
-
-(defun test-pb-write ()
-  (let ((p (make-instance 'pb:Test1Proto)))
-    ;; verify enum values
-    (assert (= pb:+Test1Proto-EnumCode-FOO+ 0))
-    (assert (= pb:+Test1Proto-EnumCode-BAR+ 1))
-    (assert (= pb:+Test1Proto-EnumCode-BAZ+ 2))
-
-    ;; default settings
-    (assert (= (pb:d-int32 p) 12))
-    (assert-string-equal (pb:d-string p) "foo")
-    (assert (eq (pb:d-bool p) t))
-
-    ;; test is-initialized
-    (assert (not (pb:is-initialized p)))
-    (setf (pb:o-a p) 20)
-    (assert (pb:is-initialized p))
-
-    ;; unrepeated things
-    (setf (pb:u-int32 p) 20)
-    (setf (pb:u-int64 p) -20)
-    (setf (pb:u-uint64 p) 12345678900)
-    (setf (pb:u-fixed32 p) 100)
-    (setf (pb:u-fixed64 p) 12345678900)
-    (setf (pb:u-bool p) t)
-    (setf (pb:u-float p) 3.14159f0)
-    (setf (pb:u-double p) 3.14159265d0)
-    (setf (pb:u-string p) "foo")
-    (setf (pb:u-vardata p) "bar")
-    (setf (pb:foo (pb:u-msg p)) 12)
-
-    ;; repeated things
-    (vector-push-extend -20 (pb:r-int32 p))
-    (vector-push-extend -30 (pb:r-int32 p))
-    (vector-push-extend 20 (pb:r-int64 p))
-    (vector-push-extend 30 (pb:r-int64 p))
-    (vector-push-extend 12345678900 (pb:r-uint64 p))
-    (vector-push-extend 98765432100 (pb:r-uint64 p))
-    (vector-push-extend 12345 (pb:r-fixed32 p))
-    (vector-push-extend 23456 (pb:r-fixed32 p))
-    (vector-push-extend 12345678900 (pb:r-fixed64 p))
-    (vector-push-extend 98765432100 (pb:r-fixed64 p))
-    (vector-push-extend nil (pb:r-bool p))
-    (vector-push-extend t (pb:r-bool p))
-    (vector-push-extend 1.5f0 (pb:r-float p))
-    (vector-push-extend -1.75f0 (pb:r-float p))
-    (vector-push-extend 3.3d0 (pb:r-double p))
-    (vector-push-extend -1.2d0 (pb:r-double p))
-    (vector-push-extend (base:string-to-utf8-octets "foo") (pb:r-string p))
-    (vector-push-extend (base:string-to-utf8-octets "bar") (pb:r-string p))
-    (vector-push-extend (base:string-to-utf8-octets "ping") (pb:r-vardata p))
-    (vector-push-extend (base:string-to-utf8-octets "pong") (pb:r-vardata p))
-
-    (let ((x (make-instance 'pb:Test1Msg))
-          (y (make-instance 'pb:Test1Msg)))
-      (setf (pb:foo x) 12)
-      (setf (pb:foo y) 13)
-      (vector-push-extend x (pb:r-msg p))
-      (vector-push-extend y (pb:r-msg p)))
-
-    (let ((x (make-instance 'pb:Test1Proto-TestGroup1))
-          (y (make-instance 'pb:Test1Proto-TestGroup2))
-          (z (make-instance 'pb:Test1Proto-TestGroup2)))
-      (setf (pb:a x) 80)
-      (setf (pb:b y) 100)
-      (setf (pb:b z) 130)
-      (vector-push-extend x (pb:testgroup1 p))
-      (vector-push-extend y (pb:testgroup2 p))
-      (vector-push-extend z (pb:testgroup2 p)))
+    (let ((x (make-instance 'pbtest::test1-proto-test-group1))
+          (y (make-instance 'pbtest::test1-proto-test-group2))
+          (z (make-instance 'pbtest::test1-proto-test-group2)))
+      (setf (pbtest::a x) 80)
+      (setf (pbtest::b y) 100)
+      (setf (pbtest::b z) 130)
+      (PUSH x (pbtest::test-group1 p))
+      (PUSH y (pbtest::test-group2 p))
+      (PUSH z (pbtest::test-group2 p)))
 
     ;; int32 tests
     (loop for x in (list (1- (ash 1 31)) (- (ash 1 31)) 1 0 -1)
-          do (vector-push-extend x (pb:r-int32 p)))
+          do (PUSH x (pbtest::r-int32 p)))
 
     ;; int64 tests
     (loop for x in (list (1- (ash 1 63)) (- (ash 1 63)) 1 0 -1)
-          do (vector-push-extend x (pb:r-int64 p)))
+          do (PUSH x (pbtest::r-int64 p)))
 
     ;; fixed32 tests
     (loop for x in (list #xffffffff (1- (ash 1 31)) 0 1)
-          do (vector-push-extend x (pb:r-fixed32 p)))
+          do (PUSH x (pbtest::r-fixed32 p)))
 
     ;; fixed64 tests
     (loop for x in (list #xffffffffffffffff (1- (ash 1 63)) 0 1)
-          do (vector-push-extend x (pb:r-fixed64 p)))
+          do (PUSH x (pbtest::r-fixed64 p)))
 
     ;; uint64 tests
     (loop for x in (list (1- (ash 1 64)) (1- (ash 1 63)) 0 1)
-          do (vector-push-extend x (pb:r-uint64 p)))
+          do (PUSH x (pbtest::r-uint64 p)))
 
     ;; write buffer to a file
-    (let ((size (pb:octet-size p)))
-      (let* ((output-buffer (base:make-octet-vector size))
-             (end (pb:serialize p output-buffer 0 size)))
-        (assert (= end size))
+    (let ((size (proto:octet-size p)))
+      (let* ((output-buffer (make-byte-vector size))
+             (end (proto:serialize p output-buffer 0 size)))
+        (qtest:assert-equal end size)
         (with-open-file (output-stream +test-file-name+ :direction :output
                          :if-exists :supersede :element-type 'unsigned-byte)
           (write-sequence output-buffer output-stream)))
@@ -166,138 +140,106 @@
       ;; check against the golden data
       (with-open-file (golden-input +golden-file-name+ :direction :input
                        :element-type 'unsigned-byte)
-        (assert (= (file-length golden-input) size))
+        (qtest:assert-equal (file-length golden-input) size)
         (with-open-file (test-input +test-file-name+ :direction :input
                          :element-type 'unsigned-byte)
-          (assert (= (file-length test-input) size))
-          (let ((golden-buffer (base:make-octet-vector size))
-                (test-buffer (base:make-octet-vector size)))
+          (qtest:assert-equal (file-length test-input) size)
+          (let ((golden-buffer (make-byte-vector size))
+                (test-buffer (make-byte-vector size)))
             (read-sequence golden-buffer golden-input)
             (read-sequence test-buffer test-input)
-            (assert (equalp golden-buffer test-buffer))))))
+            (qtest:assert-true (equalp golden-buffer test-buffer))))))
 
     ;; clean up
     (delete-file +test-file-name+)))
 
-(defun test-repeated (value golden)
-  (let ((golden-size (length golden)))
-    (assert (= (length value) golden-size))
-    (loop for v across value
-          for g in golden
-          ;; V and G are either NIL/T, numbers, or strings, actually simple
-          ;; arrays of octets.
-          do (cond ((and (member v '(t nil)) (member g '(t nil)))
-                    (assert (eq v g)))
-                   ((and (numberp v) (numberp g)) (assert (= v g)))
-                   ((and (arrayp v) (arrayp g)) (assert (equalp v g)))
-                   (t (assert (progn "type mismatch" nil)))))))
-
-(defun test-pb-read ()
-  (let ((p (make-instance 'pb:Test1Proto)))
+(qtest:define-test test-pb-read ()
+  (let ((p (make-instance 'pbtest::Test1-Proto)))
     (with-open-file (golden-input +golden-file-name+ :direction :input
                      :element-type 'unsigned-byte)
       (let* ((size (file-length golden-input))
-             (buffer (base:make-octet-vector size)))
+             (buffer (make-byte-vector size)))
         (read-sequence buffer golden-input)
-        (assert (= (pb:merge-from-array p buffer 0 size) size))))
+        (qtest:assert-equal (proto:merge-from-array p buffer 0 size) size)))
 
-    ;; unrepeated things
-    (assert (pb:has-o-a p))
-    (assert (= (pb:o-a p) 20))
-    (assert (not (pb:has-o-b p)))
-    (assert (= (pb:u-int32 p) 20))
-    (assert (= (pb:u-int64 p) -20))
-    (assert (= (pb:u-uint64 p) 12345678900))
-    (assert (= (pb:u-fixed32 p) 100))
-    (assert (= (pb:u-fixed64 p) 12345678900))
-    (assert (eq (pb:u-bool p) t))
-    (assert (= (pb:u-float p) 3.14159f0))
-    (assert (= (pb:u-double p) 3.14159265d0))
+    (flet ((test-repeated (value golden))
+            (let ((golden-size (length golden)))
+              (qtest:assert-equal (length value) golden-size)
+              (loop for v across value
+                    for g in golden
+                    ;; V and G are either NIL/T, numbers, or strings, actually simple
+                    ;; arrays of octets.
+                    do (cond ((and (member v '(t nil)) (member g '(t nil)))
+                              (qtest:assert-equal v g))
+                             ((and (numberp v) (numberp g)) (qtest:assert-equal v g))
+                             ((and (arrayp v) (arrayp g)) (qtest:assert-true (equalp v g)))
+                             (t (assert (progn "type mismatch" nil)))))))
 
-    ;; Lisp implementation omits "has" function for embedded messages.
-    ;;(assert (has-u-msg p))
-    (assert (= (pb:foo (pb:u-msg p)) 12))
+      ;; unrepeated things
+      (qtest:assert-true (pbtest::has-o-a p))
+      (qtest:assert-equal (pbtest::o-a p) 20)
+      (qtest:assert-false (pbtest::has-o-b p))
+      (qtest:assert-equal (pbtest::u-int32 p) 20)
+      (qtest:assert-equal (pbtest::u-int64 p) -20)
+      (qtest:assert-equal (pbtest::u-uint64 p) 12345678900)
+      (qtest:assert-equal (pbtest::u-fixed32 p) 100)
+      (qtest:assert-equal (pbtest::u-fixed64 p) 12345678900)
+      (qtest:assert-equal (pbtest::u-bool p) t)
+      (qtest:assert-equal (pbtest::u-float p) 3.14159f0)
+      (qtest:assert-equal (pbtest::u-double p) 3.14159265d0)
 
-    ;; repeated things
-    (test-repeated (pb:r-int32 p)
-                   (list -20 -30 (1- (ash 1 31)) (- (ash 1 31)) 1 0 -1))
-    (test-repeated (pb:r-int64 p)
-                   (list 20 30 (1- (ash 1 63)) (- (ash 1 63)) 1 0 -1))
-    (test-repeated (pb:r-uint64 p)
-                   (list 12345678900 98765432100
-                         (1- (ash 1 64)) (1- (ash 1 63))
-                         0 1))
-    (test-repeated (pb:r-fixed32 p)
-                   (list 12345 23456 #xffffffff (1- (ash 1 31)) 0 1))
-    (test-repeated (pb:r-fixed64 p)
-                   (list 12345678900 98765432100 #xffffffffffffffff
-                         (1- (ash 1 63)) 0 1))
-    (test-repeated (pb:r-bool p) '(nil t))
-    (test-repeated (pb:r-float p) '(1.5f0 -1.75f0))
-    (test-repeated (pb:r-double p) '(3.3d0 -1.2d0))
-    (test-repeated (pb:r-string p)
-                   (list (base:string-to-utf8-octets "foo")
-                         (base:string-to-utf8-octets "bar")))
-    (test-repeated (pb:r-vardata p)
-                   (list (base:string-to-utf8-octets "ping")
-                         (base:string-to-utf8-octets "pong")))
+      ;; Lisp implementation omits "has" function for embedded messages.
+      ;;(qtest:assert (has-u-msg p))
+      (qtest:assert-equal (pbtest::foo (pbtest::u-msg p)) 12)
 
-    (assert (= (length (pb:r-msg p)) 2))
-    (assert (= (pb:foo (aref (pb:r-msg p) 0)) 12))
-    (assert (= (pb:foo (aref (pb:r-msg p) 1)) 13))
+      ;; repeated things
+      (test-repeated (pbtest::r-int32 p)
+                     (list -20 -30 (1- (ash 1 31)) (- (ash 1 31)) 1 0 -1))
+      (test-repeated (pbtest::r-int64 p)
+                     (list 20 30 (1- (ash 1 63)) (- (ash 1 63)) 1 0 -1))
+      (test-repeated (pbtest::r-uint64 p)
+                     (list 12345678900 98765432100
+                           (1- (ash 1 64)) (1- (ash 1 63))
+                           0 1))
+      (test-repeated (pbtest::r-fixed32 p)
+                     (list 12345 23456 #xffffffff (1- (ash 1 31)) 0 1))
+      (test-repeated (pbtest::r-fixed64 p)
+                     (list 12345678900 98765432100 #xffffffffffffffff
+                           (1- (ash 1 63)) 0 1))
+      (test-repeated (pbtest::r-bool p) '(nil t))
+      (test-repeated (pbtest::r-float p) '(1.5f0 -1.75f0))
+      (test-repeated (pbtest::r-double p) '(3.3d0 -1.2d0))
+      (test-repeated (pbtest::r-string p) (list "foo" "bar"))
+      (test-repeated (pbtest::r-vardata p) (list "ping" "pong"))
 
-    ;; groups
-    (assert (= (length (pb:testgroup1 p)) 1))
-    (assert (= (pb:a (aref (pb:testgroup1 p) 0)) 80))
+      (qtest:assert-equal (length (pbtest::r-msg p)) 2)
+      (qtest:assert-equal (pbtest::foo (aref (pbtest::r-msg p) 0)) 12)
+      (qtest:assert-equal (pbtest::foo (aref (pbtest::r-msg p) 1)) 13)
 
-    (assert (= (length (pb:testgroup2 p)) 2))
-    (assert (= (pb:b (aref (pb:testgroup2 p) 0)) 100))
-    (assert (= (pb:b (aref (pb:testgroup2 p) 1)) 130))
+      ;; groups
+      (qtest:assert-equal (length (pbtest::test-group1 p)) 1)
+      (qtest:assert-equal (pbtest::a (aref (pbtest::test-group1 p) 0)) 80)
 
-    ;; default settings
-    (assert (= (pb:d-int32 p) 12))
-    (assert-string-equal (pb:d-string p) "foo")
-    (assert (eq (pb:d-bool p) t))))
+      (qtest:assert-equal (length (pbtest::test-group2 p)) 2)
+      (qtest:assert-equal (pbtest::b (aref (pbtest::test-group2 p) 0)) 100)
+      (qtest:assert-equal (pbtest::b (aref (pbtest::test-group2 p) 1)) 130)
+
+      ;; default settings
+      (qtest:assert-equal (pbtest::d-int32 p) 12)
+      (qtest:assert-true (string-equal (pbtest::d-string p) "foo"))
+      (qtest:assert-equal (pbtest::d-bool p) t))))
 
 (defun parser-timing (iterations)
-  (let ((src (make-instance 'pb:TimeProtocol)))
+  (let ((src (make-instance 'pbtest::Time-Protocol)))
     (dotimes (i 1000)
-      (let ((new (make-instance 'pb:TimeProtocol-G)))
-        (setf (pb:v1 new) 100)
-        (setf (pb:v2 new) 80)
-        (vector-push-extend new (pb:g src))))
+      (let ((new (make-instance 'pbtest::Time-Protocol-G)))
+        (setf (pbtest::v1 new) 100)
+        (setf (pbtest::v2 new) 80)
+        (PUSH new (pbtest::g src))))
 
-    (let* ((buffer (base:make-octet-vector 10000))
+    (let* ((buffer (make-byte-vector 10000))
            ;; XXXXXXXXXX
-           (size (pb:serialize src buffer 0 10000)))
+           (size (proto:serialize src buffer 0 10000)))
       (time (dotimes (i iterations)
-              (let ((msg (make-instance 'pb:TimeProtocol)))
-                (pb:merge-from-array msg buffer 0 size)))))))
-
-;; XXXXXXXXXXXXXXXXXXXX use parser-timing here
-
-(defun output-timing ())
-(defun test-copy-and-merge ())
-(defun auto-tests ())
-
-(defun test (&key
-             (time-raw-parse nil)
-             (time-auto-parse nil)
-             (time-raw-output nil)
-             (time-auto-output nil)
-             (iterations 10000))
-  (if (or time-raw-parse time-auto-parse)
-      (parser-timing iterations)
-      (if (or time-raw-output time-auto-output)
-          (output-timing)
-          (progn (correctness-tests)
-                 (test-pb-write)
-                 (test-pb-read)
-                 (test-copy-and-merge)
-                 ;; XXXX initialize random number generator ??
-                 (auto-tests)
-                 (print "PASS"))))
-  (values))
-
-
-;; XXXXXXXXXXXXXXXXXXXX add more test code here
+              (let ((msg (make-instance 'pbtest::TimeProtocol)))
+                (proto:merge-from-array msg buffer 0 size)))))))

@@ -48,13 +48,20 @@
 
        ;; Bob Brown's protocol buffers tests
        #+++notyet
+       (:module "brown-tests-proto"
+                :serial t
+                :pathname #p""
+                :components
+                  ((:protobuf "testproto1")
+                   (:protobuf "testproto2")))
+       #+++notyet
        (:module "brown-tests"
                 :serial t
                 :pathname #p""
-                :depends-on ("wire-level-tests" "object-level-tests")
+                :depends-on ("wire-level-tests" "object-level-tests" "brown-tests-proto")
                 :components
-                  ((:protobuf "testproto1")
-                   (:protobuf "testproto2")
+                  ((:file "testproto1")         ;.lisp, generated above
+                   (:file "testproto2")         ;.lisp, generated above
                    (:file "quick-tests" :depends-on ("testproto1" "testproto2"))
                    (:static-file "golden.data")))
 

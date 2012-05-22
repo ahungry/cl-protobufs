@@ -39,7 +39,7 @@
   (let* ((val #xE499867)
          (encoding #(#xE7 #xB0 #xA6 #x72))
          (len (length encoding))
-         (buf (make-array len :element-type '(unsigned-byte 8))))
+         (buf (make-byte-vector len)))
     (let ((idx (encode-uint32 val buf 0)))
       (qtest:assert-equal idx len)
       (qtest:assert-true (equalp buf encoding))
@@ -52,7 +52,7 @@
   (let* ((val #xE4998679470D98D)
          (encoding #(#x8D #xB3 #xC3 #xA3 #xF9 #x8C #xE6 #xA4 #x0E))
          (len (length encoding))
-         (buf (make-array len :element-type '(unsigned-byte 8))))
+         (buf (make-byte-vector len)))
     (let ((idx (encode-uint64 val buf 0)))
       (qtest:assert-equal idx len)
       (qtest:assert-true (equalp buf encoding))
@@ -66,7 +66,7 @@
 (defvar $max-bytes-64 10)
 
 (qtest:define-test powers-varint-test ()
-  (let ((buffer (make-array (* 128 $max-bytes-64) :element-type '(unsigned-byte 8)))
+  (let ((buffer (make-byte-vector (* 128 $max-bytes-64)))
         (index 0)
         length)
     ;; Encode powers of 2
@@ -102,8 +102,8 @@
 (qtest:define-test random-varint-test ()
   ;; Encode 1000 random numbers as both 32-bit and 64-bit varints
   (let* ((count 1000)
-         (buf32 (make-array (* count $max-bytes-32) :element-type '(unsigned-byte 8)))
-         (buf64 (make-array (* count $max-bytes-64) :element-type '(unsigned-byte 8)))
+         (buf32 (make-byte-vector (* count $max-bytes-32)))
+         (buf64 (make-byte-vector (* count $max-bytes-64)))
          (vals32 (make-array count))
          (vals64 (make-array count))
          (index32 0)

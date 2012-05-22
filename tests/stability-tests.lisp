@@ -86,7 +86,8 @@ service StableColorWheel {
                     (parse-schema-from-stream s
                       ;; Parsing from a string doesn't produce a name, so supply it
                       :name (proto-name schema1)
-                      :class (proto-class schema1)))))
+                      :class (proto-class schema1)
+                      :conc-name nil))))
     (qtest:assert-true (schemas-equal schema1 schema2))
     (qtest:assert-true (string=
                          (with-output-to-string (s)

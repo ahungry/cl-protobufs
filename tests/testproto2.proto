@@ -29,6 +29,8 @@
 
 syntax = "proto2";      // for compatibility with internal Google compiler
 
+package protobuf_unittest;
+
 message TimeProtocol {
   repeated group G = 1 {
     required int32 V1 = 2;
@@ -50,7 +52,7 @@ message TestProtocol {
     required int64 Five = 5;
     required uint64 Six = 64;
     optional TimeProtocol TP = 112;
-    repeated group Seven = 65 {
+    repeated group SevenG = 65 {
       optional bool Four = 66  [default=false];
       optional group Twelve = 67 {
         optional bool Thirteen = 68;
