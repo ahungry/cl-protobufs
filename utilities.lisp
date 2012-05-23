@@ -179,6 +179,15 @@
        ,object
      ,@body))
 
+(defmacro dovector ((var vector &optional value) &body body)
+  (with-gensyms (vidx vlen vvec)
+    `(let* ((,vvec ,vector)
+            (,vlen (length ,vvec)))
+       (loop for ,vidx fixnum from 0 below ,vlen
+             as ,var = (aref ,vvec ,vidx)
+             do (progn ,@body)
+             finally (return ,value)))))
+
 
 ;;; Functional programming, please
 
@@ -207,6 +216,12 @@
   (if (eq type 'null)
     'null
     'list))
+
+;; The same, but use a (stretchy) vector
+(deftype vector-of (type)
+  (if (eq type 'null)
+    'null
+    '(array *)))
 
 ;; This corresponds to the :bytes Protobufs type
 (deftype byte-vector () '(array (unsigned-byte 8)))

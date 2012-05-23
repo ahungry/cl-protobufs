@@ -244,6 +244,6 @@
               "There is no Protobufs message for the class ~S" class)
       (assert (eq class (type-of source)) ()
               "The objects ~S and ~S are of not of the same class" object source)
-      ;;--- Do this
+      ;;--- Do this (shuold return side-effected 'object', not 'source')
       type
-      object)))
+      source)))

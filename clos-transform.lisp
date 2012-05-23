@@ -121,57 +121,60 @@
        (find-slot-definition-type class slot)
       (multiple-value-bind (type pclass packed enums)
           (clos-type-to-protobuf-type expanded-type type-filter enum-filter)
-        (let* ((ename (and enums
-                           (if (and unexpanded-type (symbolp unexpanded-type))
-                             (symbol-name unexpanded-type)
-                             (format nil "~A-~A" 'enum (slot-definition-name slot)))))
-               (etype (and enums
-                           (if (and unexpanded-type (symbolp unexpanded-type))
-                             unexpanded-type
-                             (intern ename (symbol-package (slot-definition-name slot))))))
-               (enum  (and enums
-                           (let* ((names (mapcar #'enum-name->proto enums))
-                                  (prefix (and (> (length names) 1)
-                                               (subseq (first names)
-                                                       0 (mismatch (first names) (car (last names)))))))
-                             (when (and prefix (> (length prefix) 2)
-                                        (every #'(lambda (name) (starts-with name prefix)) names))
-                               (setq names (mapcar #'(lambda (name) (subseq name (length prefix))) names)))
-                             (unless (and unexpanded-type (symbolp unexpanded-type))
-                               #+ignore         ;this happens constantly, the warning is not useful
-                               (protobufs-warn "Use DEFTYPE to define a MEMBER type instead of directly using ~S"
-                                               expanded-type))
-                             (make-instance 'protobuf-enum
-                               :class  etype
-                               :name   (class-name->proto ename)
-                               :values (loop for name in names
-                                             for val in enums
-                                             for index upfrom 0
-                                             collect (make-instance 'protobuf-enum-value
-                                                       :name name
-                                                       :index index
-                                                       :value val))))))
-               (reqd    (clos-type-to-protobuf-required (find-slot-definition-type class slot) type-filter))
-               (default (if (slot-definition-initfunction slot)
-                          (clos-init-to-protobuf-default
-                           (slot-definition-initform slot) expanded-type value-filter)
-                          $empty-default))
-               (field   (make-instance 'protobuf-field
-                          :name  (slot-name->proto (slot-definition-name slot))
-                          :type  (if enum (class-name->proto ename) type)
-                          :class (if enum etype pclass)
-                          :required reqd
-                          :index index
-                          :value   (slot-definition-name slot)
-                          :reader  (let ((reader (find-slot-definition-reader class slot)))
-                                     ;; Only use the reader if it is "interesting"
-                                     (unless (string= (symbol-name reader)
-                                                      (format nil "~A-~A" 
-                                                              (class-name class) (slot-definition-name slot)))
-                                       reader))
-                          :default default
-                          :packed  packed)))
-          (values field nil enum))))))
+        (multiple-value-bind (reqd vectorp)
+            (clos-type-to-protobuf-required (find-slot-definition-type class slot) type-filter)
+          (let* ((ename (and enums
+                             (if (and unexpanded-type (symbolp unexpanded-type))
+                               (symbol-name unexpanded-type)
+                               (format nil "~A-~A" 'enum (slot-definition-name slot)))))
+                 (etype (and enums
+                             (if (and unexpanded-type (symbolp unexpanded-type))
+                               unexpanded-type
+                               (intern ename (symbol-package (slot-definition-name slot))))))
+                 (enum  (and enums
+                             (let* ((names (mapcar #'enum-name->proto enums))
+                                    (prefix (and (> (length names) 1)
+                                                 (subseq (first names)
+                                                         0 (mismatch (first names) (car (last names)))))))
+                               (when (and prefix (> (length prefix) 2)
+                                          (every #'(lambda (name) (starts-with name prefix)) names))
+                                 (setq names (mapcar #'(lambda (name) (subseq name (length prefix))) names)))
+                               (unless (and unexpanded-type (symbolp unexpanded-type))
+                                 #+ignore         ;this happens constantly, the warning is not useful
+                                 (protobufs-warn "Use DEFTYPE to define a MEMBER type instead of directly using ~S"
+                                                 expanded-type))
+                               (make-instance 'protobuf-enum
+                                 :class  etype
+                                 :name   (class-name->proto ename)
+                                 :values (loop for name in names
+                                               for val in enums
+                                               for index upfrom 0
+                                               collect (make-instance 'protobuf-enum-value
+                                                         :name name
+                                                         :index index
+                                                         :value val))))))
+                 (default (if (slot-definition-initfunction slot)
+                            (clos-init-to-protobuf-default
+                             (slot-definition-initform slot) expanded-type value-filter)
+                            (if (eq reqd :repeated)
+                              (if vectorp $empty-vector $empty-list)
+                              $empty-default)))
+                 (field   (make-instance 'protobuf-field
+                            :name  (slot-name->proto (slot-definition-name slot))
+                            :type  (if enum (class-name->proto ename) type)
+                            :class (if enum etype pclass)
+                            :required reqd
+                            :index index
+                            :value   (slot-definition-name slot)
+                            :reader  (let ((reader (find-slot-definition-reader class slot)))
+                                       ;; Only use the reader if it is "interesting"
+                                       (unless (string= (symbol-name reader)
+                                                        (format nil "~A-~A" 
+                                                                (class-name class) (slot-definition-name slot)))
+                                         reader))
+                            :default default
+                            :packed  packed)))
+            (values field nil enum)))))))
 
 (defun find-slot-definition-type (class slotd)
   "Given a class and a slot descriptor, find the \"best\" type definition for the slot."
@@ -183,7 +186,7 @@
       ;; The direct slotd will have an unexpanded definition
       ;; Prefer it for 'list-of' so we can get the base type
       (let ((type (slot-definition-type direct-slotd)))
-        (values (if (and (listp type) (member (car type) '(list-of #+quux quux:list-of)))
+        (values (if (and (listp type) (member (car type) '(list-of vector-of #+quux quux:list-of)))
                   type
                   (slot-definition-type slotd))
                 (if (symbolp type)
@@ -287,7 +290,7 @@
                                   (if enum-filter (funcall enum-filter values) values))))
                        (t
                         (error "The MEMBER type ~S is too complicated" type))))))
-            ((list-of #+quux quux:list-of)      ;special knowledge of 'list-of'
+            ((list-of vector-of #+quux quux:list-of) ;special knowledge of 'list-of'
              (multiple-value-bind (type class)
                  (type->protobuf-type (first tail))
                (values type class (packed-type-p class))))
@@ -328,32 +331,39 @@
                             :bool :float :double)))))
 
 (defun clos-type-to-protobuf-required (type &optional type-filter)
-  "Given a Lisp type, returns a \"cardinality\": :required, :optional or :repeated."
+  "Given a Lisp type, returns a \"cardinality\": :required, :optional or :repeated.
+   If the sceond returned value is true, it's a repeated field that should use a vector."
   (let ((type (if type-filter (funcall type-filter type) type)))
     (if (listp type)
       (destructuring-bind (head &rest tail) type
         (case head
           ((or)
-           (let ((optional (member 'null (cdr type))))
-             (if (loop for r in tail
-                       thereis (eq (clos-type-to-protobuf-required r) :repeated))
-               :repeated
-               (if optional :optional :required))))
+           (let ((optional (member 'null tail))
+                 (repeated (find-if #'(lambda (r)
+                                        (eq (clos-type-to-protobuf-required r) :repeated)) tail)))
+             (if repeated
+               (clos-type-to-protobuf-required repeated)
+               (values (if optional :optional :required) nil))))
           ((and)
-           (if (or (subtypep type '(list-of t))
-                   #+quux (subtypep type '(quux:list-of t)))
-             :repeated
-             :required))
+           (cond ((or (subtypep type '(list-of t))
+                      #+quux (subtypep type '(quux:list-of t)))
+                  (values :repeated nil))
+                 ((subtypep type '(vector-of t))
+                  (values :repeated t))
+                 (t
+                  (values :required nil))))
           ((member)
            (if (or (equal type '(member t nil))
                    (equal type '(member nil t)))
-             :required
-             (if (member nil tail) :optional :required)))
+             (values :required nil)
+             (values (if (member nil tail) :optional :required) nil)))
           ((list-of #+quux quux:list-of)
-           :repeated)
+           (values :repeated nil))
+          ((vector-of)
+           (values :repeated t))
           (otherwise
-           :required)))
-      :required)))
+           (values :required nil))))
+      (values :required nil))))
 
 (defun clos-init-to-protobuf-default (value type &optional value-filter)
   "Given an initform and a Lisp type, returns a plausible default value.

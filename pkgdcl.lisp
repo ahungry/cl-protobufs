@@ -29,6 +29,7 @@
    "SFIXED32"
    "SFIXED64"
    "LIST-OF"
+   "VECTOR-OF"
    "BYTE-VECTOR"
    "MAKE-BYTE-VECTOR")
 

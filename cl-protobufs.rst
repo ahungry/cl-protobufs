@@ -158,21 +158,33 @@ new .lisp file. (This is what that ASDF module type ``:proto`` does.)
 
 ::
 
-  proto:parse-schema-from-file (filename)                       [Function]
+  proto:parse-schema-from-file (pathname                        [Function]
+                                &key name class conc-name)
 
-Parses the contents of the file given by *filename*, and returns the
+Parses the contents of the file given by *pathname*, and returns the
 Protobufs model (a set object objects rooted at ``proto:protobuf-schema``)
 corresponding to the parsed file. The name of the Protobufs schema is
 generated automatically from the file name.
 
+*name*, *class* and *conc-name* are as for ``proto:parse-schema-from-stream``.
+The defaults for *name* and *class* are produced by taking the name of the
+file and generating a name string and a class name symbol.
+
 ::
 
-  proto:parse-schema-from-stream (stream &key name class)       [Function]
+  proto:parse-schema-from-stream (stream                        [Function]
+                                  &key name class conc-name)
 
 Parses the contents of the stream *stream*, and returns the Protobufs
-schema corresponding to the parsed file. If *name* is supplied, it gives
-the Protobufs name for the schema. If *class* is supplied, it gives the
-Lisp name.
+schema corresponding to the parsed file.
+
+If *name* is supplied, it gives the Protobufs name (a string) for the
+schema. If *class* is supplied, it gives the Lisp name (a symbol). These
+are only used for display purposes.
+
+*conc-name* is the default "conc name" to use for all of the messages
+in the file. The default is "", which has the effect of giving eponymous
+slot accessors to all of the classes generating during the import process.
 
 ::
 
@@ -366,7 +378,8 @@ looks like this::
   }
 
 Note that Lisp types ``(or null <T>)`` turn into optional fields,
-and Lisp types ``(proto:list-of <T>)`` turn into repeated fields.
+and Lisp types ``(proto:list-of <T>)`` and ``(proto:vector-of <T>)``
+turn into repeated fields.
 
 ::
 
@@ -479,10 +492,10 @@ are incremented by 1 for each new field value. *type* is the type of
 the slot. *name* can be used to override the defaultly generated
 Protobufs field name (for example, ``color-name`` becomes
 ``colorName``). *default* is the default value for the slot. *reader*
-is a Lisp slot reader function to use to get the value during
+is the name of a Lisp slot reader function to use to get the value during
 serialization, as opposed to using ``slot-value``; this is meant to be
 used when aliasing an existing class. *writer* can be similarly used
-to give a Lisp slot writer function.
+to name a Lisp slot writer function.
 
 Note that the Protobufs does not support full Lisp type expressions in
 the types of fields. The following type expressions are supported:
@@ -497,11 +510,15 @@ the types of fields. The following type expressions are supported:
  - ``(member ...)``, where all the members are symbols or keywords or ``nil``
  - the name of a class that corresponds to another Protobufs message
  - ``(proto:list-of <T>)``, where ``<T>`` is any of the above types
+ - ``(proto:vector-of <T>)``, where ``<T>`` is any of the above types
  - ``(or <T> null)``, where ``<T>`` is any of the above types
 
-``member`` corresponds to a Protobufs ``enum``, ``proto:list-of`` to
-a repeated field, and ``(or <T> null)`` to an optional field. The other
-types correspond to the various Protobufs scalar field types.
+``member`` corresponds to a Protobufs ``enum``. ``(or <T> null)``
+corresponds to an optional field. ``proto:list-of`` corresponds to a
+repeated field, and the Lisp slot will be typed as a list. ``proto:vector-of``
+corresponds to a repeated field, and the Lisp slot will be typed as an
+adjustable array with a fill pointer. The other types correspond to
+the various Protobufs scalar field types.
 
 ``proto:define-message`` can be used only within ``proto:define-schema``
 or ``proto:define-message``.
@@ -535,7 +552,7 @@ In Common Lisp Protobufs, you can just use an ordinary slot accessor::
 
 ::
 
-  proto:define-extend (type (&key name                          [Macro]
+  proto:define-extend (type (&key name conc-name                [Macro]
                                   options documentation)
                        &body fields)
 
@@ -599,6 +616,7 @@ The following types are defined in the ``protobufs`` package:
  - ``proto:sfixed64``, which corresponds to the Protobufs ``sfixed32`` type
  - ``proto:byte-vector``, which corresponds to the Protobufs ``bytes`` type
  - ``proto:list-of``, which corresponds to a repeated field
+ - ``proto:vector-of``, which corresponds to a repeated field
 
 The following existing Lisp type correspond to other Protobufs types:
 

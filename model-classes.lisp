@@ -234,24 +234,24 @@
       (values (proto-value option) (proto-type option) t)
       (values nil nil nil))))
 
-(defgeneric remove-option (protobuf names)
+(defgeneric remove-options (protobuf &rest names)
   (:documentation
    "Given a protobuf schema, message, enum, etc and a set of option names,
     remove all of those options from the set of options."))
 
 (defmethod remove-options ((protobuf base-protobuf) &rest names)
-  (dolist (name names)
+  (dolist (name names (proto-options protobuf))
     (let ((option (find name (proto-options protobuf) :key #'proto-name :test #'option-name=)))
       (when option
         ;; This side-effects 'proto-options'
         (setf (proto-options protobuf) (remove option (proto-options protobuf)))))))
 
 (defmethod remove-options ((options list) &rest names)
-  (dolist (name names)
+  (dolist (name names options)
     (let ((option (find name options :key #'proto-name :test #'option-name=)))
       (when option
         ;; This does not side-effect the list of options
-        (remove option options)))))
+        (setq options (remove option options))))))
 
 (defun option-name= (name1 name2)
   (let* ((name1  (string name1))
@@ -443,6 +443,8 @@
 
 (defconstant $empty-default 'empty-default
   "The marker used in 'proto-default' used to indicate that there is no default value.")
+(defconstant $empty-list    'empty-list)
+(defconstant $empty-vector  'empty-vector)
 
 ;; A protobuf field within a message
 ;;--- Support the 'deprecated' option (have serialization ignore such fields?)
@@ -500,7 +502,10 @@
             (eq (proto-message-type f) :extends))))
 
 (defmethod empty-default-p (field)
-  (eq (proto-default field) $empty-default))
+  (let ((default (proto-default field)))
+    (or (eq default $empty-default)
+        (eq default $empty-list)
+        (eq default $empty-vector))))
 
 
 ;; An extension range within a message

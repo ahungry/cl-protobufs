@@ -405,21 +405,27 @@
 (proto:define-schema automobile
     (:package proto_test
      :optimize :speed)
-  (proto:define-message automobile ()
-    (proto:define-enum auto-status ()
-      new
-      used)
+  (proto:define-enum auto-status ()
+    new
+    used)
+  (proto:define-enum paint-type ()
+    normal
+    metallic)
+  (proto:define-message automobile
+      (:conc-name auto-)
     (model  :type string)
     (color  :type auto-color)
     (status :type auto-status :default :new))
-  (proto:define-message auto-color ()
+  (proto:define-message auto-color
+      (:conc-name auto-color-)
     (name    :type (or string null))
     (r-value :type integer)
     (g-value :type integer)
     (b-value :type integer)
     (proto:define-extension 1000 max))
-  (proto:define-extend auto-color (:conc-name paint-)
-    ((metallic 1000) :type boolean))
+  (proto:define-extend auto-color
+      (:conc-name auto-color-)
+    ((paint-type 1000) :type (or paint-type null)))
   (proto:define-message buy-car-request ()
     (auto :type automobile))
   (proto:define-message buy-car-response ()
@@ -435,7 +441,7 @@
          (color2 (make-instance 'auto-color :r-value 100 :g-value 0 :b-value 100))
          (car2   (make-instance 'automobile :model "Audi" :color color2))
          (rqst2  (make-instance 'buy-car-request :auto car2)))
-    (setf (paint-metallic color2) t)
+    (setf (auto-color-paint-type color2) :metallic)
     (let ((ser1 (proto:serialize-object-to-stream rqst1 'buy-car-request :stream nil)))
       (qtest:assert-true (string= (with-output-to-string (s)
                                     (proto:print-text-format rqst1 nil :stream s))
@@ -448,10 +454,13 @@
                                   (with-output-to-string (s)
                                     (proto:print-text-format
                                       (proto:deserialize-object 'buy-car-request ser2) nil :stream s)))))
-    (qtest:assert-false (string= (with-output-to-string (s)
-                                   (proto:print-text-format rqst1 nil :stream s))
-                                 (with-output-to-string (s)
-                                   (proto:print-text-format rqst2 nil :stream s))))))
+    (let ((str1 (with-output-to-string (s)
+                  (proto:print-text-format rqst1 nil :stream s)))
+          (str2 (with-output-to-string (s)
+                  (proto:print-text-format rqst2 nil :stream s))))
+      (qtest:assert-false (string= str1 str2))
+      (qtest:assert-false (search "paint_type:" str1 :test #'char=))
+      (qtest:assert-true (search "paint_type:" str2 :test #'char=)))))
 
 
 ;; Group example

@@ -528,12 +528,13 @@
                        type))
              (class  (if (keywordp ptype) ptype (proto->class-name type *protobuf-package*)))
              (slot   (proto->slot-name name *protobuf-package*))
+             (reqd   (kintern required))
              (field  (make-instance 'protobuf-field
                        :name  name
                        :type  type
                        :class class
                        ;; One of :required, :optional or :repeated
-                       :required (kintern required)
+                       :required reqd
                        :index idx
                        :value slot
                        ;; Fields parsed from .proto files usually get an accessor
@@ -542,7 +543,9 @@
                        :default (multiple-value-bind (default type default-p)
                                     (find-option opts "default")
                                   (declare (ignore type))
-                                  (if default-p default $empty-default))
+                                  (if default-p
+                                    default
+                                    (if (eq reqd :repeated) $empty-list $empty-default)))
                        :packed  (and packed (boolean-true-p packed))
                        :message-type (proto-message-type message)
                        :options (remove-options opts "default" "packed"))))

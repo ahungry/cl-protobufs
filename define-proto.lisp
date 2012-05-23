@@ -553,7 +553,6 @@
                             options documentation &allow-other-keys) field
     (let* ((idx  (if (listp slot) (second slot) (iincf index)))
            (slot (if (listp slot) (first slot) slot))
-           (reqd (clos-type-to-protobuf-required type))
            (reader (or reader
                        (and conc-name
                             (intern (format nil "~A~A" conc-name slot) *protobuf-package*))))
@@ -569,41 +568,48 @@
                                    :value val)))))
       (multiple-value-bind (ptype pclass)
           (clos-type-to-protobuf-type type)
-        (let ((slot (unless alias-for
-                      `(,slot :type ,type
-                              ,@(and reader
-                                     (if writer
-                                       `(:reader ,reader)
-                                       `(:accessor ,reader)))
-                              ,@(and writer
-                                     `(:writer ,writer))
-                              :initarg ,(kintern (symbol-name slot))
-                              ,@(cond ((and (not default-p) 
-                                            (eq reqd :repeated))
-                                       `(:initform ()))
-                                      ((and (not default-p)
-                                            (eq reqd :optional)
-                                            ;; Use unbound for booleans only
-                                            (not (eq pclass :bool)))
-                                       `(:initform nil))
-                                      (default-p
-                                        `(:initform ,(protobuf-default-to-clos-init default type)))))))
-              (field (make-instance 'protobuf-field
-                       :name  (or name (slot-name->proto slot))
-                       :type  ptype
-                       :class pclass
-                       ;; One of :required, :optional or :repeated
-                       :required reqd
-                       :index  idx
-                       :value  slot
-                       :reader reader
-                       :writer writer
-                       :default (if default-p default $empty-default)
-                       ;; Pack the field only if requested and it actually makes sense
-                       :packed  (and (eq reqd :repeated) packed t)
-                       :options options
-                       :documentation documentation)))
-          (values field slot idx))))))
+        (multiple-value-bind (reqd vectorp)
+            (clos-type-to-protobuf-required type)
+          (let* ((default (if (eq reqd :repeated)
+                            (if vectorp $empty-vector $empty-list)      ;to distinguish between list-of and vector-of
+                            (if default-p default $empty-default)))
+                 (cslot (unless alias-for
+                          `(,slot :type ,type
+                                  ,@(and reader
+                                         (if writer
+                                           `(:reader ,reader)
+                                           `(:accessor ,reader)))
+                                  ,@(and writer
+                                         `(:writer ,writer))
+                                  :initarg ,(kintern (symbol-name slot))
+                                  ,@(cond ((eq reqd :repeated)
+                                           ;; Repeated fields get a container for their elements
+                                           (if vectorp
+                                             `(:initform (make-array 5 :fill-pointer 0 :adjustable t))
+                                             `(:initform ())))
+                                          ((and (not default-p)
+                                                (eq reqd :optional)
+                                                ;; Use unbound for booleans only
+                                                (not (eq pclass :bool)))
+                                           `(:initform nil))
+                                          (default-p
+                                            `(:initform ,(protobuf-default-to-clos-init default type)))))))
+                 (field (make-instance 'protobuf-field
+                          :name  (or name (slot-name->proto slot))
+                          :type  ptype
+                          :class pclass
+                          ;; One of :required, :optional or :repeated
+                          :required reqd
+                          :index  idx
+                          :value  slot
+                          :reader reader
+                          :writer writer
+                          :default default
+                          ;; Pack the field only if requested and it actually makes sense
+                          :packed  (and (eq reqd :repeated) packed t)
+                          :options options
+                          :documentation documentation)))
+            (values field cslot idx)))))))
 
 ;; Define a service named 'type' with generic functions declared for
 ;; each of the methods within the service
