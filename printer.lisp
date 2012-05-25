@@ -233,7 +233,14 @@
                      (and (not (zerop indentation)) indentation) required)
              (write-schema-as :proto msg stream :indentation indentation :index index :arity required))
             (t
-             (let* ((defaultp (not (empty-default-p field)))
+             (let* ((defaultp (if (proto-alias-for message)
+                                ;; Special handling for imported CLOS classes
+                                (if (eq (proto-required field) :optional)
+                                  nil
+                                  (and (proto-default field)
+                                       (not (equalp (proto-default field) #()))
+                                       (not (empty-default-p field))))
+                                (not (empty-default-p field))))
                     (default  (proto-default field))
                     (default  (and defaultp
                                    (cond ((and (typep msg 'protobuf-enum)
@@ -553,7 +560,13 @@
                   (eq (proto-message-type msg) :group))
              (write-schema-as :lisp msg stream :indentation indentation :index index :arity required))
             (t
-             (let* ((defaultp (not (empty-default-p field)))
+             (let* ((defaultp (if (proto-alias-for message)
+                                (if (eq (proto-required field) :optional)
+                                  nil
+                                  (and (proto-default field)
+                                       (not (equalp (proto-default field) #()))
+                                       (not (empty-default-p field))))
+                                (not (empty-default-p field))))
                     (default  (proto-default field))
                     (default  (and defaultp
                                    (cond ((and (typep msg 'protobuf-enum)

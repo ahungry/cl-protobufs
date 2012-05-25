@@ -951,15 +951,16 @@
   (declare (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
   ;; Seven bits at a time, least significant bits first
-  (loop with val fixnum = 0
-        for places fixnum upfrom 0 by 7
-        for byte fixnum = (prog1 (aref buffer index) (iincf index))
-        do (setq val (ilogior val (iash (ildb (byte 7 0) byte) places)))
-        until (i< byte 128)
-        finally (progn
-                  (assert (< val #.(ash 1 32)) ()
-                          "The value ~D is longer than 32 bits" val)
-                  (return (values val index)))))
+  (let ((val 0))
+    (declare (type (unsigned-byte 32) val))
+    (loop for places fixnum upfrom 0 by 7
+          for byte fixnum = (prog1 (aref buffer index) (iincf index))
+          do (setq val (ilogior val (iash (ildb (byte 7 0) byte) places)))
+          until (i< byte 128)
+          finally (progn
+                    (assert (< val #.(ash 1 32)) ()
+                            "The value ~D is longer than 32 bits" val)
+                    (return (values val index))))))
 
 (defun decode-uint64 (buffer index)
   "Decodes the next 64-bit varint integer in the buffer at the given index.
@@ -969,12 +970,13 @@
   (declare (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
   ;; Seven bits at a time, least significant bits first
-  (loop with val = 0
-        for places fixnum upfrom 0 by 7
-        for byte fixnum = (prog1 (aref buffer index) (iincf index))
-        do (setq val (logior val (ash (ildb (byte 7 0) byte) places)))
-        until (i< byte 128)
-        finally (return (values val index))))
+  (let ((val 0))
+    (declare (type (unsigned-byte 64) val))
+    (loop for places fixnum upfrom 0 by 7
+          for byte fixnum = (prog1 (aref buffer index) (iincf index))
+          do (setq val (logior val (ash (ildb (byte 7 0) byte) places)))
+          until (i< byte 128)
+          finally (return (values val index)))))
 
 (defun decode-int32 (buffer index)
   "Decodes the next 32-bit varint integer in the buffer at the given index.

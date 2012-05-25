@@ -273,7 +273,7 @@
                            (setq index (skip-element buffer index tag))
                            ;;--- Check for mismatched wire type, running past end of buffer, etc
                            (cond ((and field (eq (proto-required field) :repeated))
-                                  (let ((vectorp (eq (proto-default field) $empty-vector)))
+                                  (let ((vectorp (vector-field-p field)))
                                     (cond ((and (proto-packed field) (packed-type-p type))
                                            (multiple-value-bind (values idx)
                                                (deserialize-packed type buffer index)
@@ -521,7 +521,7 @@
                (index  (proto-index field)))
           (when reader
             (cond ((eq (proto-required field) :repeated)
-                   (let ((iterator (if (eq (proto-default field) $empty-vector) 'dovector 'dolist)))
+                   (let ((iterator (if (vector-field-p field) 'dovector 'dolist)))
                      (cond ((and (proto-packed field) (packed-type-p class))
                             (collect-serializer
                              (let ((tag (make-tag class index)))
@@ -654,7 +654,7 @@
                              (multiple-value-bind (,vval idx)
                                  (deserialize-packed ,class ,vbuf ,vidx)
                                (setq ,vidx idx)
-                               ,@(when (eq (proto-default field) $empty-vector)
+                               ,@(when (vector-field-p field)
                                    `((setq ,vval (make-array (length ,vval)
                                                    :fill-pointer t :adjustable t
                                                    :initial-contents ,vval))))
@@ -758,7 +758,7 @@
                              for temp in rtemps
                              as slot = (proto-value field)
                              as writer = (proto-writer field)
-                             collect (cond ((eq (proto-default field) $empty-vector)
+                             collect (cond ((vector-field-p field)
                                             (if writer
                                               `(funcall ,writer ,vobj (make-array (length ,temp)
                                                                         :fill-pointer t :adjustable t
@@ -801,7 +801,7 @@
                (index  (proto-index field)))
           (when reader
             (cond ((eq (proto-required field) :repeated)
-                   (let ((iterator (if (eq (proto-default field) $empty-vector) 'dovector 'dolist)))
+                   (let ((iterator (if (vector-field-p field) 'dovector 'dolist)))
                      (cond ((and (proto-packed field) (packed-type-p class))
                             (collect-sizer
                              (let ((tag (make-tag class index)))

@@ -501,11 +501,19 @@
             (eq (proto-message-type f) :group)
             (eq (proto-message-type f) :extends))))
 
-(defmethod empty-default-p (field)
+(defmethod empty-default-p ((field protobuf-field))
   (let ((default (proto-default field)))
     (or (eq default $empty-default)
         (eq default $empty-list)
-        (eq default $empty-vector))))
+        (eq default $empty-vector)
+        ;; Special handling for imported CLOS classes
+        (and (not (eq (proto-required field) :optional))
+             (or (null default) (equal default #()))))))
+
+(defmethod vector-field-p ((field protobuf-field))
+  (let ((default (proto-default field)))
+    (or (eq default $empty-vector)
+        (and (vectorp default) (not (stringp default))))))
 
 
 ;; An extension range within a message

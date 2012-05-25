@@ -40,27 +40,35 @@
 #||
 ;; A pretty useful subset of geographic business data
 (defclass geodata ()
+  ;; This one stores the data in lists
   ((countries :type (proto:list-of qres-core::country) :initform () :initarg :countries)
    (regions :type (proto:list-of qres-core::region) :initform () :initarg :regions)
    (cities :type (proto:list-of qres-core::city) :initform () :initarg :cities)
    (airports :type (proto:list-of qres-core::airport) :initform () :initarg :airports)))
 
-(setq bizd-schema (proto:generate-schema-for-classes
-                   '(qres-core::country
-                     qres-core::region
-                     qres-core::region-key
-                     qres-core::city
-                     qres-core::airport
-                     qres-core::timezone
-                     qres-core::tz-variation
-                     qres-core::currency
-                     qres-core::country-currencies
-                     qres-core::carrier
-                     geodata)
-                   :install t))
+(defclass geodata-v ()
+  ;; This one stores the data in vectors
+  ((countries :type (proto:vector-of qres-core::country) :initform #() :initarg :countries)
+   (regions :type (proto:vector-of qres-core::region) :initform #() :initarg :regions)
+   (cities :type (proto:vector-of qres-core::city) :initform #() :initarg :cities)
+   (airports :type (proto:vector-of qres-core::airport) :initform #() :initarg :airports)))
 
-(proto:write-schema bizd-schema)
-(proto:write-schema bizd-schema :type :lisp)
+(setq *geodata* (proto:generate-schema-for-classes
+                 '(qres-core::country
+                   qres-core::region
+                   qres-core::region-key
+                   qres-core::city
+                   qres-core::airport
+                   qres-core::timezone
+                   qres-core::tz-variation
+                   qres-core::currency
+                   qres-core::country-currencies
+                   qres-core::carrier
+                   geodata geodata-v)
+                 :install t))
+
+(proto:write-schema *geodata*)
+(proto:write-schema *geodata* :type :lisp)
 
 ;; Load the data
 (let* ((countries (loop for v being the hash-values of (qres-core::country-business-data) collect (car v)))
@@ -71,7 +79,12 @@
                   :countries countries
                   :regions regions
                   :cities cities
-                  :airports airports)))
+                  :airports airports)
+        geodata-v (make-instance 'geodata-v
+                    :countries (make-array (length countries) :fill-pointer t :initial-contents countries)
+                    :regions (make-array (length regions) :fill-pointer t :initial-contents regions)
+                    :cities (make-array (length cities) :fill-pointer t :initial-contents cities)
+                    :airports (make-array (length airports) :fill-pointer t :initial-contents airports))))
 
 (dolist (class '(qres-core::country
                  qres-core::region
@@ -83,8 +96,8 @@
                  qres-core::currency
                  qres-core::country-currencies
                  qres-core::carrier
-                 geodata))
-  (let ((message (proto-impl:find-message bizd-schema class)))
+                 geodata geodata-v))
+  (let ((message (proto-impl:find-message *geodata* class)))
     (eval (proto-impl:generate-object-size  message))
     (eval (proto-impl:generate-serializer   message))
     (eval (proto-impl:generate-deserializer message))))
@@ -95,6 +108,15 @@
 (equalp gser (proto:serialize-object-to-stream
               (proto:deserialize-object 'geodata gser)
               'geodata :stream nil))
+
+(time (progn (setq gser-v (proto:serialize-object-to-stream geodata-v 'geodata-v :stream nil)) nil))
+(time (proto:deserialize-object 'geodata-v gser-v))
+
+(equalp gser-v (proto:serialize-object-to-stream
+                (proto:deserialize-object 'geodata-v gser-v)
+                'geodata-v :stream nil))
+
+(equalp gser gser-v)
 ||#
 
 

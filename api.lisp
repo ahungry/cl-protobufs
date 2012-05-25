@@ -110,10 +110,10 @@
 
 (defmethod reinitialize-object (object (message protobuf-message))
   (dolist (field (proto-fields message))
-    (reinitialize-field object field message))
+    (reinitialize-field object message field))
   object)
 
-(defmethod reinitialize-field (object field (message protobuf-message))
+(defmethod reinitialize-field (object (message protobuf-message) field)
   (macrolet ((write-slot (object slot writer value)
                `(if ,writer
                   (funcall ,writer ,object ,value)
@@ -129,9 +129,9 @@
                (slot-makunbound object slot)
                (write-slot object slot writer default)))))))
 
-(defmethod reinitialize-slot (object slot (message protobuf-message))
+(defmethod reinitialize-slot (object (message protobuf-message) slot)
   (let ((field (find slot (proto-fields message) :key #'proto-value)))
-    (reinitialize-field object field message)))
+    (reinitialize-field object message field)))
 
 
 ;;; A Python-like, Protobufs2-compatible API
@@ -209,8 +209,10 @@
              (buffer  (or buffer (make-byte-vector size))))
         (assert (>= (length buffer) size) ()
                 "The buffer ~S is not large enough to hold ~S" buffer object)
-        (serialize-object object type buffer start visited)
-        buffer))))
+        (multiple-value-bind (nbuf nend)
+            (serialize-object object type buffer start visited)
+        (declare (ignore nbuf))
+        nend)))))
 
 (defgeneric merge-from-array (object buffer &optional start end)
   (:documentation

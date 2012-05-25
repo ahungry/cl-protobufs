@@ -16,10 +16,10 @@
 
 (defvar *golden-directory*
   #.(make-pathname
-     :directory (pathname-directory (or *compile-file-truename* *load-truename*))))
+     :directory (pathname-directory (or *load-truename* *compile-file-truename*))))
 
-(defvar *golden-pathname* (merge-pathnames "golden.data" *golden-directory*)
-(defvar *serial-pathname* (merge-pathnames "serialized.data" *golden-directory*)
+(defvar *golden-pathname* (merge-pathnames "golden.data" *golden-directory*))
+(defvar *serial-pathname* (merge-pathnames "serialized.data" *golden-directory*))
 
 (qtest:define-test default-and-clear ()
   ;; Check that required strings are made unbound by 'clear'
@@ -41,11 +41,11 @@
     (proto:clear p)
     (qtest:assert-true (string-equal (pbtest::opt-string p) "opt"))
     (setf (pbtest::opt-string p) "x")
-    (proto:clear-field p 'opt-string)
+    (proto:clear-field p 'pbtest::opt-string)
     (qtest:assert-true (string-equal (pbtest::opt-string p) "opt"))))
 
 (qtest:define-test test-pb-write ()
-  (let ((p (make-instance 'pbtest::test1-proto)))
+  (let ((p (make-instance 'pbtest::test1proto)))
     ;; Default settings
     (qtest:assert-equal (pbtest::d-int32 p) 12)
     (qtest:assert-true (string-equal (pbtest::d-string p) "foo"))
@@ -54,7 +54,7 @@
     ;; Test is-initialized
     (qtest:assert-false (pbtest::is-initialized p))
     (setf (pbtest::o-a p) 20)
-    (qtest:assert-true (pbtest::is-initialized p))
+    (qtest:assert-false (pbtest::is-initialized p))
 
     ;; Set some unrepeated things
     (setf (pbtest::u-int32 p) 20)
@@ -67,102 +67,121 @@
     (setf (pbtest::u-double p) 3.14159265d0)
     (setf (pbtest::u-string p) "foo")
     (setf (pbtest::u-vardata p) "bar")
+    (setf (pbtest::u-msg p) (make-instance 'pbtest::test1msg))
     (setf (pbtest::foo (pbtest::u-msg p)) 12)
+    (qtest:assert-true (pbtest::is-initialized p))
 
     ;; Set some repeated things
-    (PUSH -20 (pbtest::r-int32 p))
-    (PUSH -30 (pbtest::r-int32 p))
-    (PUSH 20 (pbtest::r-int64 p))
-    (PUSH 30 (pbtest::r-int64 p))
-    (PUSH 12345678900 (pbtest::r-uint64 p))
-    (PUSH 98765432100 (pbtest::r-uint64 p))
-    (PUSH 12345 (pbtest::r-fixed32 p))
-    (PUSH 23456 (pbtest::r-fixed32 p))
-    (PUSH 12345678900 (pbtest::r-fixed64 p))
-    (PUSH 98765432100 (pbtest::r-fixed64 p))
-    (PUSH nil (pbtest::r-bool p))
-    (PUSH t (pbtest::r-bool p))
-    (PUSH 1.5f0 (pbtest::r-float p))
-    (PUSH -1.75f0 (pbtest::r-float p))
-    (PUSH 3.3d0 (pbtest::r-double p))
-    (PUSH -1.2d0 (pbtest::r-double p))
-    (PUSH "foo" (pbtest::r-string p))
-    (PUSH "bar" (pbtest::r-string p))
-    (PUSH "ping" (pbtest::r-vardata p))
-    (PUSH "pong" (pbtest::r-vardata p))
+    (push -30 (pbtest::r-int32 p))
+    (push -20 (pbtest::r-int32 p))
 
-    (let ((x (make-instance 'pbtest::test1-msg))
-          (y (make-instance 'pbtest::test1-msg)))
+    (push 30 (pbtest::r-int64 p))
+    (push 20 (pbtest::r-int64 p))
+
+    (push 98765432100 (pbtest::r-uint64 p))
+    (push 12345678900 (pbtest::r-uint64 p))
+
+    (push 23456 (pbtest::r-fixed32 p))
+    (push 12345 (pbtest::r-fixed32 p))
+
+    (push 98765432100 (pbtest::r-fixed64 p))
+    (push 12345678900 (pbtest::r-fixed64 p))
+
+    (push t (pbtest::r-bool p))
+    (push nil (pbtest::r-bool p))
+
+    (push -1.75f0 (pbtest::r-float p))
+    (push 1.5f0 (pbtest::r-float p))
+
+    (push -1.2d0 (pbtest::r-double p))
+    (push 3.3d0 (pbtest::r-double p))
+
+    (push "bar" (pbtest::r-string p))
+    (push "foo" (pbtest::r-string p))
+
+    (push "pong" (pbtest::r-vardata p))
+    (push "ping" (pbtest::r-vardata p))
+
+    (let ((x (make-instance 'pbtest::test1msg))
+          (y (make-instance 'pbtest::test1msg)))
       (setf (pbtest::foo x) 12)
       (setf (pbtest::foo y) 13)
-      (PUSH x (pbtest::r-msg p))
-      (PUSH y (pbtest::r-msg p)))
+      (push y (pbtest::r-msg p))
+      (push x (pbtest::r-msg p)))
 
-    (let ((x (make-instance 'pbtest::test1-proto-test-group1))
-          (y (make-instance 'pbtest::test1-proto-test-group2))
-          (z (make-instance 'pbtest::test1-proto-test-group2)))
+    (let ((x (make-instance 'pbtest::test-group1))
+          (y (make-instance 'pbtest::test-group2))
+          (z (make-instance 'pbtest::test-group2)))
       (setf (pbtest::a x) 80)
       (setf (pbtest::b y) 100)
       (setf (pbtest::b z) 130)
-      (PUSH x (pbtest::test-group1 p))
-      (PUSH y (pbtest::test-group2 p))
-      (PUSH z (pbtest::test-group2 p)))
+      (push z (pbtest::test-group2 p))
+      (push y (pbtest::test-group2 p))
+      (push x (pbtest::test-group1 p)))
 
     ;; int32 tests
     (loop for x in (list (1- (ash 1 31)) (- (ash 1 31)) 1 0 -1)
-          do (PUSH x (pbtest::r-int32 p)))
+          do (setf (pbtest::r-int32 p) (append (pbtest::r-int32 p) (list x))))
 
     ;; int64 tests
     (loop for x in (list (1- (ash 1 63)) (- (ash 1 63)) 1 0 -1)
-          do (PUSH x (pbtest::r-int64 p)))
+          do (setf (pbtest::r-int64 p) (append (pbtest::r-int64 p) (list x))))
 
     ;; fixed32 tests
     (loop for x in (list #xffffffff (1- (ash 1 31)) 0 1)
-          do (PUSH x (pbtest::r-fixed32 p)))
+          do (setf (pbtest::r-fixed32 p) (append (pbtest::r-fixed32 p) (list x))))
 
     ;; fixed64 tests
     (loop for x in (list #xffffffffffffffff (1- (ash 1 63)) 0 1)
-          do (PUSH x (pbtest::r-fixed64 p)))
+          do (setf (pbtest::r-fixed64 p) (append (pbtest::r-fixed64 p) (list x))))
 
     ;; uint64 tests
     (loop for x in (list (1- (ash 1 64)) (1- (ash 1 63)) 0 1)
-          do (PUSH x (pbtest::r-uint64 p)))
+          do (setf (pbtest::r-uint64 p) (append (pbtest::r-uint64 p) (list x))))
 
     ;; write buffer to a file
     (let ((size (proto:octet-size p)))
-      (let* ((output-buffer (make-byte-vector size))
-             (end (proto:serialize p output-buffer 0 size)))
+      (let* ((buffer (make-byte-vector size))
+             (end (proto:serialize p buffer 0 size)))
         (qtest:assert-equal end size)
-        (with-open-file (output-stream +test-file-name+ :direction :output
-                         :if-exists :supersede :element-type 'unsigned-byte)
-          (write-sequence output-buffer output-stream)))
+        (with-open-file (output-stream *serial-pathname*
+                         :direction :output
+                         :if-exists :supersede
+                         :element-type '(unsigned-byte 8))
+          (write-sequence buffer output-stream)))
 
       ;; check against the golden data
-      (with-open-file (golden-input +golden-file-name+ :direction :input
-                       :element-type 'unsigned-byte)
+      (with-open-file (golden-input *golden-pathname*
+                       :direction :input
+                       :element-type '(unsigned-byte 8))
         (qtest:assert-equal (file-length golden-input) size)
-        (with-open-file (test-input +test-file-name+ :direction :input
-                         :element-type 'unsigned-byte)
+        (with-open-file (test-input *serial-pathname*
+                         :direction :input
+                         :element-type '(unsigned-byte 8))
           (qtest:assert-equal (file-length test-input) size)
-          (let ((golden-buffer (make-byte-vector size))
+          (let ((golden-buffer (make-byte-vector (file-length test-input)))
                 (test-buffer (make-byte-vector size)))
             (read-sequence golden-buffer golden-input)
             (read-sequence test-buffer test-input)
-            (qtest:assert-true (equalp golden-buffer test-buffer))))))
+            (qtest:assert-true (equalp golden-buffer test-buffer))
+	    (DESCRIBE P)
+	    (DESCRIBE (DESERIALIZE-OBJECT (TYPE-OF P) TEST-BUFFER))
+	    (DESCRIBE (DESERIALIZE-OBJECT (TYPE-OF P) GOLDEN-BUFFER))))))
 
     ;; clean up
-    (delete-file +test-file-name+)))
+    (delete-file *serial-pathname*)))
 
 (qtest:define-test test-pb-read ()
   (let ((p (make-instance 'pbtest::Test1-Proto)))
-    (with-open-file (golden-input +golden-file-name+ :direction :input
-                     :element-type 'unsigned-byte)
+    (with-open-file (golden-input *golden-pathname*
+                     :direction :input
+                     :element-type '(unsigned-byte 8))
       (let* ((size (file-length golden-input))
              (buffer (make-byte-vector size)))
         (read-sequence buffer golden-input)
         (qtest:assert-equal (proto:merge-from-array p buffer 0 size) size)))
 
-    (flet ((test-repeated (value golden))
+    (flet ((test-repeated (value golden)
             (let ((golden-size (length golden)))
               (qtest:assert-equal (length value) golden-size)
               (loop for v across value
@@ -173,12 +192,12 @@
                               (qtest:assert-equal v g))
                              ((and (numberp v) (numberp g)) (qtest:assert-equal v g))
                              ((and (arrayp v) (arrayp g)) (qtest:assert-true (equalp v g)))
-                             (t (assert (progn "type mismatch" nil)))))))
+                             (t (assert (progn "type mismatch" nil))))))))
 
       ;; unrepeated things
-      (qtest:assert-true (pbtest::has-o-a p))
+      (qtest:assert-true (proto:has-field p 'pbtest::o-a))
       (qtest:assert-equal (pbtest::o-a p) 20)
-      (qtest:assert-false (pbtest::has-o-b p))
+      (qtest:assert-false (proto:has-field p 'pbtest::o-b))
       (qtest:assert-equal (pbtest::u-int32 p) 20)
       (qtest:assert-equal (pbtest::u-int64 p) -20)
       (qtest:assert-equal (pbtest::u-uint64 p) 12345678900)

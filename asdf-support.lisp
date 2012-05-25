@@ -43,7 +43,9 @@
   (let ((schema (parse-schema-from-file protobuf-file)))
     (with-open-file (stream lisp-file
                      :direction :output
-                     :if-exists :supersede)
+                     :if-exists :supersede
+                     :external-format :utf-8
+                     :element-type 'character)
       (write-schema schema :stream stream :type :lisp)))
   lisp-file)
 

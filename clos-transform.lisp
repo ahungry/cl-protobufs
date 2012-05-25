@@ -164,14 +164,14 @@
                             :type  (if enum (class-name->proto ename) type)
                             :class (if enum etype pclass)
                             :required reqd
-                            :index index
-                            :value   (slot-definition-name slot)
-                            :reader  (let ((reader (find-slot-definition-reader class slot)))
-                                       ;; Only use the reader if it is "interesting"
-                                       (unless (string= (symbol-name reader)
-                                                        (format nil "~A-~A" 
-                                                                (class-name class) (slot-definition-name slot)))
-                                         reader))
+                            :index  index
+                            :value  (slot-definition-name slot)
+                            :reader (let ((reader (find-slot-definition-reader class slot)))
+                                      ;; Only use the reader if it is "interesting"
+                                      (unless (string= (symbol-name reader)
+                                                       (format nil "~A-~A" 
+                                                               (class-name class) (slot-definition-name slot)))
+                                        reader))
                             :default default
                             :packed  packed)))
             (values field nil enum)))))))

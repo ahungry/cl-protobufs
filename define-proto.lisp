@@ -471,7 +471,7 @@
                                  `(:type (list-of ,type)
                                    :initform ())))
                             ,@(and reader
-                                   `(:reader ,reader))
+                                   `(:accessor ,reader))
                             :initarg ,(kintern (symbol-name slot)))))
          (mfield  (make-instance 'protobuf-field
                     :name  (slot-name->proto slot)
