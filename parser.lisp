@@ -638,7 +638,8 @@
                  (maybe-skip-comments stream)))
          (service (make-instance 'protobuf-service
                     :class (proto->class-name name *protobuf-package*)
-                    :name name)))
+                    :name name))
+         (index 0))
     (loop
       (let ((token (parse-token stream)))
         (when (null token)
@@ -649,12 +650,12 @@
         (cond ((string= token "option")
                (parse-proto-option stream service))
               ((string= token "rpc")
-               (parse-proto-method stream service))
+               (parse-proto-method stream service (iincf index)))
               (t
                (error "Unrecognized token ~A at position ~D"
                       token (file-position stream))))))))
 
-(defun parse-proto-method (stream service)
+(defun parse-proto-method (stream service index)
   "Parse a Protobufs method from 'stream'.
    Updates the 'protobuf-service' object to have the method."
   (check-type service protobuf-service)
@@ -678,6 +679,7 @@
                    :input-name  in
                    :output-type (proto->class-name out *protobuf-package*)
                    :output-name out
+                   :index index
                    :options opts)))
     (let ((name (find-option method "lisp_name")))
       (when name

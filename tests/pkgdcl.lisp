@@ -15,7 +15,9 @@
 
 (defpackage protobufs-test
   (:use :common-lisp :protobufs :protobufs-implementation)
-  (:nicknames :proto-test))
+  (:nicknames :proto-test)
+  (:shadowing-import-from :protobufs-implementation
+   "FIND-METHOD"))
 
 (defpackage protobuf-unittest
   (:use :common-lisp :protobufs)

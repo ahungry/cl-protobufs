@@ -28,7 +28,7 @@
     :maintainer '("Scott McKay")
     :description      "Protobufs for Common Lisp"
     :long-description "Protobufs for Common Lisp"
-    :depends-on (:cl-ppcre :closer-mop :split-sequence :drakma :cl-unicode)
+    :depends-on (:closer-mop :babel)
     :serial t
     :components
       ((:module "packages"
@@ -75,4 +75,4 @@
                    (:file "asdf-support")
                    (:file "examples")))))
 
-
+(pushnew :protobufs *features*)

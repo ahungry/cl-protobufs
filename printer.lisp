@@ -80,10 +80,20 @@
 
 (defvar *option-types* '(("optimize_for"          symbol)
                          ("deprecated"            symbol)
+                         ;; Keep the rest of these in alphabetical order
+                         ("cc_api_version"       integer)
                          ("cc_generic_services"   symbol)
+                         ("ctype"                 symbol)
+                         ("go_package"            string)
+                         ("java_api_version"     integer)
                          ("java_generic_services" symbol)
-                         ("py_generic_services"   symbol)
-                         ("ctype"                 symbol)))
+                         ("java_java5_enums"     boolean)
+                         ("java_multiple_files"  boolean)
+                         ("java_outer_classname"  string)
+                         ("java_package"          string)
+                         ("java_use_javaproto2"  boolean)
+                         ("py_api_version"       integer)
+                         ("py_generic_services"   symbol)))
 
 (defmethod write-schema-header ((type (eql :proto)) (schema protobuf-schema) stream)
   (when (any-lisp-option schema)

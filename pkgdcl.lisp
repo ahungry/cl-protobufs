@@ -116,6 +116,8 @@
   (:nicknames :proto-impl)
   (:use :common-lisp :protobufs)
 
+  (:shadow
+   "FIND-METHOD")
   (:import-from :closer-mop
    "CLASS-SLOTS"
    "CLASS-DIRECT-SLOTS"
@@ -171,11 +173,13 @@
    ;; Object lookup
    "*ALL-SCHEMAS*"
    "*ALL-MESSAGES*"
-   "FIND-SCHEMA"
-   "FIND-MESSAGE-FOR-CLASS"
-   "FIND-MESSAGE"
    "FIND-ENUM"
    "FIND-FIELD"
+   "FIND-MESSAGE"
+   "FIND-MESSAGE-FOR-CLASS"
+   "FIND-METHOD"                ;if you ":use proto-impl", watch for name clash
+   "FIND-SCHEMA"
+   "FIND-SERVICE"
    "FIND-OPTION"
    "REMOVE-OPTIONS"
 

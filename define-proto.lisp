@@ -322,7 +322,7 @@
                 (setf (proto-parent model) extends)
                 (setf (proto-messages extends) (nconc (proto-messages extends) (list model)))
                 (when extra-slot
-                  ;;--- Fix all this duplicated code!
+                  ;;--- Refactor to get rid of all this duplicated code!
                   (let* ((inits  (cdr extra-slot))
                          (sname  (car extra-slot))
                          (stable (fintern "~A-VALUES" sname))
@@ -630,7 +630,8 @@
                     :class type
                     :name  name
                     :options options
-                    :documentation documentation)))
+                    :documentation documentation))
+         (index 0))
     (with-collectors ((forms collect-form))
       (dolist (method method-specs)
         (destructuring-bind (function (input-type output-type) &key name options documentation) method
@@ -651,6 +652,7 @@
                             :input-name  (or input-name (class-name->proto input-type))
                             :output-type output-type
                             :output-name (or output-name (class-name->proto output-type))
+                            :index (iincf index)
                             :options options
                             :documentation documentation)))
             (setf (proto-methods service) (nconc (proto-methods service) (list method)))

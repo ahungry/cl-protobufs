@@ -332,6 +332,7 @@
    (eql    (proto-output-type method1) (proto-output-type method2))
    (equalp (proto-input-name method1) (proto-input-name method2))
    (equalp (proto-output-name method1) (proto-output-name method2))
+   (eql    (proto-index method1) (proto-index method2))
    (= (length (proto-options method1)) (length (proto-options method2)))
    (loop for option1 in (proto-options method1)
          as option2 = (find (proto-name option1) (proto-options method2)

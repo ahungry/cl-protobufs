@@ -88,11 +88,41 @@
   (let ((words (split-string string :separators separators)))
     (format nil "~(~A~)~{~@(~A~)~}" (car words) (cdr words))))
 
-;; (uncamel-case "CamelCase") => "Camel-Case"
-;; (uncamel-case "TCPConnection") => "Tcp-Connection"
-(defun uncamel-case (string &optional (separator #\-))
-  (format nil (format nil "~~{~~A~~^~C~~}" separator)
-          (cl-ppcre:split "(?<=[a-z])(?=[A-Z])" string)))
+
+;; (uncamel-case "CamelCase") => "CAMEL-CASE"
+;; (uncamel-case "TCPConnection") => "TCP-CONNECTION"
+;; (uncamel-case "NewTCPConnection") => "NEW-TCP-CONNECTION"
+;; (uncamel-case "new_RPC_LispService") => "NEW-RPC-LISP-SERVICE"
+;; (uncamel-case "RPC_LispServiceRequest_get_request") => "RPC-LISP-SERVICE-REQUEST-GET-REQUEST"
+;; (uncamel-case "TCP2Name3") => "TCP2-NAME3"
+(defun uncamel-case (name)
+  ;; We need a whole state machine to get this right
+  (labels ((uncamel (chars state result)
+             (let ((ch (first chars)))
+               (cond ((null chars)
+                      result)
+                     ((upper-case-p ch)
+                      (uncamel (rest chars) 'upper
+                               (case state
+                                 ((upper)
+                                  ;; "TCPConnection" => "TCP-CONNECTION"
+                                  (if (and (second chars) (lower-case-p (second chars)))
+                                    (list* ch #\- result)
+                                    (cons ch result)))
+                                 ((lower digit) (list* ch #\- result))
+                                 (otherwise (cons ch result)))))
+                     ((lower-case-p ch)
+                      (uncamel (rest chars) 'lower
+                               (cons (char-upcase ch) result)))
+                     ((digit-char-p ch)
+                      (uncamel (rest chars) 'digit 
+                               (cons ch result)))
+                     ((eql ch #\_)
+                      (uncamel (rest chars) '_
+                               (cons #\- result)))
+                     (t
+                      (error "Invalid name character: ~A" ch))))))
+    (concatenate 'string (nreverse (uncamel (concatenate 'list name) nil ())))))
 
 
 (defun split-string (line &key (start 0) (end (length line)) (separators '(#\-)))
@@ -303,7 +333,7 @@
 (defun proto->class-name (x &optional package)
   "Given a Protobufs message or enum type name, returns a Lisp class or type name.
    This resolves Protobufs qualified names as best as it can."
-  (let* ((xs (split-string (substitute #\- #\_ (string-upcase (uncamel-case x)))
+  (let* ((xs (split-string (substitute #\- #\_ (uncamel-case x))
                            :separators '(#\.)))
          (pkg (and (cdr xs) (find-package (first xs))))
          (package (or pkg package))
@@ -316,7 +346,7 @@
 (defun proto->enum-name (x &optional package)
   "Given a Protobufs enum value name, returns a Lisp enum value name.
    This resolves Protobufs qualified names as best as it can."
-  (let* ((xs (split-string (substitute #\- #\_ (string-upcase (uncamel-case x)))
+  (let* ((xs (split-string (substitute #\- #\_ (uncamel-case x))
                            :separators '(#\.)))
          (pkg (and (cdr xs) (find-package (first xs))))
          (package (or pkg package))
@@ -329,7 +359,7 @@
 (defun proto->slot-name (x &optional package)
   "Given a Protobufs field value name, returns a Lisp slot name.
    This resolves Protobufs qualified names as best as it can."
-  (let* ((xs (split-string (substitute #\- #\_ (string-upcase (uncamel-case x)))
+  (let* ((xs (split-string (substitute #\- #\_ (uncamel-case x))
                            :separators '(#\.)))
          (pkg (and (cdr xs) (find-package (first xs))))
          (package (or pkg package))

@@ -76,7 +76,7 @@
    "The base class for all Protobufs model classes."))
 
 
-;; A protobuf schema, corresponds to one .proto file
+;; A Protobufs schema, corresponds to one .proto file
 (defclass protobuf-schema (base-protobuf)
   ((syntax :type (or null string)               ;syntax, passed on but otherwise ignored
            :accessor proto-syntax
@@ -144,9 +144,30 @@
     (format stream "~@[~S~]~@[ (package ~A)~]"
             (proto-class s) (proto-package s))))
 
+(defgeneric find-enum (protobuf type)
+  (:documentation
+   "Given a Protobufs schema or message and the name of an enum type,
+    returns the Protobufs enum corresponding to the type."))
+
+(defmethod find-enum ((schema protobuf-schema) (type symbol))
+  (labels ((find-it (schema)
+             (let ((enum (find type (proto-enums schema) :key #'proto-class)))
+               (when enum
+                 (return-from find-enum enum))
+               (map () #'find-it (proto-imported-schemas schema)))))
+    (find-it schema)))
+
+(defmethod find-enum ((schema protobuf-schema) (name string))
+  (labels ((find-it (schema)
+             (let ((enum (find name (proto-enums schema) :key #'proto-name :test #'string=)))
+               (when enum
+                 (return-from find-enum enum))
+               (map () #'find-it (proto-imported-schemas schema)))))
+    (find-it schema)))
+
 (defgeneric find-message (protobuf type)
   (:documentation
-   "Given a protobuf schema or message and a type name or class name,
+   "Given a Protobufs schema or message and a type name or class name,
     returns the Protobufs message corresponding to the type."))
 
 (defmethod find-message ((schema protobuf-schema) (type symbol))
@@ -171,26 +192,15 @@
                (map () #'find-it (proto-imported-schemas schema)))))
     (find-it schema)))
 
-(defgeneric find-enum (protobuf type)
+(defgeneric find-service (protobuf name)
   (:documentation
-   "Given a protobuf schema or message and the name of an enum type,
-    returns the Protobufs enum corresponding to the type."))
+   "Given a Protobufs schema,returns the Protobufs service of the given name."))
 
-(defmethod find-enum ((schema protobuf-schema) type)
-  (labels ((find-it (schema)
-             (let ((enum (find type (proto-enums schema) :key #'proto-class)))
-               (when enum
-                 (return-from find-enum enum))
-               (map () #'find-it (proto-imported-schemas schema)))))
-    (find-it schema)))
+(defmethod find-service ((schema protobuf-schema) (name symbol))
+  (find name (proto-services schema) :key #'proto-class))
 
-(defmethod find-enum ((schema protobuf-schema) (name string))
-  (labels ((find-it (schema)
-             (let ((enum (find name (proto-enums schema) :key #'proto-name :test #'string=)))
-               (when enum
-                 (return-from find-enum enum))
-               (map () #'find-it (proto-imported-schemas schema)))))
-    (find-it schema)))
+(defmethod find-service ((schema protobuf-schema) (name string))
+  (find name (proto-services schema) :key #'proto-name :test #'string=))
 
 
 ;; We accept and store any option, but only act on a few: default, packed,
@@ -218,7 +228,7 @@
 
 (defgeneric find-option (protobuf name)
   (:documentation
-   "Given a protobuf schema, message, enum, etc and the name of an option,
+   "Given a Protobufs schema, message, enum, etc and the name of an option,
     returns the value of the option and its (Lisp) type. The third value is
     true if an option was found, otherwise it is false."))
 
@@ -236,7 +246,7 @@
 
 (defgeneric remove-options (protobuf &rest names)
   (:documentation
-   "Given a protobuf schema, message, enum, etc and a set of option names,
+   "Given a Protobufs schema, message, enum, etc and a set of option names,
     remove all of those options from the set of options."))
 
 (defmethod remove-options ((protobuf base-protobuf) &rest names)
@@ -263,7 +273,7 @@
     (string= name1 name2 :start1 start1 :end1 end1 :start2 start2 :end2 end2)))
 
 
-;; A protobuf enumeration
+;; A Protobufs enumeration
 (defclass protobuf-enum (base-protobuf)
   ((alias :type (or null symbol)                ;use this if you want to make this enum
           :accessor proto-alias-for             ;  be an alias for an existing Lisp enum
@@ -285,13 +295,13 @@
             (proto-class e) (proto-alias-for e))))
 
 
-;; A protobuf value within an enumeration
+;; A Protobufs value within an enumeration
 (defclass protobuf-enum-value (base-protobuf)
-  ((index :type (integer #.(- (ash 1 31)) #.(1- (ash 1 31)))
-          :accessor proto-index                 ;the index of the enum value
+  ((index :type (signed-byte 32)                ;the numeric value of the enum
+          :accessor proto-index
           :initarg :index)
-   (value :type (or null symbol)
-          :accessor proto-value                 ;the Lisp value of the enum
+   (value :type (or null symbol)                ;the Lisp value of the enum
+          :accessor proto-value
           :initarg :value
           :initform nil))
   (:documentation
@@ -306,7 +316,7 @@
             (proto-name v) (proto-index v))))
 
 
-;; A protobuf message
+;; A Protobufs message
 (defclass protobuf-message (base-protobuf)
   ((parent :type (or protobuf-schema protobuf-message)
            :accessor proto-parent
@@ -405,7 +415,7 @@
 
 (defgeneric find-field (message name)
   (:documentation
-   "Given a protobuf message and a slot name, field name or index,
+   "Given a Protobufs message and a slot name, field name or index,
     returns the Protobufs field having that name."))
 
 (defmethod find-field ((message protobuf-message) (name symbol))
@@ -446,7 +456,7 @@
 (defconstant $empty-list    'empty-list)
 (defconstant $empty-vector  'empty-vector)
 
-;; A protobuf field within a message
+;; A Protobufs field within a message
 ;;--- Support the 'deprecated' option (have serialization ignore such fields?)
 (defclass protobuf-field (base-protobuf)
   ((type :type string                           ;the name of the Protobuf type for the field
@@ -455,8 +465,8 @@
    (required :type (member :required :optional :repeated)
              :accessor proto-required
              :initarg :required)
-   (index :type (integer 1 #.(1- (ash 1 29)))   ;the index number for this field
-          :accessor proto-index
+   (index :type (unsigned-byte 29)              ;the index number for this field
+          :accessor proto-index                 ; which must be strictly positive
           :initarg :index)
    (value :type (or null symbol)                ;the Lisp slot holding the value within an object
           :accessor proto-value                 ;this also serves as the Lisp field name
@@ -488,8 +498,9 @@
 (defmethod initialize-instance :after ((field protobuf-field) &rest initargs)
   (declare (ignore initargs))
   (when (slot-boundp field 'index)
-    (assert (not (<= 19000 (proto-index field) 19999)) ()
-            "Protobuf field indexes between 19000 and 19999 are not allowed")))
+    (assert (and (plusp (proto-index field))
+                 (not (<= 19000 (proto-index field) 19999))) ()
+            "Protobuf field indexes must be positive and not between 19000 and 19999 (inclusive)")))
 
 (defmethod make-load-form ((f protobuf-field) &optional environment)
   (make-load-form-saving-slots f :environment environment))
@@ -536,7 +547,7 @@
             (proto-extension-from e) (proto-extension-from e))))
 
 
-;; A protobuf service
+;; A Protobufs service
 (defclass protobuf-service (base-protobuf)
   ((methods :type (list-of protobuf-method)     ;the methods in the service
             :accessor proto-methods
@@ -553,8 +564,22 @@
     (format stream "~A"
             (proto-name s))))
 
+(defgeneric find-method (service name)
+  (:documentation
+   "Given a Protobufs service and a method name,
+    returns the Protobufs method having that name."))
 
-;; A protobuf method within a service
+(defmethod find-method ((service protobuf-service) (name symbol))
+  (find name (proto-methods service) :key #'proto-class))
+
+(defmethod find-method ((service protobuf-service) (name string))
+  (find name (proto-methods service) :key #'proto-name :test #'string=))
+
+(defmethod find-method ((service protobuf-service) (index integer))
+  (find index (proto-methods service) :key #'proto-index))
+
+
+;; A Protobufs method within a service
 (defclass protobuf-method (base-protobuf)
   ((itype :type (or null symbol)                ;the Lisp type name of the input
            :accessor proto-input-type
@@ -571,7 +596,10 @@
    (oname :type (or null string)                ;the Protobufs name of the output
           :accessor proto-output-name
           :initarg :output-name
-          :initform nil))
+          :initform nil)
+   (index :type (unsigned-byte 32)              ;an identifying index for this method
+          :accessor proto-index                 ; (used by Stubby)
+          :initarg :index))
   (:documentation
    "The model class that represents one method with a Protobufs service."))
 
