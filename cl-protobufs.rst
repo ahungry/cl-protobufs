@@ -49,9 +49,9 @@ Implementation notes
 --------------------
 
 The Protobufs library defines a set of model classes that describes a
-protobufs "schema" (i.e., one .proto file). There is a class that
-describes a schema, its options, enums and enum values, messages and
-fields, and services and methods.
+protobufs "schema" (i.e., one .proto file). These classes describe a
+schema, its options, enums and enum values, messages and fields, and
+services and methods.
 
 The library provides the means to convert several kinds of inputs into
 the Protobufs models, including:
@@ -154,7 +154,8 @@ If you have an existing .proto source file that you would like to
 convert to Lisp classes (more precisely, to the macros defined by the
 Protobufs library), you can use ``proto:parse-schema-from-file`` to
 read the .proto file and then use ``proto:write-schema`` to write a
-new .lisp file. (This is what that ASDF module type ``:proto`` does.)
+new .lisp file. (This is what that ASDF module type ``:protobuf-file``
+does.)
 
 ::
 
@@ -280,13 +281,14 @@ as for ``proto:generate-schema-for-classes``.
 Using .proto files directly
 ---------------------------
 
-In addition to using the tools described above to convert between .proto
-files and .lisp files, you can also use .proto files directly in ASDF
-systems. Just use the ASDF module type ``:proto`` in your system, and
-compile and load the system in the usual way. This will create both the
-Protobufs model and the Lisp classes that correspond to the Protobufs
-messages. (Note that it will also leave a .lisp file having the same
-name as the .proto file in the file system.)
+In addition to using the tools described above to convert between
+.proto files and .lisp files, you can also use .proto files directly
+in ASDF systems. Just use the ASDF module type ``:protobuf-file`` in
+your system, and compile and load the system in the usual way. This
+will create both the Protobufs model and the Lisp classes that
+correspond to the Protobufs messages. (Note that it will also leave a
+.lisp file having the same name as the .proto file in the file
+system.)
 
 
 Using the Protobufs macros
@@ -325,19 +327,11 @@ following macros. For example::
 
 This will create the Protobufs model objects, Lisp classes and enum
 types that correspond to the model. The .proto file of the same schema
-looks like this::
+looks something like this::
 
   syntax = "proto2";
 
   package com.google.colorwheel;
-
-  import "net/proto2/proto/descriptor.proto";
-
-  extend proto2.MessageOptions {
-    optional string lisp_package = 195801;
-    optional string lisp_name = 195802;
-    optional string lisp_alias = 195803;
-  }
 
   option (lisp_package) = "color-wheel";
 
@@ -379,7 +373,8 @@ looks like this::
 
 Note that Lisp types ``(or null <T>)`` turn into optional fields,
 and Lisp types ``(proto:list-of <T>)`` and ``(proto:vector-of <T>)``
-turn into repeated fields.
+turn into repeated fields representing by lists or vectors,
+respectively.
 
 ::
 

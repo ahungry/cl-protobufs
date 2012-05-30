@@ -253,7 +253,6 @@
 
 ;;; The parser itself
 
-(defvar *protobuf-conc-name* nil)
 (defun parse-schema-from-file (filename &key name class (conc-name ""))
   "Parses the named file as a .proto file, and returns the Protobufs schema."
   (with-open-file (stream filename

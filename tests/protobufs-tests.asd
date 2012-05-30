@@ -47,34 +47,34 @@
                  (:file "stability-tests")))
 
        ;; Bob Brown's protocol buffers tests
-       #+++notyet
        (:module "brown-tests-proto"
                 :serial t
                 :pathname #p""
                 :components
-                  ((:protobuf "testproto1")
-                   (:protobuf "testproto2")))
-       #+++notyet
+                  ((:protobuf-file "testproto1")
+                   (:protobuf-file "testproto2")))
        (:module "brown-tests"
                 :serial t
                 :pathname #p""
-                :depends-on ("wire-level-tests" "object-level-tests" "brown-tests-proto")
+                :depends-on ("object-level-tests" "brown-tests-proto")
                 :components
-                  ((:file "testproto1")         ;.lisp, generated above
-                   (:file "testproto2")         ;.lisp, generated above
-                   (:file "quick-tests" :depends-on ("testproto1" "testproto2"))
+                  ((:file "quick-tests")
                    (:static-file "golden.data")))
-
        ;; Google's own protocol buffers and protobuf definitions tests
+       #+++notyet
+       (:module "google-tests-proto"
+                :serial t
+                :pathname #p""
+                :components
+                  ((:protobuf-file "descriptor")
+                   (:protobuf-file "unittest_import")
+                   (:protobuf-file "unittest" :depends-on ("unittest_import"))))
        #+++notyet
        (:module "google-tests"
                 :serial t
                 :pathname #p""
-                :depends-on ("brown-tests")
+                :depends-on ("object-level-tests" "google-tests-proto")
                 :components
-                  ((:protobuf "descriptor")
-                   (:protobuf "unittest_import")
-                   (:protobuf "unittest" :depends-on ("unittest_import"))
-                   (:file "full-tests" :depends-on ("unittest"))
+                  ((:file "full-tests")
                    (:static-file "golden_message.data")
                    (:static-file "golden_packed_message.data")))))

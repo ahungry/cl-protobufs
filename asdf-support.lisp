@@ -8,36 +8,137 @@
 ;;;                                                                  ;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(in-package "PROTO-IMPL")
+(in-package "ASDF")
 
 
-(eval-when (:compile-toplevel :load-toplevel :execute)
-
-(defclass protobuf-file (asdf:cl-source-file)
-  ((asdf::type :initform "protobuf"))
+(defclass protobuf-file (cl-source-file)
+  ((type :initform "proto")             ;default file type
+   (relative-pathname :reader proto-relative-pathname
+                      :initform nil
+                      :initarg :relative-pathname)
+   (search-path :reader proto-search-path
+                :initform ()
+                :initarg :search-path))
   (:documentation
    "This ASDF component defines COMPILE-OP and LOAD-OP operations
-    that compiles the .proto file into a .lisp file, and the compiles
-    the resulting .lisp file into a fasl."))
+    that compiles the .proto file into a .lisp file. You must then
+    compile the generated .lisp file in another module."))
 
-)       ;eval-when
+(defclass proto-to-lisp (compile-op) ())
 
-(defmethod asdf:output-files ((op asdf:compile-op) (c protobuf-file))
-  (append (call-next-method)
-          (make-pathname :type "lisp" :defaults (asdf:component-pathname c))))
+(defmethod component-depends-on ((op compile-op) (component protobuf-file))
+  "Compiling a protocol buffer file depends on generating Lisp source code for it."
+  (if (typep op 'proto-to-lisp)
+    (call-next-method)
+    `((proto-to-lisp ,(component-name component))
+      ,@(call-next-method))))
 
-(defmethod asdf:perform ((op asdf:compile-op) (c protobuf-file))
-  (destructuring-bind (fasl-file lisp-file)
-      (asdf:output-files op c)
-    (funcall asdf::*compile-op-compile-file-function*
-             (parse-protobuf-file (asdf:component-pathname c) lisp-file)
-             :output-file fasl-file)))
+(defmethod component-depends-on ((op load-op) (component protobuf-file))
+  "Loading a protocol buffer file depends on generating Lisp source code for it."
+  `((proto-to-lisp ,(component-name component))
+    ,@(call-next-method)))
 
-(defmethod asdf:perform ((op asdf:load-source-op) (c protobuf-file))
-  (destructuring-bind (fasl-file lisp-file)
-      (asdf:output-files op c)
-    (declare (ignore fasl-file))
-    (load (parse-protobuf-file (asdf:component-pathname c) lisp-file))))
+(defmethod component-self-dependencies :around ((op load-op) (component protobuf-file))
+  (remove-if #'(lambda (x)
+                 (eq (car x) 'proto-to-lisp))
+             (call-next-method)))
+
+(defmethod protobuf-input-file ((component protobuf-file))
+  "Returns the pathname of the protocol buffer definition file that must be
+   translated into Lisp source code for this PROTO-FILE component."
+  (if (proto-relative-pathname component)
+    ;; Path was specified with ':relative-pathname'
+    (merge-pathnames
+      (make-pathname :type "proto")
+      (merge-pathnames (pathname (proto-relative-pathname component))
+                        (component-pathname (component-parent component))))
+    ;; No ':relative-pathname', the  path of the protobuf file
+    ;; defaults to that of the Lisp file with a ".proto" suffix
+    (merge-pathnames
+      (make-pathname :type "proto")
+      (component-pathname component))))
+
+(defmethod resolve-search-path ((component protobuf-file))
+  (let* ((search-path (proto-search-path component))
+         (parent-path (component-pathname (component-parent component))))
+    (mapcar #'(lambda (path)
+                (resolve-relative-pathname path parent-path))
+            search-path)))
+
+(defun resolve-relative-pathname (path parent-path)
+  "When 'path' doesn't have an absolute directory component,
+   treat it as relative to 'parent-path'."
+  (let* ((pathname  (pathname path))
+         (directory (pathname-directory pathname)))
+    (if (and (list directory) (eq (car directory) :absolute))
+      pathname
+      (let ((resolved-path (merge-pathnames pathname parent-path)))
+        (make-pathname :directory (pathname-directory resolved-path)
+                       :name nil
+                       :type nil
+                       :defaults resolved-path)))))
+
+(defmethod input-files ((op proto-to-lisp) (component protobuf-file))
+  (list (protobuf-input-file component)))
+
+(defmethod output-files ((op proto-to-lisp) (component protobuf-file))
+  (values (list (component-pathname component))
+          nil))
+
+(defmethod perform ((op proto-to-lisp) (component protobuf-file))
+  (let* ((input  (protobuf-input-file component))
+         (output (first (output-files op component)))
+         (paths  (cons (directory-namestring input) (resolve-search-path component))))
+    (dolist (path paths (error 'compile-failed
+                               :component component :operation op))
+      (let ((source (merge-pathnames path (pathname input))))
+        (when (probe-file source)
+          (return-from perform
+            (proto-impl:parse-protobuf-file
+             (make-pathname :type "proto" :defaults source)
+             (make-pathname :type "lisp"  :defaults output))))))))
+
+(defmethod operation-description ((op proto-to-lisp) (component protobuf-file))
+  (format nil (compatfmt "~@<proto-compiling ~3i~_~A~@:>")
+          (make-pathname :name (pathname-name (component-pathname component))
+                         :type "proto"
+                         :defaults (first (output-files op component)))))
+
+(defmethod perform ((op compile-op) (component protobuf-file))
+  (let ((source (make-pathname :name (pathname-name (component-pathname component))
+                               :type "lisp"
+                               :defaults (first (output-files op component))))
+        (output (first (output-files op component)))
+        (*compile-file-warnings-behaviour* (operation-on-warnings op))
+        (*compile-file-failure-behaviour* (operation-on-failure op)))
+    (multiple-value-bind (output warnings-p failure-p)
+        (apply #'compile-file* source
+               :output-file output
+               (compile-op-flags op))
+      (when warnings-p
+        (case (operation-on-warnings op)
+          (:warn  (warn "~@<COMPILE-FILE warned while performing ~A on ~A.~@:>" op component))
+          (:error (error 'compile-warned
+                         :component component :operation op))
+          (:ignore nil)))
+      (when failure-p
+        (case (operation-on-failure op)
+          (:warn  (warn "~@<COMPILE-FILE failed while performing ~A on ~A.~@:>" op component))
+          (:error (error 'compile-failed
+                         :component component :operation op))
+          (:ignore nil)))
+      (unless output
+        (error 'compile-error
+               :component component :operation op)))))
+
+(defmethod operation-description ((op compile-op) (component protobuf-file))
+  (format nil (compatfmt "~@<compiling ~3i~_~A~@:>")
+          (make-pathname :name (pathname-name (component-pathname component))
+                         :type "lisp"
+                         :defaults (first (output-files op component)))))
+
+
+(in-package "PROTO-IMPL")
 
 (defun parse-protobuf-file (protobuf-file lisp-file)
   (let ((schema (parse-schema-from-file protobuf-file)))
@@ -48,7 +149,6 @@
                      :element-type 'character)
       (write-schema schema :stream stream :type :lisp)))
   lisp-file)
-
 
 ;; Process 'import' lines
 (defun process-imports (schema &rest imports)

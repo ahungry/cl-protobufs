@@ -33,10 +33,6 @@
    "BYTE-VECTOR"
    "MAKE-BYTE-VECTOR")
 
-  ;; ASDF module type
-  (:export
-   "PROTOBUF-FILE")
-  
   ;; The Protobufs API
   (:export
    ;; Model classes
@@ -262,4 +258,8 @@
    "PROTO->ENUM-NAME"
    "PROTO->SLOT-NAME"
    "PROTOBUFS-WARNING"
-   "PROTOBUFS-WARN"))
+   "PROTOBUFS-WARN"
+
+   ;; Stuff for ASDF
+   "PARSE-PROTOBUF-FILE"
+   "PROCESS-IMPORTS"))

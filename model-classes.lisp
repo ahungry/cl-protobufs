@@ -49,6 +49,7 @@
 ;; A few things (the pretty printer) want to keep track of the current schema
 (defvar *protobuf* nil)                         ;this can be schema, a message, ...
 (defvar *protobuf-package* nil)
+(defvar *protobuf-conc-name* nil)
 
 
 ;;; The model classes
