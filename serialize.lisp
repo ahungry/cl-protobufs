@@ -503,7 +503,7 @@
       (return-from generate-serializer
         `(defmethod serialize-object
            (,vobj (,vclass (eql ,message)) ,vbuf &optional (,vidx 0) visited)
-         (declare (optimize (speed 3) (safety 0) (debug 0)))
+         (declare #.$optimize-serialization)
          (declare (ignorable ,vobj ,vclass visited)
                   (type (simple-array (unsigned-byte 8)) ,vbuf)
                   (type fixnum ,vidx))
@@ -606,7 +606,7 @@
                                   (setq ,vidx (serialize-enum ,vval '(,@(proto-values msg)) ,tag ,vbuf ,vidx)))))))))))))
       `(defmethod serialize-object
            (,vobj (,vclass (eql ,message)) ,vbuf &optional (,vidx 0) visited)
-         (declare (optimize (speed 3) (safety 0) (debug 0)))
+         (declare #.$optimize-serialization)
          (declare (ignorable visited)
                   (type (simple-array (unsigned-byte 8)) ,vbuf)
                   (type fixnum ,vidx))
@@ -621,7 +621,7 @@
       (return-from generate-deserializer
         `(defmethod deserialize-object
              ((,vclass (eql ,message)) ,vbuf &optional ,vidx ,vlen (,vendtag 0))
-           (declare (optimize (speed 3) (safety 0) (debug 0)))
+           (declare #.$optimize-serialization)
            (declare (ignorable ,vclass ,vbuf ,vlen ,vendtag)
                     (type (simple-array (unsigned-byte 8)) ,vbuf))
            (let ((,vidx (or ,vidx 0)))
@@ -740,7 +740,7 @@
              (rtemps  (mapcar #'second rslots)))
         `(defmethod deserialize-object
              ((,vclass (eql ,message)) ,vbuf &optional ,vidx ,vlen (,vendtag 0))
-           (declare (optimize (speed 3) (safety 0) (debug 0)))
+           (declare #.$optimize-serialization)
            (declare (type (simple-array (unsigned-byte 8)) ,vbuf))
            (let ((,vidx (or ,vidx 0))
                  (,vlen (or ,vlen (length ,vbuf))))
@@ -785,7 +785,7 @@
       (return-from generate-object-size
         `(defmethod object-size
              (,vobj (,vclass (eql ,message)) &optional visited)
-         (declare (optimize (speed 3) (safety 0) (debug 0)))
+         (declare #.$optimize-serialization)
          (declare (ignorable ,vobj visited))
          0)))
     (with-collectors ((sizers collect-sizer))
@@ -882,7 +882,7 @@
                                   (iincf ,vsize (enum-size ,vval '(,@(proto-values msg)) ,tag)))))))))))))
       `(defmethod object-size
            (,vobj (,vclass (eql ,message)) &optional visited)
-         (declare (optimize (speed 3) (safety 0) (debug 0)))
+         (declare #.$optimize-serialization)
          (declare (ignorable visited))
          (let ((,vsize (and visited (gethash ,vobj visited))))
            (when ,vsize

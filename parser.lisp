@@ -17,20 +17,20 @@
 
 (declaim (inline proto-whitespace-char-p))
 (defun proto-whitespace-char-p (ch)
-  (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
-    (and ch (member ch '(#\space #\tab #\return #\newline)))))
+  (declare #.$optimize-fast-unsafe)
+  (and ch (member ch '(#\space #\tab #\return #\newline))))
 
 (declaim (inline proto-eol-char-p))
 (defun proto-eol-char-p (ch)
-  (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
-    (and ch (member ch '(#\return #\newline)))))
+  (declare #.$optimize-fast-unsafe)   
+  (and ch (member ch '(#\return #\newline))))
 
 (declaim (inline proto-token-char-p))
 (defun proto-token-char-p (ch)
-  (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
-    (and ch (or (alpha-char-p ch)
-                (digit-char-p ch)
-                (member ch '(#\_ #\.))))))
+  (declare #.$optimize-fast-unsafe)
+  (and ch (or (alpha-char-p ch)
+              (digit-char-p ch)
+              (member ch '(#\_ #\.)))))
 
 
 (defun skip-whitespace (stream)

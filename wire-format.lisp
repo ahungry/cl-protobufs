@@ -17,11 +17,18 @@
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
 
+;; If you need to debug the (de)serializer, (pushnew :debug-serialization *features*)
+;; Otherwise, we try to make (de)serialization as fast as possible,
+;; risking life and limb to do so
+(defconstant $optimize-serialization
+  #+debug-serialization $optimize-default
+  #-debug-serialization $optimize-fast-unsafe)
+
 (defconstant $wire-type-varint 0)
 (defconstant $wire-type-64bit  1)
 (defconstant $wire-type-string 2)
-(defconstant $wire-type-start-group 3)          ;supposedly obsolete
-(defconstant $wire-type-end-group   4)          ;supposedly obsolete
+(defconstant $wire-type-start-group 3)          ;supposedly deprecated, but no such luck
+(defconstant $wire-type-end-group   4)          ;supposedly deprecated
 (defconstant $wire-type-32bit  5)
 
 )       ;eval-when
@@ -30,7 +37,7 @@
 (defun make-tag (type index)
   "Given a wire type or the name of a Protobufs type and a field index,
    return the tag that encodes both of them."
-  (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
+  (locally (declare #.$optimize-serialization)
     (if (typep type 'fixnum)
       (ilogior type (iash index 3))
       (let ((type (ecase type
@@ -85,46 +92,46 @@
 
 
 (defun zig-zag-encode32 (val)
-  (declare (optimize (speed 3) (safety 0) (debug 0)))
+  (declare #.$optimize-serialization)
   (declare (type (signed-byte 32) val))
   (logxor (ash val 1) (ash val -31)))
 
 (defun zig-zag-encode64 (val)
-  (declare (optimize (speed 3) (safety 0) (debug 0)))
+  (declare #.$optimize-serialization)
   (declare (type (signed-byte 64) val))
   (logxor (ash val 1) (ash val -63)))
 
 (define-compiler-macro zig-zag-encode32 (&whole form val)
   (if (atom val)
-    `(locally (declare (optimize (speed 3) (safety 0) (debug 0))
+    `(locally (declare #.$optimize-serialization
                        (type (signed-byte 32) ,val))
        (logxor (ash ,val 1) (ash ,val -31)))
     form))
 
 (define-compiler-macro zig-zag-encode64 (&whole form val)
   (if (atom val)
-    `(locally (declare (optimize (speed 3) (safety 0) (debug 0))
+    `(locally (declare #.$optimize-serialization
                        (type (signed-byte 64) ,val))
        (logxor (ash ,val 1) (ash ,val -63)))
     form))
 
 (defun zig-zag-decode32 (val)
-  (declare (optimize (speed 3) (safety 0) (debug 0)))
+  (declare #.$optimize-serialization)
   (logxor (ash val -1) (- (logand val 1))))
 
 (defun zig-zag-decode64 (val)
-  (declare (optimize (speed 3) (safety 0) (debug 0)))
+  (declare #.$optimize-serialization)
   (logxor (ash val -1) (- (logand val 1))))
 
 (define-compiler-macro zig-zag-decode32 (&whole form val)
   (if (atom val)
-    `(locally (declare (optimize (speed 3) (safety 0) (debug 0)))
+    `(locally (declare #.$optimize-serialization)
        (logxor (ash ,val -1) (- (logand ,val 1))))
     form))
 
 (define-compiler-macro zig-zag-decode64 (&whole form val)
   (if (atom val)
-    `(locally (declare (optimize (speed 3) (safety 0) (debug 0)))
+    `(locally (declare #.$optimize-serialization)
        (logxor (ash ,val -1) (- (logand ,val 1))))
     form))
 
@@ -140,7 +147,7 @@
   (declare 
            (type (unsigned-byte 32) tag)
            (type fixnum index))
-  (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
+  (locally (declare #.$optimize-serialization)
     (let ((idx (encode-uint32 tag buffer index)))
       (declare (type fixnum idx))
       (ecase type
@@ -186,7 +193,7 @@
   (if (member type '(:int32 :uint32 :int64 :uint64 :sint32 :sint64
                      :fixed32 :sfixed32 :fixed64 :sfixed64
                      :string :bytes :bool :float :double))
-    `(locally (declare (optimize (speed 3) (safety 0) (debug 0))
+    `(locally (declare #.$optimize-serialization
                        (type (simple-array (unsigned-byte 8)) ,buffer)
                        ;; 'tag' is a constant, no need to declare its type
                        (type fixnum ,index))
@@ -233,7 +240,7 @@
   (declare (type (simple-array (unsigned-byte 8)) buffer)
            (type (unsigned-byte 32) tag)
            (type fixnum index))
-  (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
+  (locally (declare #.$optimize-serialization)
     (let ((idx (encode-uint32 tag buffer index)))
       (declare (type fixnum idx))
       (multiple-value-bind (full-len len)
@@ -271,7 +278,7 @@
   (if (member type '(:int32 :uint32 :int64 :uint64 :sint32 :sint64
                      :fixed32 :sfixed32 :fixed64 :sfixed64
                      :bool :float :double))
-    `(locally (declare (optimize (speed 3) (safety 0) (debug 0))
+    `(locally (declare #.$optimize-serialization
                        (type (simple-array (unsigned-byte 8)) ,buffer)
                        ;; 'tag' is a constant, no need to declare its type
                        (type fixnum ,index))
@@ -320,7 +327,7 @@
   (declare (type (simple-array (unsigned-byte 8)) buffer)
            (type (unsigned-byte 32) tag)
            (type fixnum index))
-  (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
+  (locally (declare #.$optimize-serialization)
     (let* ((val (let ((e (find val enum-values :key #'proto-value)))
                   (and e (proto-index e))))
            (idx (encode-uint32 tag buffer index)))
@@ -336,7 +343,7 @@
   (declare (type (simple-array (unsigned-byte 8)) buffer)
            (type (unsigned-byte 32) tag)
            (type fixnum index))
-  (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
+  (locally (declare #.$optimize-serialization)
     (let ((idx (encode-uint32 tag buffer index)))
       (declare (type fixnum idx))
       (multiple-value-bind (full-len len)
@@ -361,7 +368,7 @@
    Watch out, this function turns off most type checking and all array bounds checking."
   (declare (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
-  (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
+  (locally (declare #.$optimize-serialization)
     (ecase type
       ((:int32)
        (decode-int32 buffer index))
@@ -413,7 +420,7 @@
   (if (member type '(:int32 :uint32 :int64 :uint64 :sint32 :sint64
                      :fixed32 :sfixed32 :fixed64 :sfixed64
                      :string :bytes :bool :float :double))
-    `(locally (declare (optimize (speed 3) (safety 0) (debug 0))
+    `(locally (declare #.$optimize-serialization
                        (type (simple-array (unsigned-byte 8)) ,buffer)
                        (type fixnum ,index))
        ,(ecase type
@@ -462,7 +469,7 @@
    Watch out, this function turns off most type checking and all array bounds checking."
   (declare (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
-  (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
+  (locally (declare #.$optimize-serialization)
     (multiple-value-bind (len idx)
         (decode-uint32 buffer index)
       (declare (type (unsigned-byte 32) len)
@@ -515,7 +522,7 @@
   (if (member type '(:int32 :uint32 :int64 :uint64 :sint32 :sint64
                      :fixed32 :sfixed32 :fixed64 :sfixed64
                      :bool :float :double))
-    `(locally (declare (optimize (speed 3) (safety 0) (debug 0))
+    `(locally (declare #.$optimize-serialization
                        (type (simple-array (unsigned-byte 8)) ,buffer)
                        (type fixnum ,index))
        (block deserialize-packed
@@ -574,7 +581,7 @@
    Watch out, this function turns off most type checking and all array bounds checking."
   (declare (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
-  (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
+  (locally (declare #.$optimize-serialization)
     (multiple-value-bind (val idx)
         (decode-int32 buffer index)
       (let ((val (let ((e (find val enum-values :key #'proto-index)))
@@ -588,7 +595,7 @@
    Watch out, this function turns off most type checking and all array bounds checking."
   (declare (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
-  (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
+  (locally (declare #.$optimize-serialization)
     (multiple-value-bind (len idx)
         (decode-uint32 buffer index)
       (declare (type (unsigned-byte 32) len)
@@ -613,7 +620,7 @@
   "Returns the size in bytes that the primitive object will take when serialized.
    Watch out, this function turns off most type checking."
   (declare (type (unsigned-byte 32) tag))
-  (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
+  (locally (declare #.$optimize-serialization)
     (ecase type
       ((:int32 :uint32)
        (i+ (length32 tag) (length32 (ldb (byte 32 0) val))))
@@ -654,7 +661,7 @@
   (if (member type '(:int32 :uint32 :int64 :uint64 :sint32 :sint64
                      :fixed32 :sfixed32 :fixed64 :sfixed64
                      :string :bytes :bool :float :double))
-    `(locally (declare (optimize (speed 3) (safety 0) (debug 0)))
+    `(locally (declare #.$optimize-serialization)
        ,(ecase type
           ((:int32)
            `(i+ (length32 ,tag) (length32 (ldb (byte 32 0) ,val))))
@@ -690,7 +697,7 @@
   "Returns the size in bytes that the packed object will take when serialized.
    Watch out, this function turns off most type checking."
   (declare (type (unsigned-byte 32) tag))
-  (locally (declare (optimize (speed 3) (safety 0) (debug 0)))
+  (locally (declare #.$optimize-serialization)
     (let ((len (let ((len 0))
                  (declare (type fixnum len))
                  (map () #'(lambda (val)
@@ -716,7 +723,7 @@
   (if (member type '(:int32 :uint32 :int64 :uint64 :sint32 :sint64
                      :fixed32 :sfixed32 :fixed64 :sfixed64
                      :bool :float :double))
-    `(locally (declare (optimize (speed 3) (safety 0) (debug 0)))
+    `(locally (declare #.$optimize-serialization)
        (let ((len (let ((len 0))
                     (declare (type fixnum len))
                     (map () #'(lambda (val)
@@ -769,7 +776,7 @@
    at the given index.
    Modifies the buffer, and returns the new index into the buffer.
    Watch out, this function turns off all type checking and array bounds checking."
-  (declare (optimize (speed 3) (safety 0) (debug 0)))
+  (declare #.$optimize-serialization)
   (declare (type (unsigned-byte 32) val)
            (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
@@ -787,7 +794,7 @@
    at the given index.
    Modifies the buffer, and returns the new index into the buffer.
    Watch out, this function turns off all type checking and array bounds checking."
-  (declare (optimize (speed 3) (safety 0) (debug 0)))
+  (declare #.$optimize-serialization)
   (declare (type (unsigned-byte 64) val)
            (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
@@ -804,7 +811,7 @@
    at the given index.
    Modifies the buffer, and returns the new index into the buffer.
    Watch out, this function turns off all type checking and array bounds checking."
-  (declare (optimize (speed 3) (safety 0) (debug 0)))
+  (declare #.$optimize-serialization)
   (declare (type (unsigned-byte 32) val)
            (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
@@ -821,7 +828,7 @@
    at the given index.
    Modifies the buffer, and returns the new index into the buffer.
    Watch out, this function turns off all type checking and array bounds checking."
-  (declare (optimize (speed 3) (safety 0) (debug 0)))
+  (declare #.$optimize-serialization)
   (declare (type (unsigned-byte 64) val)
            (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
@@ -838,7 +845,7 @@
    at the given index.
    Modifies the buffer, and returns the new index into the buffer.
    Watch out, this function turns off all type checking and array bounds checking."
-  (declare (optimize (speed 3) (safety 0) (debug 0)))
+  (declare #.$optimize-serialization)
   (declare (type (signed-byte 32) val)
            (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
@@ -855,7 +862,7 @@
    at the given index.
    Modifies the buffer, and returns the new index into the buffer.
    Watch out, this function turns off all type checking and array bounds checking."
-  (declare (optimize (speed 3) (safety 0) (debug 0)))
+  (declare #.$optimize-serialization)
   (declare (type (signed-byte 64) val)
            (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
@@ -871,7 +878,7 @@
   "Encodes the single float 'val' into the buffer at the given index.
    Modifies the buffer, and returns the new index into the buffer.
    Watch out, this function turns off all type checking and array bounds checking."
-  (declare (optimize (speed 3) (safety 0) (debug 0)))
+  (declare #.$optimize-serialization)
   (declare (type single-float val)
            (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
@@ -888,7 +895,7 @@
   "Encodes the double float 'val' into the buffer at the given index.
    Modifies the buffer, and returns the new index into the buffer.
    Watch out, this function turns off all type checking and array bounds checking."
-  (declare (optimize (speed 3) (safety 0) (debug 0)))
+  (declare #.$optimize-serialization)
   (declare (type double-float val)
            (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
@@ -912,7 +919,7 @@
   "Encodes the octets into the buffer at the given index.
    Modifies the buffer, and returns the new index into the buffer.
    Watch out, this function turns off all type checking and array bounds checking."
-  (declare (optimize (speed 3) (safety 0) (debug 0)))
+  (declare #.$optimize-serialization)
   (declare (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
   (let* ((octets (babel:string-to-octets string :encoding :utf-8))
@@ -927,7 +934,7 @@
   "Encodes the octets into the buffer at the given index.
    Modifies the buffer, and returns the new index into the buffer.
    Watch out, this function turns off all type checking and array bounds checking."
-  (declare (optimize (speed 3) (safety 0) (debug 0)))
+  (declare #.$optimize-serialization)
   (declare (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
   (let* ((len (length octets))
@@ -947,7 +954,7 @@
   "Decodes the next 32-bit varint integer in the buffer at the given index.
    Returns both the decoded value and the new index into the buffer.
    Watch out, this function turns off all type checking and array bounds checking."
-  (declare (optimize (speed 3) (safety 0) (debug 0)))
+  (declare #.$optimize-serialization)
   (declare (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
   ;; Seven bits at a time, least significant bits first
@@ -955,7 +962,9 @@
     (declare (type (unsigned-byte 32) val))
     (loop for places fixnum upfrom 0 by 7
           for byte fixnum = (prog1 (aref buffer index) (iincf index))
-          do (setq val (ilogior val (iash (ildb (byte 7 0) byte) places)))
+          do (let ((bits (ildb (byte 7 0) byte)))
+               (declare (type (unsigned-byte 8) bits))
+               (setq val (ilogior val (iash bits places))))
           until (i< byte 128)
           finally (progn
                     (assert (< val #.(ash 1 32)) ()
@@ -966,7 +975,7 @@
   "Decodes the next 64-bit varint integer in the buffer at the given index.
    Returns both the decoded value and the new index into the buffer.
    Watch out, this function turns off all type checking and array bounds checking."
-  (declare (optimize (speed 3) (safety 0) (debug 0)))
+  (declare #.$optimize-serialization)
   (declare (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
   ;; Seven bits at a time, least significant bits first
@@ -974,7 +983,9 @@
     (declare (type (unsigned-byte 64) val))
     (loop for places fixnum upfrom 0 by 7
           for byte fixnum = (prog1 (aref buffer index) (iincf index))
-          do (setq val (logior val (ash (ildb (byte 7 0) byte) places)))
+          do (let ((bits (ildb (byte 7 0) byte)))
+               (declare (type (unsigned-byte 8) bits))
+               (setq val (logior val (ash bits places))))
           until (i< byte 128)
           finally (return (values val index)))))
 
@@ -982,7 +993,7 @@
   "Decodes the next 32-bit varint integer in the buffer at the given index.
    Returns both the decoded value and the new index into the buffer.
    Watch out, this function turns off all type checking and array bounds checking."
-  (declare (optimize (speed 3) (safety 0) (debug 0)))
+  (declare #.$optimize-serialization)
   (declare (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
   (multiple-value-bind (val index)
@@ -996,7 +1007,7 @@
   "Decodes the next 64-bit varint integer in the buffer at the given index.
    Returns both the decoded value and the new index into the buffer.
    Watch out, this function turns off all type checking and array bounds checking."
-  (declare (optimize (speed 3) (safety 0) (debug 0)))
+  (declare #.$optimize-serialization)
   (declare (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
   (multiple-value-bind (val index)
@@ -1009,7 +1020,7 @@
   "Decodes the next 32-bit unsigned fixed integer in the buffer at the given index.
    Returns both the decoded value and the new index into the buffer.
    Watch out, this function turns off all type checking and array bounds checking."
-  (declare (optimize (speed 3) (safety 0) (debug 0)))
+  (declare #.$optimize-serialization)
   (declare (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
   ;; Eight bits at a time, least significant bits first
@@ -1025,7 +1036,7 @@
   "Decodes the next unsigned 64-bit fixed integer in the buffer at the given index.
    Returns both the decoded value and the new index into the buffer.
    Watch out, this function turns off all type checking and array bounds checking."
-  (declare (optimize (speed 3) (safety 0) (debug 0)))
+  (declare #.$optimize-serialization)
   (declare (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
   ;; Eight bits at a time, least significant bits first
@@ -1040,7 +1051,7 @@
   "Decodes the next 32-bit signed fixed integer in the buffer at the given index.
    Returns both the decoded value and the new index into the buffer.
    Watch out, this function turns off all type checking and array bounds checking."
-  (declare (optimize (speed 3) (safety 0) (debug 0)))
+  (declare #.$optimize-serialization)
   (declare (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
   ;; Eight bits at a time, least significant bits first
@@ -1058,7 +1069,7 @@
   "Decodes the next signed 64-bit fixed integer in the buffer at the given index.
    Returns both the decoded value and the new index into the buffer.
    Watch out, this function turns off all type checking and array bounds checking."
-  (declare (optimize (speed 3) (safety 0) (debug 0)))
+  (declare #.$optimize-serialization)
   (declare (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
   ;; Eight bits at a time, least significant bits first
@@ -1075,7 +1086,7 @@
   "Decodes the next single float in the buffer at the given index.
    Returns both the decoded value and the new index into the buffer.
    Watch out, this function turns off all type checking and array bounds checking."
-  (declare (optimize (speed 3) (safety 0) (debug 0)))
+  (declare #.$optimize-serialization)
   (declare (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
   ;; Eight bits at a time, least significant bits first
@@ -1092,7 +1103,7 @@
   "Decodes the next double float in the buffer at the given index.
    Returns both the decoded value and the new index into the buffer.
    Watch out, this function turns off all type checking and array bounds checking."
-  (declare (optimize (speed 3) (safety 0) (debug 0)))
+  (declare #.$optimize-serialization)
   (declare (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
   ;; Eight bits at a time, least significant bits first
@@ -1115,7 +1126,7 @@
   "Decodes the next UTF-8 encoded string in the buffer at the given index.
    Returns both the decoded string and the new index into the buffer.
    Watch out, this function turns off all type checking and array bounds checking."
-  (declare (optimize (speed 3) (safety 0) (debug 0)))
+  (declare #.$optimize-serialization)
   (declare (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
   (multiple-value-bind (len idx)
@@ -1128,7 +1139,7 @@
   "Decodes the next octets in the buffer at the given index.
    Returns both the decoded value and the new index into the buffer.
    Watch out, this function turns off all type checking and array bounds checking."
-  (declare (optimize (speed 3) (safety 0) (debug 0)))
+  (declare #.$optimize-serialization)
   (declare (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
   (multiple-value-bind (len idx)
@@ -1143,7 +1154,7 @@
 
 (defun length32 (val)
   "Returns the length that 'val' will take when encoded as a 32-bit integer."
-  (declare (optimize (speed 3) (safety 0) (debug 0)))
+  (declare #.$optimize-serialization)
   (declare (type (unsigned-byte 32) val))
   (let ((size 0))
     (declare (type fixnum size))
@@ -1155,7 +1166,7 @@
 
 (defun length64 (val)
   "Returns the length that 'val' will take when encoded as a 64-bit integer."
-  (declare (optimize (speed 3) (safety 0) (debug 0)))
+  (declare #.$optimize-serialization)
   (declare (type (unsigned-byte 64) val))
   (let ((size 0))
     (declare (type fixnum size))
@@ -1173,7 +1184,7 @@
   "Skip an element in the buffer at the index of the given wire type.
    Returns the new index in the buffer.
    Watch out, this function turns off all type checking and all array bounds checking."
-  (declare (optimize (speed 3) (safety 0) (debug 0)))
+  (declare #.$optimize-serialization)
   (declare (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index)
            (type (unsigned-byte 32) tag))

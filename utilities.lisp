@@ -13,6 +13,13 @@
 
 ;;; Optimized fixnum arithmetic
 
+(defconstant $optimize-default     '(optimize (speed 1) (safety 3) (debug 3))
+  "Compiler optimization settings for safe, debuggable code.")
+
+(defconstant $optimize-fast-unsafe '(optimize (speed 3) (safety 0) (debug 0))
+  "Compiler optimization settings for fast, unsafe, hard-to-debug code.")
+
+
 (defmacro i+ (&rest fixnums)
   `(the fixnum (+ ,@(loop for n in fixnums collect `(the fixnum ,n)))))
 
@@ -60,7 +67,7 @@
 (define-modify-macro idecf (&optional (delta 1)) i-)
 
 (defmacro ildb (bytespec value)
-  `(ldb ,bytespec (the fixnum ,value)))
+  `(the fixnum (ldb ,bytespec (the fixnum ,value))))
 
 
 ;;; String utilities
