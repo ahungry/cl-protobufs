@@ -20,7 +20,7 @@
 ;; If you need to debug the (de)serializer, (pushnew :debug-serialization *features*)
 ;; Otherwise, we try to make (de)serialization as fast as possible,
 ;; risking life and limb to do so
-(defconstant $optimize-serialization
+(defparameter $optimize-serialization
   #+debug-serialization $optimize-default
   #-debug-serialization $optimize-fast-unsafe)
 
