@@ -4,7 +4,8 @@
 ;;;                                                                  ;;;
 ;;; Copyright (c) 2012 ITA Software, Inc.  All rights reserved.      ;;;
 ;;;                                                                  ;;;
-;;; Original author: Francois-Rene Rideau, Scott McKay               ;;;
+;;; Original author: Scott McKay                                     ;;;
+;;; Based on work by: Robert Brown, Francois-Rene Rideau             ;;;
 ;;;                                                                  ;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

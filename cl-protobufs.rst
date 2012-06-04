@@ -36,13 +36,13 @@ Protobufs for Common Lisp
 Introduction
 ============
 
-The Common Lisp Protobufs library provides a way for Common Lisp
-programs to use existing (or define new) Protobufs "schemas", and
-serialize and deserialize objects to and from the Protobufs wire and
-text formats.
+The Common Lisp Protobufs library provides a fully in-Lisp way for
+Common Lisp programs to use existing, or define new Protobufs
+"schemas", and serialize and deserialize objects to and from the
+Protobufs wire and text formats.
 
-To use it, first load the ASDF declaration file ``protobufs/protobufs.asd``
-and then use ASDF to load the library named ``:protobufs``.
+To use it, first load the ASDF declaration file ``protobufs/cl-protobufs.asd``
+and then use ASDF to load the library named ``:cl-protobufs``.
 
 
 Implementation notes
@@ -52,6 +52,12 @@ The Protobufs library defines a set of model classes that describes a
 protobufs "schema" (i.e., one .proto file). These classes describe a
 schema, its options, enums and enum values, messages and fields, and
 services and methods.
+
+Unlike the 'protobuf' library described at ``http://common-lisp.net/project/protobuf``,
+this implementation is entirely written in Common Lisp. It provides
+some things that the 'protobuf' library does not, in particular,
+the ability to define Protobufs schemas entirely within Lisp and
+the ability to "export" a set of CLOS classes as a Protobufs schema.
 
 The library provides the means to convert several kinds of inputs into
 the Protobufs models, including:

@@ -14,8 +14,8 @@
 ;;; Package declaration for Protobufs tests
 
 (defpackage protobufs-test
-  (:use :common-lisp :protobufs :protobufs-implementation)
   (:nicknames :proto-test)
+  (:use :common-lisp :protobufs :protobufs-implementation)
   (:shadowing-import-from :protobufs-implementation
    "FIND-METHOD"))
 

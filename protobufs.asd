@@ -11,7 +11,7 @@
 (in-package "CL-USER")
 
 
-(asdf:defsystem :protobufs
+(asdf:defsystem :cl-protobufs
     :name "Protobufs"
     :author "Scott McKay"
     :version "1.0"
