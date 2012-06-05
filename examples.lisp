@@ -242,7 +242,7 @@
       (revision :type (or null string))
       (date :type (or null string)))
     (name :type string)
-    (colors :type (list-of color1))
+    (colors :type (proto:list-of color1))
     (metadata1 :type (or null metadata1)))
   (proto:define-message color1 ()
     (name :type (or null string))
@@ -259,7 +259,7 @@
      :documentation "Color wheel example, with group")
   (proto:define-message color-wheel2 ()
     (name :type string)
-    (colors :type (list-of color2))
+    (colors :type (proto:list-of color2))
     (proto:define-group metadata2
         (:index 3
          :arity :optional)

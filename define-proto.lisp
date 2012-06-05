@@ -335,7 +335,8 @@
                                      (intern (format nil "~A-~A" 'set reader) *protobuf-package*)))
                          (default (getf inits :initform)))
                     (collect-form `(without-redefinition-warnings ()
-                                     (let ((,stable (make-hash-table :test #'eq :weak t)))
+                                     (let ((,stable #+ccl  (make-hash-table :test #'eq :weak t)
+                                                    #+sbcl (make-hash-table :test #'eq :weakness :value)))
                                        ,@(and reader `((defmethod ,reader ((object ,type))
                                                          (gethash object ,stable ,default))))
                                        ,@(and writer `((defmethod ,writer ((object ,type) value)
@@ -386,7 +387,8 @@
                  ;; will result in harmless redefinitions, so squelch the warnings
                  ;;--- Maybe these methods need to be defined in 'define-message'?
                  (collect-form `(without-redefinition-warnings ()
-                                  (let ((,stable (make-hash-table :test #'eq :weak t)))
+                                  (let ((,stable #+ccl  (make-hash-table :test #'eq :weak t)
+                                                 #+sbcl (make-hash-table :test #'eq :weakness :value)))
                                     ,@(and reader `((defmethod ,reader ((object ,type))
                                                       (gethash object ,stable ,default))))
                                     ,@(and writer `((defmethod ,writer ((object ,type) value)
@@ -676,7 +678,7 @@
               ;; asynchronous calls simpler.
               (collect-form `(defgeneric ,client-fn (,vchannel ,vinput ,voutput &key ,vcallback)
                                ,@(and documentation `((:documentation ,documentation)))
-                               (declare (values ,output-type))))
+                               #-sbcl (declare (values ,output-type))))
               ;; The server side stub, e.g., 'do-read-air-reservation'.
               ;; The expectation is that the server-side program will implement
               ;; a method with the business logic for this on each kind of channel
@@ -690,7 +692,7 @@
               ;; CL-Stubby provides the channel classes and does (de)serialization, etc
               (collect-form `(defgeneric ,server-fn (,vchannel ,vinput ,voutput &key ,vcallback)
                                ,@(and documentation `((:documentation ,documentation)))
-                               (declare (values ,output-type))))))))
+                               #-sbcl (declare (values ,output-type))))))))
       `(progn
          define-service
          ,service
@@ -710,37 +712,43 @@
                  #'string< :key #'proto-name)))
     (mapcan #'ensure-schema protos)))
 
-(defmethod ensure-schema ((schema protobuf-schema))
-  "Ensure that all of the types are defined in the Protobufs schema 'schema'.
-   This returns two values:
-    - A list whose elements are (<undefined-type> \"message:field\" ...)
-    - The accumulated warnings table that has the same information as objects."
-  (let ((*undefined-messages* (make-hash-table))
-        (trace (list schema)))
-    (map () (curry #'ensure-message trace) (proto-messages schema))
-    (map () (curry #'ensure-service trace) (proto-services schema))
-    (loop for type being the hash-keys of *undefined-messages*
-            using (hash-value things)
-          collect (list* type
-                         (mapcar #'(lambda (thing)
-                                     (format nil "~A:~A" (proto-name (car thing)) (proto-name (cdr thing))))
-                                 things)) into warnings
-          finally (return (values warnings *undefined-messages*)))))
+(defgeneric ensure-schema (schema)
+  (:documentation
+   "Ensure that all of the types are defined in the Protobufs schema 'schema'.
+    This returns two values:
+     - A list whose elements are (<undefined-type> \"message:field\" ...)
+     - The accumulated warnings table that has the same information as objects.")
+  (:method ((schema protobuf-schema))
+    (let ((*undefined-messages* (make-hash-table))
+          (trace (list schema)))
+      (map () (curry #'ensure-message trace) (proto-messages schema))
+      (map () (curry #'ensure-service trace) (proto-services schema))
+      (loop for type being the hash-keys of *undefined-messages*
+              using (hash-value things)
+            collect (list* type
+                           (mapcar #'(lambda (thing)
+                                       (format nil "~A:~A" (proto-name (car thing)) (proto-name (cdr thing))))
+                                   things)) into warnings
+            finally (return (values warnings *undefined-messages*))))))
 
-(defmethod ensure-message (trace (message protobuf-message))
-  (let ((trace (cons message trace)))
-    (map () (curry #'ensure-message trace) (proto-messages message))
-    (map () (curry #'ensure-field trace message) (proto-fields message))))
+(defgeneric ensure-message (trace message)
+  (:method (trace (message protobuf-message))
+    (let ((trace (cons message trace)))
+      (map () (curry #'ensure-message trace) (proto-messages message))
+      (map () (curry #'ensure-field trace message) (proto-fields message)))))
 
-(defmethod ensure-field (trace message (field protobuf-field))
-  (ensure-type trace message field (proto-class field)))
+(defgeneric ensure-field (trace message field)
+  (:method (trace message (field protobuf-field))
+    (ensure-type trace message field (proto-class field))))
 
-(defmethod ensure-service (trace (service protobuf-service))
-  (map () (curry #'ensure-method trace service) (proto-methods service)))
+(defgeneric ensure-service (trace service)
+  (:method (trace (service protobuf-service))
+    (map () (curry #'ensure-method trace service) (proto-methods service))))
 
-(defmethod ensure-method (trace service (method protobuf-method))
-  (ensure-type trace service method (proto-input-type method))
-  (ensure-type trace service method (proto-output-type method)))
+(defgeneric ensure-method (trace service method)
+  (:method (trace service (method protobuf-method))
+    (ensure-type trace service method (proto-input-type method))
+    (ensure-type trace service method (proto-output-type method))))
 
 ;; 'message' and 'field' can be a message and a field or a service and a method
 (defun ensure-type (trace message field type)

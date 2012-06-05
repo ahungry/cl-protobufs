@@ -117,21 +117,25 @@
 
 (defun zig-zag-decode32 (val)
   (declare #.$optimize-serialization)
+  (declare (type (unsigned-byte 32) val))
   (logxor (ash val -1) (- (logand val 1))))
 
 (defun zig-zag-decode64 (val)
   (declare #.$optimize-serialization)
+  (declare (type (unsigned-byte 64) val))
   (logxor (ash val -1) (- (logand val 1))))
 
 (define-compiler-macro zig-zag-decode32 (&whole form val)
   (if (atom val)
-    `(locally (declare #.$optimize-serialization)
+    `(locally (declare #.$optimize-serialization
+                       (type (unsigned-byte 32) ,val))
        (logxor (ash ,val -1) (- (logand ,val 1))))
     form))
 
 (define-compiler-macro zig-zag-decode64 (&whole form val)
   (if (atom val)
-    `(locally (declare #.$optimize-serialization)
+    `(locally (declare #.$optimize-serialization
+                       (type (unsigned-byte 64) ,val))
        (logxor (ash ,val -1) (- (logand ,val 1))))
     form))
 
@@ -144,8 +148,7 @@
    The value is given by 'val', the primitive type by 'type'.
    Modifies the buffer in place, and returns the new index into the buffer.
    Watch out, this function turns off most type checking and all array bounds checking."
-  (declare 
-           (type (unsigned-byte 32) tag)
+  (declare (type (unsigned-byte 32) tag)
            (type fixnum index))
   (locally (declare #.$optimize-serialization)
     (let ((idx (encode-uint32 tag buffer index)))
@@ -324,7 +327,8 @@
    The value is given by 'val', the enum values are in 'enum-values'.
    Modifies the buffer in place, and returns the new index into the buffer.
    Watch out, this function turns off most type checking and all array bounds checking."
-  (declare (type (simple-array (unsigned-byte 8)) buffer)
+  (declare (type list enum-values)
+           (type (simple-array (unsigned-byte 8)) buffer)
            (type (unsigned-byte 32) tag)
            (type fixnum index))
   (locally (declare #.$optimize-serialization)
@@ -340,7 +344,8 @@
    The values are given by 'values', the enum values are in 'enum-values'.
    Modifies the buffer in place, and returns the new index into the buffer.
    Watch out, this function turns off most type checking and all array bounds checking."
-  (declare (type (simple-array (unsigned-byte 8)) buffer)
+  (declare (type list enum-values)
+           (type (simple-array (unsigned-byte 8)) buffer)
            (type (unsigned-byte 32) tag)
            (type fixnum index))
   (locally (declare #.$optimize-serialization)
@@ -579,7 +584,8 @@
    Deserializes from the byte vector 'buffer' starting at 'index'.
    Returns the value and and the new index into the buffer.
    Watch out, this function turns off most type checking and all array bounds checking."
-  (declare (type (simple-array (unsigned-byte 8)) buffer)
+  (declare (type list enum-values)
+           (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
   (locally (declare #.$optimize-serialization)
     (multiple-value-bind (val idx)
@@ -593,7 +599,8 @@
    Deserializes from the byte vector 'buffer' starting at 'index'.
    Returns the value and and the new index into the buffer.
    Watch out, this function turns off most type checking and all array bounds checking."
-  (declare (type (simple-array (unsigned-byte 8)) buffer)
+  (declare (type list enum-values)
+           (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
   (locally (declare #.$optimize-serialization)
     (multiple-value-bind (len idx)
@@ -746,7 +753,8 @@
 
 (defun enum-size (val enum-values tag)
   "Returns the size in bytes that the enum object will take when serialized."
-  (declare (type (unsigned-byte 32) tag))
+  (declare (type list enum-values)
+           (type (unsigned-byte 32) tag))
   (let ((idx (let ((e (find val enum-values :key #'proto-value)))
                (and e (proto-index e)))))
     (assert idx () "There is no enum value for ~S" val)
@@ -754,13 +762,15 @@
 
 (defun packed-enum-size (values enum-values tag)
   "Returns the size in bytes that the enum values will take when serialized."
+  (declare (type list enum-values)
+           (type (unsigned-byte 32) tag))
   (let ((len (let ((len 0))
                (declare (type fixnum len))
                (map () #'(lambda (val)
                            (let ((idx (let ((e (find val enum-values :key #'proto-value)))
                                         (and e (proto-index e)))))
                              (assert idx () "There is no enum value for ~S" val)
-                             (iincf len (length32 (ldb (byte 32 0) val))))) values)
+                             (iincf len (length32 (ldb (byte 32 0) idx))))) values)
                len)))
     (declare (type (unsigned-byte 32) len))
     ;; Two value: the full size of the packed object, and the size
@@ -925,7 +935,8 @@
   (let* ((octets (babel:string-to-octets string :encoding :utf-8))
          (len (length octets))
          (idx (encode-uint32 len buffer index)))
-    (declare (type fixnum len)
+    (declare (type (array (unsigned-byte 8)) octets)
+             (type fixnum len)
              (type (unsigned-byte 32) idx))
     (replace buffer octets :start1 idx)
     (values (i+ idx len) buffer)))
@@ -935,7 +946,8 @@
    Modifies the buffer, and returns the new index into the buffer.
    Watch out, this function turns off all type checking and array bounds checking."
   (declare #.$optimize-serialization)
-  (declare (type (simple-array (unsigned-byte 8)) buffer)
+  (declare (type (array (unsigned-byte 8)) octets)
+           (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
   (let* ((len (length octets))
          (idx (encode-uint32 len buffer index)))

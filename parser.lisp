@@ -81,11 +81,11 @@
         ((#\*)
          (skip-block-comment stream))
         ((nil)
+         (skip-whitespace stream)
          (return-from maybe-skip-comments))
         (otherwise
          (error "Found a '~C' at position ~D to start a comment, but no following '~C' or '~C'"
-                #\/ (file-position stream) #\/ #\*)))))
-  (skip-whitespace stream))
+                #\/ (file-position stream) #\/ #\*))))))
 
 (defun skip-line-comment (stream)
   "Skip to the end of a line comment, that is, to the end of the line.
@@ -602,8 +602,7 @@
         (multiple-value-bind (option term)
             (parse-proto-option stream nil '(#\] #\,))
           (setq terminator term)
-          (collect-option option))))
-    options))
+          (collect-option option))))))
 
 (defun parse-proto-extension (stream message)
   (check-type message protobuf-message)

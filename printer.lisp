@@ -27,6 +27,11 @@
     If 'more' is true, this means there are more enum values, fields, etc to
     be written after the current one."))
 
+(defgeneric write-schema-header (type schema stream)
+  (:documentation
+   "Writes a header for the schema onto the given stream 'stream'
+    in the format given by 'type' (:proto, :text, etc)."))
+
 (defgeneric write-schema-documentation (type docstring stream &key indentation)
   (:documentation
    "Writes the docstring as a \"block comment\" onto the given stream 'stream'
@@ -103,21 +108,25 @@
       (format stream "~&  optional ~(~A~) ~A = ~D;~%" type option index))
     (format stream "~&}~%~%")))
 
-(defmethod any-lisp-option ((schema protobuf-schema))
-  (labels ((find-one (protobuf)
-             (dolist (enum (proto-enums protobuf))
-               (with-prefixed-accessors (name class alias-for) (proto- enum)
-                 (when (or alias-for
-                           (and class (not (string-equal name (class-name->proto class))) class))
-                   (return-from any-lisp-option t))))
-             (dolist (msg (proto-messages protobuf))
-               (with-prefixed-accessors (name class alias-for) (proto- msg)
-                 (when (or alias-for
-                           (and class (not (string-equal name (class-name->proto class))) class))
-                   (return-from any-lisp-option t))))
-             (map () #'find-one (proto-messages protobuf))))
-    (find-one schema)
-    nil))
+(defgeneric any-lisp-option (schema)
+  (:documentation
+   "Returns true iff there is anything in the schema that would require that
+    the .proto file include and extend 'MessageOptions'.")
+  (:method ((schema protobuf-schema))
+    (labels ((find-one (protobuf)
+               (dolist (enum (proto-enums protobuf))
+                 (with-prefixed-accessors (name class alias-for) (proto- enum)
+                   (when (or alias-for
+                             (and class (not (string-equal name (class-name->proto class))) class))
+                     (return-from any-lisp-option t))))
+               (dolist (msg (proto-messages protobuf))
+                 (with-prefixed-accessors (name class alias-for) (proto- msg)
+                   (when (or alias-for
+                             (and class (not (string-equal name (class-name->proto class))) class))
+                     (return-from any-lisp-option t))))
+               (map () #'find-one (proto-messages protobuf))))
+      (find-one schema)
+      nil)))
 
 (defun cl-user::protobuf-option (stream option colon-p atsign-p)
   (let ((type (or (second (find (proto-name option) *option-types* :key #'first :test #'string=))

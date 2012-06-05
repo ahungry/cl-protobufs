@@ -113,25 +113,27 @@
     (reinitialize-field object message field))
   object)
 
-(defmethod reinitialize-field (object (message protobuf-message) field)
-  (macrolet ((write-slot (object slot writer value)
-               `(if ,writer
-                  (funcall ,writer ,object ,value)
-                  (setf (slot-value ,object ,slot) ,value))))
-    (let ((default (proto-default field))
-          (slot    (proto-value field))
-          (writer  (proto-writer field)))
-      (cond ((null slot)
-             (unless (empty-default-p field)
-               (write-slot object slot writer default)))
-            (t
-             (if (empty-default-p field)
-               (slot-makunbound object slot)
-               (write-slot object slot writer default)))))))
+(defgeneric reinitialize-field (object message field)
+  (:method (object (message protobuf-message) field)
+    (macrolet ((write-slot (object slot writer value)
+                 `(if ,writer
+                    (funcall ,writer ,object ,value)
+                    (setf (slot-value ,object ,slot) ,value))))
+      (let ((default (proto-default field))
+            (slot    (proto-value field))
+            (writer  (proto-writer field)))
+        (cond ((null slot)
+               (unless (empty-default-p field)
+                 (write-slot object slot writer default)))
+              (t
+               (if (empty-default-p field)
+                 (slot-makunbound object slot)
+                 (write-slot object slot writer default))))))))
 
-(defmethod reinitialize-slot (object (message protobuf-message) slot)
-  (let ((field (find slot (proto-fields message) :key #'proto-value)))
-    (reinitialize-field object message field)))
+(defgeneric reinitialize-slot (object message slot)
+  (:method (object (message protobuf-message) slot)
+    (let ((field (find slot (proto-fields message) :key #'proto-value)))
+      (reinitialize-field object message field))))
 
 
 ;;; A Python-like, Protobufs2-compatible API

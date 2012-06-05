@@ -126,19 +126,21 @@
                   s)
               initializer))))
 
-(defmethod record-protobuf ((schema protobuf-schema) &optional symbol name type)
-  "Record all the names by which the Protobufs schema might be known."
-  (declare (ignore type))
-  (let ((symbol (or symbol (proto-class schema)))
-        (name   (or name (proto-name schema))))
-    (when symbol
-      (setf (gethash (keywordify symbol) *all-schemas*) schema))
-    (when name
-      (setf (gethash (string-upcase name) *all-schemas*) schema))
-    (let ((path (or *compile-file-pathname* *load-pathname*)))
-      (when path
-        ;; Record the file from which the Protobufs schema came, sans file type
-        (setf (gethash (make-pathname :type nil :defaults (truename path)) *all-schemas*) schema)))))
+(defgeneric record-protobuf (schema &optional symbol name type)
+  (:documentation
+   "Record all the names by which the Protobufs schema might be known.")
+  (:method ((schema protobuf-schema) &optional symbol name type)
+    (declare (ignore type))
+    (let ((symbol (or symbol (proto-class schema)))
+          (name   (or name (proto-name schema))))
+      (when symbol
+        (setf (gethash (keywordify symbol) *all-schemas*) schema))
+      (when name
+        (setf (gethash (string-upcase name) *all-schemas*) schema))
+      (let ((path (or *compile-file-pathname* *load-pathname*)))
+        (when path
+          ;; Record the file from which the Protobufs schema came, sans file type
+          (setf (gethash (make-pathname :type nil :defaults (truename path)) *all-schemas*) schema))))))
 
 (defmethod print-object ((s protobuf-schema) stream)
   (print-unreadable-object (s stream :type t :identity t)
@@ -513,19 +515,34 @@
             (eq (proto-message-type f) :group)
             (eq (proto-message-type f) :extends))))
 
-(defmethod empty-default-p ((field protobuf-field))
-  (let ((default (proto-default field)))
-    (or (eq default $empty-default)
-        (eq default $empty-list)
-        (eq default $empty-vector)
-        ;; Special handling for imported CLOS classes
-        (and (not (eq (proto-required field) :optional))
-             (or (null default) (equal default #()))))))
+;; The 'value' slot really holds the name of the slot,
+;; so let's give it a better name
+(defmethod proto-slot ((field protobuf-field))
+  (proto-value field))
 
-(defmethod vector-field-p ((field protobuf-field))
-  (let ((default (proto-default field)))
-    (or (eq default $empty-vector)
-        (and (vectorp default) (not (stringp default))))))
+(defmethod (setf proto-slot) (slot (field protobuf-field))
+  (setf (proto-value field) slot))
+
+(defgeneric empty-default-p (field)
+  (:documentation
+   "Returns true iff the default for the field is empty, ie, was not supplied.")
+  (:method ((field protobuf-field))
+    (let ((default (proto-default field)))
+      (or (eq default $empty-default)
+          (eq default $empty-list)
+          (eq default $empty-vector)
+          ;; Special handling for imported CLOS classes
+          (and (not (eq (proto-required field) :optional))
+               (or (null default) (equal default #())))))))
+
+(defgeneric vector-field-p (field)
+  (:documentation
+   "Returns true if the storage for a 'repeated' field is a vector,
+    returns false if the storage is a list.")
+  (:method ((field protobuf-field))
+    (let ((default (proto-default field)))
+      (or (eq default $empty-vector)
+          (and (vectorp default) (not (stringp default)))))))
 
 
 ;; An extension range within a message

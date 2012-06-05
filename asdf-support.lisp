@@ -12,12 +12,16 @@
 (in-package "ASDF")
 
 
+;;; ASDF support for CL-Protobufs
+
 (defclass protobuf-file (cl-source-file)
   ((type :initform "proto")             ;default file type
-   (relative-pathname :reader proto-relative-pathname
+   ;; If non-nil, use this relative pathname
+   (relative-pathname :accessor proto-relative-pathname
                       :initform nil
                       :initarg :relative-pathname)
-   (search-path :reader proto-search-path
+   ;; A search path to try when looking for system-provided .proto files
+   (search-path :accessor proto-search-path
                 :initform ()
                 :initarg :search-path))
   (:documentation
@@ -44,9 +48,10 @@
                  (eq (car x) 'proto-to-lisp))
              (call-next-method)))
 
-(defmethod protobuf-input-file ((component protobuf-file))
+(defun protobuf-input-file (component)
   "Returns the pathname of the protocol buffer definition file that must be
    translated into Lisp source code for this PROTO-FILE component."
+  (check-type component protobuf-file)
   (if (proto-relative-pathname component)
     ;; Path was specified with ':relative-pathname'
     (merge-pathnames
@@ -59,7 +64,8 @@
       (make-pathname :type "proto")
       (component-pathname component))))
 
-(defmethod resolve-search-path ((component protobuf-file))
+(defun resolve-search-path (component)
+  (check-type component protobuf-file)
   (let* ((search-path (proto-search-path component))
          (parent-path (component-pathname (component-parent component))))
     (mapcar #'(lambda (path)

@@ -138,10 +138,7 @@
                  (member new-type '("fixed64" "sfixed64") :test #'string=))
             ;; Strings and bytes are compatible, assuming UTF-8 encoding
             (and (member old-type '("string" "bytes") :test #'string=)
-                 (member new-type '("string" "bytes") :test #'string=))))
-         (default-upgradable (old-default new-default)
-           (declare (ignore old-default new-default))
-           t))
+                 (member new-type '("string" "bytes") :test #'string=)))))
     ;; No need to check that the names are equal, our caller did that already
     (and
      ;; Do they have the same index?
