@@ -1,8 +1,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;                                                                  ;;;
-;;; Confidential and proprietary information of ITA Software, Inc.   ;;;
+;;; Free Software published under an MIT-like license. See LICENSE   ;;;
 ;;;                                                                  ;;;
-;;; Copyright (c) 2012 ITA Software, Inc.  All rights reserved.      ;;;
+;;; Copyright (c) 2012 Google, Inc.  All rights reserved.            ;;;
 ;;;                                                                  ;;;
 ;;; Original author: Scott McKay                                     ;;;
 ;;; Based on original work by Robert Brown                           ;;;

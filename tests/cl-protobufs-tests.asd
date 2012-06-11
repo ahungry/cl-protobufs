@@ -1,8 +1,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;                                                                  ;;;
-;;; Confidential and proprietary information of ITA Software, Inc.   ;;;
+;;; Free Software published under an MIT-like license. See LICENSE   ;;;
 ;;;                                                                  ;;;
-;;; Copyright (c) 2012 ITA Software, Inc.  All rights reserved.      ;;;
+;;; Copyright (c) 2012 Google, Inc.  All rights reserved.            ;;;
 ;;;                                                                  ;;;
 ;;; Original author: Scott McKay                                     ;;;
 ;;;                                                                  ;;;
@@ -15,16 +15,7 @@
   :name "Protobufs Tests"
   :author "Scott McKay"
   :version "1.0"
-  :licence "
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;;                                                                  ;;;
-;;; Confidential and proprietary information of ITA Software, Inc.   ;;;
-;;;                                                                  ;;;
-;;; Copyright (c) 2012 ITA Software, Inc.  All rights reserved.      ;;;
-;;;                                                                  ;;;
-;;; Original author: Scott McKay                                     ;;;
-;;;                                                                  ;;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;"
+  :licence "MIT-style"
   :maintainer '("Scott McKay")
   :description      "Test code for Protobufs for Common Lisp"
   :long-description "Test code for Protobufs for Common Lisp"
