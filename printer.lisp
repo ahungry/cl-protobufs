@@ -355,17 +355,16 @@
            (lisp-pkg (and lisp-package (if (stringp lisp-package) lisp-package (string lisp-package))))
            (*show-lisp-enum-indexes* show-enum-indexes)
            (*show-lisp-field-indexes* show-field-indexes)
-           (*protobuf-package* (or (find-package lisp-pkg)
-                                   (find-package (string-upcase lisp-pkg))
-                                   *package*))
+           (*protobuf-package* (or (find-proto-package lisp-pkg) *package*))
            (*package* *protobuf-package*))
       (when (or lisp-pkg pkg)
         (let ((pkg (string-upcase (or lisp-pkg pkg))))
-          (format stream "~&(eval-when (:execute :compile-toplevel :load-toplevel) ~
-                          ~%  (unless (find-package \"~A\") ~
-                          ~%    (defpackage ~A (:use :COMMON-LISP :PROTOBUFS)))) ~
-                          ~%(in-package \"~A\")~%~%"
-                  pkg pkg pkg)))
+          (format stream "~&(cl:eval-when (:execute :compile-toplevel :load-toplevel) ~
+                          ~%  (unless (cl:find-package \"~A\") ~
+                          ~%    (cl:defpackage ~A (:use :COMMON-LISP)))) ~
+                          ~%(cl:in-package \"~A\") ~
+                          ~%(cl:export~%~{  ~S~^~%~})~%~%"
+                  pkg pkg pkg (collect-exports schema))))
       (when documentation
         (write-schema-documentation type documentation stream :indentation indentation))
       (format stream "~&(proto:define-schema ~(~A~)" (or class name))
@@ -651,13 +650,49 @@
                             &key (indentation 0) more)
   (declare (ignore more))
   (with-prefixed-accessors
-      (function documentation input-type output-type options) (proto- method)
+      (class documentation input-type output-type options) (proto- method)
     (when documentation
       (write-schema-documentation type documentation stream :indentation indentation))
     (format stream "~&~@[~VT~](~(~S~) (~(~S~) ~(~S~))"
             (and (not (zerop indentation)) indentation)
-            function input-type output-type)
+            class input-type output-type)
     (when options
       (format stream "~%~VT:options (~{~@/protobuf-option/~^ ~})"
               (+ indentation 2) options))
     (format stream ")")))
+
+
+;;; Collect symbols to be exported
+
+(defgeneric collect-exports (schema)
+  (:documentation
+   "Collect all the symbols that should be exported from a Protobufs package"))
+
+(defmethod collect-exports ((schema protobuf-schema))
+  (delete-duplicates
+   (delete-if #'(lambda (s) (string-equal s "NIL"))
+    (append (mapcan #'collect-exports (proto-enums schema))
+            (mapcan #'collect-exports (proto-messages schema))
+            (mapcan #'collect-exports (proto-services schema))))
+   :from-end t))
+
+;; Export just the type name
+(defmethod collect-exports ((enum protobuf-enum))
+  (list (symbol-name (proto-class enum))))
+
+;; Export the class name and all of the accessor names
+(defmethod collect-exports ((message protobuf-message))
+  (append (list (symbol-name (proto-class message)))
+          (mapcan #'collect-exports (proto-fields message))))
+
+;; Export just the slot accessor name
+(defmethod collect-exports ((field protobuf-field))
+  (list (symbol-name (proto-slot field))))
+
+;; Export the names of all the methods
+(defmethod collect-exports ((service protobuf-service))
+  (mapcan #'collect-exports (proto-methods service)))
+
+;; Export just the method name
+(defmethod collect-exports ((method protobuf-method))
+  (list (symbol-name (proto-class method))))

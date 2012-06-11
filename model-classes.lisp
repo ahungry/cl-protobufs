@@ -65,6 +65,10 @@
          :reader proto-name
          :initarg :name
          :initform nil)
+   (full-name :type (or null string)            ;the fully qualified name, e.g., "proto2.MessageSet"
+              :accessor proto-qualified-name
+              :initarg :qualified-name
+              :initform nil)
    (options :type (list-of protobuf-option)     ;options, mostly just passed along
             :accessor proto-options
             :initarg :options
@@ -75,6 +79,25 @@
         :initform nil))
   (:documentation
    "The base class for all Protobufs model classes."))
+
+(defun find-qualified-name (name protos
+                            &key (proto-key #'proto-name) (lisp-key #'proto-class))
+  "Find something by its string name.
+   First do a simple name match.
+   Failing that, exhaustively search qualified names."
+  (or (find name protos :key proto-key :test #'string=)
+      ;; Get desperate in the face of incomplete namespace support
+      ;;--- This needs to be more sophisticated than just using Lisp packages
+      (multiple-value-bind (name package path other)
+          (proto->class-name name)
+        (declare (ignore path))
+        (let* ((name   (string name))
+               (symbol (or (and package (find-symbol name package))
+                           (and other
+                                (find-proto-package other)
+                                (find-symbol name (find-proto-package other))))))
+          (when symbol
+            (find symbol protos :key lisp-key))))))
 
 
 ;; A Protobufs schema, corresponds to one .proto file
@@ -162,7 +185,7 @@
 
 (defmethod find-enum ((schema protobuf-schema) (name string))
   (labels ((find-it (schema)
-             (let ((enum (find name (proto-enums schema) :key #'proto-name :test #'string=)))
+             (let ((enum (find-qualified-name name (proto-enums schema))))
                (when enum
                  (return-from find-enum enum))
                (map () #'find-it (proto-imported-schemas schema)))))
@@ -188,8 +211,8 @@
 
 (defmethod find-message ((schema protobuf-schema) (name string))
   (labels ((find-it (schema)
-             (let ((message (or (find name (proto-extenders schema) :key #'proto-name :test #'string=)
-                                (find name (proto-messages  schema) :key #'proto-name :test #'string=))))
+             (let ((message (or (find-qualified-name name (proto-extenders schema))
+                                (find-qualified-name name (proto-messages  schema)))))
                (when message
                  (return-from find-message message))
                (map () #'find-it (proto-imported-schemas schema)))))
@@ -203,7 +226,7 @@
   (find name (proto-services schema) :key #'proto-class))
 
 (defmethod find-service ((schema protobuf-schema) (name string))
-  (find name (proto-services schema) :key #'proto-name :test #'string=))
+  (find-qualified-name name (proto-services schema)))
 
 
 ;; We accept and store any option, but only act on a few: default, packed,
@@ -404,8 +427,8 @@
   (find-message message (class-name type)))
 
 (defmethod find-message ((message protobuf-message) (name string))
-  (or (find name (proto-extenders message) :key #'proto-name :test #'string=)
-      (find name (proto-messages message) :key #'proto-name :test #'string=)
+  (or (find-qualified-name name (proto-extenders message))
+      (find-qualified-name name (proto-messages message))
       (find-message (proto-parent message) name)))
 
 (defmethod find-enum ((message protobuf-message) type)
@@ -413,7 +436,7 @@
       (find-enum (proto-parent message) type)))
 
 (defmethod find-enum ((message protobuf-message) (name string))
-  (or (find name (proto-enums message) :key #'proto-name :test #'string=)
+  (or (find-qualified-name name (proto-enums message))
       (find-enum (proto-parent message) name)))
 
 (defgeneric find-field (message name)
@@ -425,7 +448,7 @@
   (find name (proto-fields message) :key #'proto-value))
 
 (defmethod find-field ((message protobuf-message) (name string))
-  (find name (proto-fields message) :key #'proto-name :test #'string=))
+  (find-qualified-name name (proto-fields message) :lisp-key #'proto-value))
 
 (defmethod find-field ((message protobuf-message) (index integer))
   (find index (proto-fields message) :key #'proto-index))
@@ -591,7 +614,7 @@
   (find name (proto-methods service) :key #'proto-class))
 
 (defmethod find-method ((service protobuf-service) (name string))
-  (find name (proto-methods service) :key #'proto-name :test #'string=))
+  (find-qualified-name name (proto-methods service)))
 
 (defmethod find-method ((service protobuf-service) (index integer))
   (find index (proto-methods service) :key #'proto-index))
@@ -599,18 +622,22 @@
 
 ;; A Protobufs method within a service
 (defclass protobuf-method (base-protobuf)
-  ((itype :type (or null symbol)                ;the Lisp type name of the input
-           :accessor proto-input-type
-           :initarg :input-type
-           :initform nil)
+  ((client-fn :type symbol                      ;the Lisp name of the client stb
+              :accessor proto-client-stub
+              :initarg :client-stub)
+   (server-fn :type symbol                      ;the Lisp name of the server stb
+              :accessor proto-server-stub
+              :initarg :server-stub)
+   (itype :type symbol                          ;the Lisp type name of the input
+          :accessor proto-input-type
+          :initarg :input-type)
    (iname :type (or null string)                ;the Protobufs name of the input
           :accessor proto-input-name
           :initarg :input-name
           :initform nil)
-   (otype :type (or null symbol)                ;the Lisp type name of the output
-           :accessor proto-output-type
-           :initarg :output-type
-           :initform nil)
+   (otype :type symbol                          ;the Lisp type name of the output
+          :accessor proto-output-type
+          :initarg :output-type)
    (oname :type (or null string)                ;the Protobufs name of the output
           :accessor proto-output-name
           :initarg :output-name
@@ -627,12 +654,4 @@
 (defmethod print-object ((m protobuf-method) stream)
   (print-unreadable-object (m stream :type t :identity t)
     (format stream "~S (~S) => (~S)"
-            (proto-function m) (proto-input-type m) (proto-output-type m))))
-
-;; The 'class' slot really holds the name of the function,
-;; so let's give it a better name
-(defmethod proto-function ((method protobuf-method))
-  (proto-class method))
-
-(defmethod (setf proto-function) (function (method protobuf-method))
-  (setf (proto-function method) function))
+            (proto-class m) (proto-input-type m) (proto-output-type m))))

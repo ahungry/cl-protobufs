@@ -298,9 +298,7 @@
                                (name   (and option (proto-name option)))
                                (value  (and option (proto-value option))))
                           (when (and option (option-name= name "lisp_package"))
-                            (let ((package (or (find-package value)
-                                               (find-package (string-upcase value))
-                                               *protobuf-package*)))
+                            (let ((package (or (find-proto-package value) *protobuf-package*)))
                               (setf (proto-lisp-package schema) value)
                               (setq *protobuf-package* package)))))
                        ((string= token "enum")
@@ -335,9 +333,7 @@
     (setf (proto-package schema) package)
     (unless (proto-lisp-package schema)
       (setf (proto-lisp-package schema) lisp-pkg))
-    (let ((package (or (find-package lisp-pkg)
-                       (find-package (string-upcase lisp-pkg))
-                       *protobuf-package*)))
+    (let ((package (or (find-proto-package lisp-pkg) *protobuf-package*)))
       (setq *protobuf-package* package))))
 
 (defun parse-proto-import (stream schema &optional (terminator #\;))
@@ -670,8 +666,9 @@
                    (expect-char stream #\; () "service"))
                  (maybe-skip-comments stream)
                  opts))
+         (stub   (proto->class-name name *protobuf-package*))
          (method (make-instance 'protobuf-method
-                   :class (proto->class-name name *protobuf-package*)
+                   :class stub
                    :name  name
                    :input-type  (proto->class-name in *protobuf-package*)
                    :input-name  in
@@ -679,9 +676,12 @@
                    :output-name out
                    :index index
                    :options opts)))
-    (let ((name (find-option method "lisp_name")))
-      (when name
-        (setf (proto-function method) (make-lisp-symbol name))))
+    (let* ((name (find-option method "lisp_name"))
+           (stub (or (and name (make-lisp-symbol name))
+                     stub)))
+      (setf (proto-class method) stub
+            (proto-client-stub method) stub
+            (proto-server-stub method) (intern (format nil "~A-~A" 'do stub) *protobuf-package*)))
     (assert (string= ret "returns") ()
             "Syntax error in 'message' at position ~D" (file-position stream))
     (setf (proto-methods service) (nconc (proto-methods service) (list method)))

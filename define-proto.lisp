@@ -53,9 +53,7 @@
                                  options)
                      :documentation documentation))
          (*protobuf* schema)
-         (*protobuf-package* (or (find-package lisp-pkg)
-                                 (find-package (string-upcase lisp-pkg))
-                                 *package*)))
+         (*protobuf-package* (or (find-proto-package lisp-pkg) *package*)))
     (apply #'process-imports schema imports)
     (with-collectors ((forms collect-form))
       (dolist (msg messages)
@@ -647,9 +645,14 @@
                                 collect (make-instance 'protobuf-option
                                           :name  (if (symbolp key) (slot-name->proto key) key)
                                           :value val)))
+                 (package   *protobuf-package*)
+                 (client-fn function)
+                 (server-fn (intern (format nil "~A-~A" 'do function) package))
                  (method  (make-instance 'protobuf-method
                             :class function
                             :name  (or name (class-name->proto function))
+                            :client-stub client-fn
+                            :server-stub server-fn
                             :input-type  input-type
                             :input-name  (or input-name (class-name->proto input-type))
                             :output-type output-type
@@ -659,10 +662,7 @@
                             :documentation documentation)))
             (setf (proto-methods service) (nconc (proto-methods service) (list method)))
             ;; The following are the hooks to CL-Stubby
-            (let* ((package   *protobuf-package*)
-                   (client-fn function)
-                   (server-fn (intern (format nil "~A-~A" 'do function) package))
-                   (vinput    (intern (format nil "~A-~A" (symbol-name input-type) 'in) package))
+            (let* ((vinput    (intern (format nil "~A-~A" (symbol-name input-type) 'in) package))
                    (voutput   (intern (format nil "~A-~A" (symbol-name output-type) 'out) package))
                    (vchannel  (intern (symbol-name 'channel) package))
                    (vcallback (intern (symbol-name 'callback) package)))
@@ -673,7 +673,7 @@
               ;; because we can just use multi-methods.
               ;; The CL-Stubby macros take care of serializing the input, transmitting the
               ;; request over the wire, waiting for input (or not if it's asynchronous),
-              ;; filling in the output, and calling the callback (if it's synchronous).
+              ;; filling in the output, and calling the callback (if it's asynchronous).
               ;; It's not very Lispy to side-effect an output object, but it makes
               ;; asynchronous calls simpler.
               (collect-form `(defgeneric ,client-fn (,vchannel ,vinput ,voutput &key ,vcallback)
@@ -690,7 +690,7 @@
               ;; The channel objects hold client identity information, deadline info,
               ;; etc, and can be side-effected to indicate success or failure
               ;; CL-Stubby provides the channel classes and does (de)serialization, etc
-              (collect-form `(defgeneric ,server-fn (,vchannel ,vinput ,voutput &key ,vcallback)
+              (collect-form `(defgeneric ,server-fn (,vchannel ,vinput ,voutput)
                                ,@(and documentation `((:documentation ,documentation)))
                                #-sbcl (declare (values ,output-type))))))))
       `(progn

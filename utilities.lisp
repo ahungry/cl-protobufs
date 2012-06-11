@@ -127,9 +127,12 @@
                      ((digit-char-p ch)
                       (uncamel (rest chars) 'digit 
                                (cons ch result)))
-                     ((eql ch #\_)
-                      (uncamel (rest chars) '_
+                     ((or (eql ch #\-) (eql ch #\_))
+                      (uncamel (rest chars) 'dash
                                (cons #\- result)))
+                     ((eql ch #\.)
+                      (uncamel (rest chars) 'dot
+                               (cons #\. result)))
                      (t
                       (error "Invalid name character: ~A" ch))))))
     (concatenate 'string (nreverse (uncamel (concatenate 'list name) nil ())))))
@@ -184,6 +187,7 @@
         ((string-not-equal x "nil")
          (intern (string-upcase x) (find-package "KEYWORD")))
         (t nil)))
+
 
 ;;; Collectors, etc
 
@@ -250,6 +254,8 @@
     form))
 
 
+;;; Types
+
 ;; A parameterized list type for repeated fields
 ;; The elements aren't type-checked
 (deftype list-of (type)
@@ -261,10 +267,10 @@
 (deftype vector-of (type)
   (if (eq type 'null)
     'null
-    '(array *)))
+    '(array * (*))))            ;an 1-dimensional array of any type
 
 ;; This corresponds to the :bytes Protobufs type
-(deftype byte-vector () '(array (unsigned-byte 8)))
+(deftype byte-vector () '(array (unsigned-byte 8) (*)))
 
 (defun make-byte-vector (size)
   (make-array size :element-type '(unsigned-byte 8)))
@@ -287,6 +293,18 @@
 (defvar *proto-name-separators* '(#\- #\_ #\/ #\space))
 (defvar *camel-case-field-names* nil)
 
+(defun find-proto-package (name)
+  "A very fuzzy definition of 'find-package'."
+  (typecase name
+    ((or string symbol)
+     ;; Try looking under the given name and the all-uppercase name
+     (or (find-package (string name))
+         (find-package (string-upcase (string name)))))
+    ((cons)
+     ;; If 'name' is a list, it's actually a fully-qualified path
+     (or (find-proto-package (first name))
+         (find-proto-package (format nil "~{~A~^.~}" name))))))
+
 ;; "class-name" -> "ClassName", ("ClassName")
 ;; "outer-class.inner-class" -> "InnerClass", ("OuterClass" "InnerClass")
 (defun class-name->proto (x)
@@ -298,7 +316,9 @@
                                           (camel-case (format nil "~A" x) *proto-name-separators*))))
          (nx (car (last xs)))
          (name (remove-if-not #'alphanumericp (camel-case nx *proto-name-separators*))))
-    (values name (append ns (list name)))))
+    (values name (append ns (list name))
+            ;; This might be the name of a package, too
+            (format nil "~{~A~^.~}" (butlast xs)))))
 
 ;; "enum-value" -> "ENUM_VALUE", ("ENUM_VALUE")
 ;; "class-name.enum-value" -> "ENUM_VALUE", ("ClassName" "ENUM_VALUE")
@@ -315,7 +335,8 @@
          (name (remove-if-not #'(lambda (x) (or (alphanumericp x) (eql x #\_)))
                               (format nil "~{~A~^_~}"
                                       (split-string nx :separators *proto-name-separators*)))))
-    (values name (append ns (list name)))))
+    (values name (append ns (list name))
+            (format nil "~{~A~^.~}" (butlast xs)))))
 
 ;; "slot-name" -> "slot_name", ("slot_name") or "slotName", ("slotName")
 ;; "class-name.slot-name" -> "Class.slot_name", ("ClassName" "slot_name")
@@ -334,7 +355,8 @@
                  (remove-if-not #'(lambda (x) (or (alphanumericp x) (eql x #\_)))
                                 (format nil "~{~A~^_~}"
                                         (split-string nx :separators *proto-name-separators*))))))
-    (values name (append ns (list name)))))
+    (values name (append ns (list name))
+            (format nil "~{~A~^.~}" (butlast xs)))))
 
 
 ;; "ClassName" -> 'class-name
@@ -345,10 +367,13 @@
    This resolves Protobufs qualified names as best as it can."
   (let* ((xs (split-string (substitute #\- #\_ (uncamel-case x))
                            :separators '(#\.)))
-         (pkg (and (cdr xs) (find-package (first xs))))
-         (package (or pkg package))
-         (name (format nil "~{~A~^.~}" (if pkg (cdr xs) xs))))
-    (values (if package (intern name package) (make-symbol name)) package xs)))
+         (pkg1 (and (cdr xs) (find-proto-package (first xs))))
+         (pkgn (and (cdr xs) (find-proto-package (butlast xs))))
+         (package (or pkg1 pkgn package))
+         (name (format nil "~{~A~^.~}" (if pkg1 (cdr xs) (if pkgn (last xs) xs)))))
+    (values (if package (intern name package) (make-symbol name)) package xs
+            ;; This might be the name of a package, too
+            (format nil "~{~A~^.~}" (butlast xs)))))
 
 ;; "ENUM_VALUE" -> :enum-value
 ;; "cl-user.ENUM_VALUE" -> :enum-value
@@ -358,10 +383,12 @@
    This resolves Protobufs qualified names as best as it can."
   (let* ((xs (split-string (substitute #\- #\_ (uncamel-case x))
                            :separators '(#\.)))
-         (pkg (and (cdr xs) (find-package (first xs))))
-         (package (or pkg package))
-         (name (format nil "~{~A~^.~}" (if pkg (cdr xs) xs))))
-    (values (kintern name) package xs)))
+         (pkg1 (and (cdr xs) (find-proto-package (first xs))))
+         (pkgn (and (cdr xs) (find-proto-package (butlast xs))))
+         (package (or pkg1 pkgn package))
+         (name (format nil "~{~A~^.~}" (if pkg1 (cdr xs) (if pkgn (last xs) xs)))))
+    (values (kintern name) package xs
+            (format nil "~{~A~^.~}" (butlast xs)))))
 
 ;; "slot_name" or "slotName" -> 'slot-name
 ;; "cl-user.slot_name" or "cl-user.slotName" -> 'cl-user::slot-name
@@ -371,11 +398,15 @@
    This resolves Protobufs qualified names as best as it can."
   (let* ((xs (split-string (substitute #\- #\_ (uncamel-case x))
                            :separators '(#\.)))
-         (pkg (and (cdr xs) (find-package (first xs))))
-         (package (or pkg package))
-         (name (format nil "~{~A~^.~}" (if pkg (cdr xs) xs))))
-    (values (if package (intern name package) (make-symbol name)) package xs)))
+         (pkg1 (and (cdr xs) (find-proto-package (first xs))))
+         (pkgn (and (cdr xs) (find-proto-package (butlast xs))))
+         (package (or pkg1 pkgn package))
+         (name (format nil "~{~A~^.~}" (if pkg1 (cdr xs) (if pkgn (last xs) xs)))))
+    (values (if package (intern name package) (make-symbol name)) package xs
+            (format nil "~{~A~^.~}" (butlast xs)))))
 
+
+;;; Warnings
 
 (define-condition protobufs-warning (warning simple-condition) ())
 
@@ -398,7 +429,7 @@
   `(let ((dspec:*redefinition-action* :quiet)) ,@body))
 
 
-;;; Floating point utilities
+;;; Portable floating point utilities
 
 #+(or abcl allegro cmu sbcl lispworks)
 (defun single-float-bits (x)

@@ -163,9 +163,19 @@
    If the file is a .proto file, it first parses it and writes a .lisp file.
    The .lisp file is the compiled and loaded."
   (dolist (import imports)
-    (let* ((base-path  (if *compile-file-pathname*
-                         (merge-pathnames (pathname import) *compile-file-pathname*)
-                         (pathname import)))
+    (let* ((import-dir  (pathname-directory (pathname import)))
+           (import-name (pathname-name (pathname import)))
+           (imported   (find-schema (class-name->proto import-name)))
+           ;;---*** This just isn't right, either in QRes or Google3
+           (base-dir   (ecase (car import-dir)
+                         (:relative
+                          (assert *compile-file-pathname* ()
+                                  "You need a compile-file pathname for relative imports")
+                          import-dir)
+                         (:absolute
+                          import-dir)))
+           (base-path  (make-pathname :name import-name :directory base-dir
+                                      :defaults *compile-file-pathname*))
            (proto-file (make-pathname :type "proto" :defaults base-path))
            (lisp-file  (make-pathname :type "lisp"  :defaults base-path))
            (fasl-file  (compile-file-pathname lisp-file))
@@ -175,6 +185,10 @@
                             (ignore-errors (file-write-date lisp-file))))
            (fasl-date  (and (probe-file fasl-file)
                             (ignore-errors (file-write-date fasl-file)))))
+      (when imported
+        (setf (proto-imported-schemas schema)
+              (nconc (proto-imported-schemas schema) (list imported)))
+        (return-from process-imports imported))
       (when (string= (pathname-type base-path) "proto")
         ;; The user asked to import a .proto file
         ;; If there's no .lisp file or an older .lisp file, parse the .proto file now
@@ -198,5 +212,5 @@
       (let* ((imported (find-schema base-path)))
         (when imported
           (setf (proto-imported-schemas schema)
-                (nconc (proto-imported-schemas schema) (list imported)))))
-      base-path)))
+                (nconc (proto-imported-schemas schema) (list imported))))
+        imported))))

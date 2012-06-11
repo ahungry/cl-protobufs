@@ -24,6 +24,7 @@ Protobufs for Common Lisp
       2.3  Using .proto files directly
       2.4  Using the Protobufs macros
         2.4.1  Protobufs types
+        2.4.2  Protobufs service stubs
     3  Serializing and deserializing
       3.1  Wire format
       3.2  Text format
@@ -628,6 +629,38 @@ The following existing Lisp type correspond to other Protobufs types:
  - ``member`` of a set of keywords generates a Protobufs ``enum`` type
 
 Note that ``(or <T> null)`` corresponds to an optional field.
+
+
+Protobufs service stubs
+-----------------------
+
+When you use the ``proto:define-service`` macro to define a service
+with some methods, the macro defines "stubs" (CLOS generic functions)
+for each of the methods in the service. Each method gets a client stub
+and a server stub whose signatures are, respectively::
+
+  (rpc-channel input output &key callback) => output
+  (rpc-channel input output) => output
+
+The type of *rpc-channel* is unspecified, but is meant to be a
+"channel" over which some sort of RPC call will be done. The types of
+*input* and *output* are classes that were defined via
+Protobufs. *callback* is a function of two arguments, the RPC channel
+and the output; it is intended for use by asynchronous RPC calls.
+
+For example, this fragment defines four stubs::
+
+  (proto:define-service color-wheel ()
+    (get-color (get-color-request color))
+    (add-color (add-color-request color)))
+
+The client stubs are ``get-color`` and ``add-color``, the server stubs
+are ``do-get-color`` and ``do-add-color``. An RPC library will implement
+a method for the client stub. You must fill in the server stub yourself;
+it will implement the desired functionality.
+
+It is beyond the scope of this Protobufs library to provide the RPC
+service; that is the domain of another library.
 
 
 Serializing and deserializing
