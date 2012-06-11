@@ -1,8 +1,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;                                                                  ;;;
-;;; Confidential and proprietary information of ITA Software, Inc.   ;;;
+;;; Free Software published under an MIT-like license. See LICENSE   ;;;
 ;;;                                                                  ;;;
-;;; Copyright (c) 2012 ITA Software, Inc.  All rights reserved.      ;;;
+;;; Copyright (c) 2012 Google, Inc.  All rights reserved.            ;;;
 ;;;                                                                  ;;;
 ;;; Original author: Scott McKay                                     ;;;
 ;;; Based on work by: Robert Brown, Francois-Rene Rideau             ;;;
@@ -54,15 +54,12 @@
   (check-type component protobuf-file)
   (if (proto-relative-pathname component)
     ;; Path was specified with ':relative-pathname'
-    (merge-pathnames
-      (make-pathname :type "proto")
-      (merge-pathnames (pathname (proto-relative-pathname component))
-                        (component-pathname (component-parent component))))
-    ;; No ':relative-pathname', the  path of the protobuf file
+    (subpathname (component-pathname (component-parent component))
+                 (proto-relative-pathname component)
+                 :type "proto")
+    ;; No ':relative-pathname', the path of the protobuf file
     ;; defaults to that of the Lisp file with a ".proto" suffix
-    (merge-pathnames
-      (make-pathname :type "proto")
-      (component-pathname component))))
+    (make-pathname :type "proto" :defaults (component-pathname component))))
 
 (defun resolve-search-path (component)
   (check-type component protobuf-file)
@@ -75,15 +72,8 @@
 (defun resolve-relative-pathname (path parent-path)
   "When 'path' doesn't have an absolute directory component,
    treat it as relative to 'parent-path'."
-  (let* ((pathname  (pathname path))
-         (directory (pathname-directory pathname)))
-    (if (and (list directory) (eq (car directory) :absolute))
-      pathname
-      (let ((resolved-path (merge-pathnames pathname parent-path)))
-        (make-pathname :directory (pathname-directory resolved-path)
-                       :name nil
-                       :type nil
-                       :defaults resolved-path)))))
+  (pathname-directory-pathname
+   (merge-pathnames* path parent-path)))
 
 (defmethod input-files ((op proto-to-lisp) (component protobuf-file))
   (list (protobuf-input-file component)))
