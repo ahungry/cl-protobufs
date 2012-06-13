@@ -15,9 +15,25 @@
 
 ;;; Serialization
 
-;; Serialize the object using the given protobuf type
+(defun serialize-object-to-file (filename object type &key visited)
+  "Serializes the object 'object' of type 'type' into the file 'filename'
+   using the wire format.
+   'object' and 'type' are the same as for 'serialize-object-to-bytes'."
+  (with-open-file (stream filename
+                   :direction :output
+                   :element-type '(unsigned-byte 8))
+    (serialize-object-to-stream object type :stream stream :visited visited)))
+
 (defun serialize-object-to-stream (object type &key (stream *standard-output*) visited)
   "Serializes the object 'object' of type 'type' onto the stream 'stream'
+   using the wire format.
+   'object' and 'type' are the same as for 'serialize-object-to-bytes'."
+  (let ((buffer (serialize-object-to-bytes object type :visited visited)))
+    (write-sequence buffer stream)
+    buffer))
+
+(defun serialize-object-to-bytes (object type &key visited)
+  "Serializes the object 'object' of type 'type' into a new byte vector
    using the wire format.
    'type' is the Lisp name of a Protobufs message (usually the name of a 
    Lisp class) or a 'protobuf-message'.
@@ -31,15 +47,10 @@
          (size    (object-size object type visited))
          (buffer  (make-byte-vector size)))
     (serialize-object object type buffer 0 visited)
-    (when stream
-      (write-sequence buffer stream))
     buffer))
 
-(defun serialize-object-to-file (filename object type &key visited)
-  (with-open-file (stream filename
-                   :direction :output
-                   :element-type '(unsigned-byte 8))
-    (serialize-object-to-stream object type :stream stream :visited visited)))
+;; Serialize the object using the given protobuf type
+
 
 ;; Allow clients to add their own methods
 ;; This is how we address the problem of cycles, e.g. -- if you have an object
@@ -178,21 +189,29 @@
 
 ;;; Deserialization
 
+(defun deserialize-object-from-file (type filename)
+  "Deserializes an object of the given type 'type' from the given file
+   as a Protobuf object."
+  (with-open-file (stream filename
+                   :direction :input
+                   :element-type '(unsigned-byte 8))
+    (deserialize-object-from-stream type :stream stream)))
+
 (defun deserialize-object-from-stream (type &key (stream *standard-input*))
-  "Deserializes an object of the given type 'type' as a Protobuf object.
-   'type' is the Lisp name of a Protobufs message (usually the name of a 
-   Lisp class) or a 'protobuf-message'.
-   The return value is the object."
+  "Deserializes an object of the given type 'type' from the given stream
+   as a Protobuf object."
   (let* ((size    (file-length stream))
          (buffer  (make-byte-vector size)))
     (read-sequence buffer stream)
     (deserialize-object type buffer 0 size)))
 
-(defun deserialize-object-from-file (type filename)
-  (with-open-file (stream filename
-                   :direction :input
-                   :element-type '(unsigned-byte 8))
-    (deserialize-object-from-stream type :stream stream)))
+(defun deserialize-object-from-bytes (type buffer)
+  "Deserializes an object of the given type 'type' from the given stream
+   as a Protobuf object.
+   'type' is the Lisp name of a Protobufs message (usually the name of a 
+   Lisp class) or a 'protobuf-message'.
+   The return value is the object."
+  (deserialize-object type buffer))
 
 ;; Allow clients to add their own methods
 ;; This is you might preserve object identity, e.g.

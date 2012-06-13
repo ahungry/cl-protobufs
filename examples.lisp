@@ -102,19 +102,17 @@
     (eval (proto-impl:generate-serializer   message))
     (eval (proto-impl:generate-deserializer message))))
 
-(time (progn (setq gser (proto:serialize-object-to-stream geodata 'geodata :stream nil)) nil))
+(time (progn (setq gser (proto:serialize-object-to-bytes geodata 'geodata)) nil))
 (time (proto:deserialize-object 'geodata gser))
 
-(equalp gser (proto:serialize-object-to-stream
-              (proto:deserialize-object 'geodata gser)
-              'geodata :stream nil))
+(equalp gser (proto:serialize-object-to-bytes
+              (proto:deserialize-object 'geodata gser) 'geodata))
 
-(time (progn (setq gser-v (proto:serialize-object-to-stream geodata-v 'geodata-v :stream nil)) nil))
+(time (progn (setq gser-v (proto:serialize-object-to-bytes geodata-v 'geodata-v)) nil))
 (time (proto:deserialize-object 'geodata-v gser-v))
 
-(equalp gser-v (proto:serialize-object-to-stream
-                (proto:deserialize-object 'geodata-v gser-v)
-                'geodata-v :stream nil))
+(equalp gser-v (proto:serialize-object-to-bytes
+                (proto:deserialize-object 'geodata-v gser-v) 'geodata-v))
 
 (equalp gser gser-v)
 ||#
@@ -153,7 +151,7 @@
   (cdr x))
 
 (let ((list '("this" "is" "a" ("nested" "test"))))
-  (proto:serialize-object-to-stream list 'typed-list :stream nil)
+  (proto:serialize-object-to-bytes list 'typed-list)
   (proto:print-text-format list 'typed-list)
   (proto:print-text-format list 'typed-list :suppress-line-breaks t)
   (let ((text (with-output-to-string (s)
@@ -162,7 +160,7 @@
       (proto:parse-text-format 'typed-list :stream s))))
 
 (let ((list '((1 one) (2 two) (3 three))))
-  (proto:serialize-object-to-stream list 'typed-list :stream nil)
+  (proto:serialize-object-to-bytes list 'typed-list)
   (proto:print-text-format list 'typed-list)
   (proto:print-text-format list 'typed-list :suppress-line-breaks t)
   (let ((text (with-output-to-string (s)
@@ -217,13 +215,13 @@
   (setf (color-opacity color2) 50)
   (progn
     (format t "~2&Unextended (has-extension ~S)~%" (has-extension color1 'opacity))
-    (let ((ser1 (proto:serialize-object-to-stream rqst1 'add-color-request :stream nil)))
+    (let ((ser1 (proto:serialize-object-to-bytes rqst1 'add-color-request)))
       (print ser1)
       (proto:print-text-format rqst1)
       (proto:print-text-format (proto:deserialize-object 'add-color-request ser1))))
   (progn 
     (format t "~2&Extended (has-extension ~S)~%" (has-extension color2 'opacity))
-    (let ((ser2 (proto:serialize-object-to-stream rqst2 'add-color-request :stream nil)))
+    (let ((ser2 (proto:serialize-object-to-bytes rqst2 'add-color-request)))
       (print ser2)
       (proto:print-text-format rqst2)
       (proto:print-text-format (proto:deserialize-object 'add-color-request ser2)))))
@@ -288,13 +286,13 @@
        (rqst2  (make-instance 'add-color2 :wheel wheel2 :color color2)))
   (progn
     (format t "~2&Nested")
-    (let ((ser1 (proto:serialize-object-to-stream rqst1 'add-color1 :stream nil)))
+    (let ((ser1 (proto:serialize-object-to-bytes rqst1 'add-color1)))
       (print ser1)
       (proto:print-text-format rqst1)
       (proto:print-text-format (proto:deserialize-object 'add-color1 ser1))))
   (progn
     (format t "~2&Group")
-    (let ((ser2 (proto:serialize-object-to-stream rqst2 'add-color2 :stream nil)))
+    (let ((ser2 (proto:serialize-object-to-bytes rqst2 'add-color2)))
       (print ser2)
       (proto:print-text-format rqst2)
       (proto:print-text-format (proto:deserialize-object 'add-color2 ser2)))))
