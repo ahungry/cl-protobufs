@@ -23,7 +23,10 @@
    ;; A search path to try when looking for system-provided .proto files
    (search-path :accessor proto-search-path
                 :initform ()
-                :initarg :search-path))
+                :initarg :search-path)
+   (conc-name :accessor proto-conc-name
+              :initform ""
+              :initarg :conc-name))
   (:documentation
    "This ASDF component defines COMPILE-OP and LOAD-OP operations
     that compiles the .proto file into a .lisp file. You must then
@@ -93,7 +96,8 @@
           (return-from perform
             (proto-impl:parse-protobuf-file
              (make-pathname :type "proto" :defaults source)
-             (make-pathname :type "lisp"  :defaults output))))))))
+             (make-pathname :type "lisp"  :defaults output)
+             :conc-name (proto-conc-name component))))))))
 
 (defmethod operation-description ((op proto-to-lisp) (component protobuf-file))
   (format nil (compatfmt "~@<proto-compiling ~3i~_~A~@:>")
@@ -137,8 +141,8 @@
 
 (in-package "PROTO-IMPL")
 
-(defun parse-protobuf-file (protobuf-file lisp-file)
-  (let ((schema (parse-schema-from-file protobuf-file)))
+(defun parse-protobuf-file (protobuf-file lisp-file &key (conc-name ""))
+  (let ((schema (parse-schema-from-file protobuf-file :conc-name conc-name)))
     (with-open-file (stream lisp-file
                      :direction :output
                      :if-exists :supersede

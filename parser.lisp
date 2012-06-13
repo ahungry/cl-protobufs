@@ -422,12 +422,13 @@
   (let* ((name (prog1 (or name (parse-token stream))
                  (expect-char stream #\{ () "message")
                  (maybe-skip-comments stream)))
+         (class (proto->class-name name *protobuf-package*))
          (message (make-instance 'protobuf-message
-                    :class (proto->class-name name *protobuf-package*)
+                    :class class
                     :name name
                     :parent protobuf
-                    ;; Force accessors for all slots
-                    :conc-name *protobuf-conc-name*))
+                    ;; Maybe force accessors for all slots
+                    :conc-name (conc-name-for-type class *protobuf-conc-name*)))
          (*protobuf* message))
     (loop
       (let ((token (parse-token stream)))
@@ -533,8 +534,9 @@
                        :index idx
                        :value slot
                        ;; Fields parsed from .proto files usually get an accessor
-                       :reader (and *protobuf-conc-name*
-                                    (intern (format nil "~A~A" *protobuf-conc-name* slot) *protobuf-package*))
+                       :reader (let ((conc-name (proto-conc-name message)))
+                                 (and conc-name
+                                      (intern (format nil "~A~A" conc-name slot) *protobuf-package*)))
                        :default (multiple-value-bind (default type default-p)
                                     (find-option opts "default")
                                   (declare (ignore type))
@@ -572,9 +574,10 @@
                   :required (kintern required)
                   :index idx
                   :value slot
-                  ;; Groups parsed from .proto files always get an accessor
-                  :reader (and *protobuf-conc-name*
-                               (intern (format nil "~A~A" *protobuf-conc-name* slot) *protobuf-package*))
+                  ;; Groups parsed from .proto files usually get an accessor
+                  :reader (let ((conc-name (proto-conc-name message)))
+                            (and conc-name
+                                 (intern (format nil "~A~A" conc-name slot) *protobuf-package*)))
                   :message-type :group)))
     (setf (proto-message-type msg) :group)
     (when extended-from

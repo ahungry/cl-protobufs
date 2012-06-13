@@ -125,7 +125,7 @@
                         collect (make-instance 'protobuf-option
                                   :name  (if (symbolp key) (slot-name->proto key) key)
                                   :value val)))
-         (conc-name (and conc-name (string conc-name)))
+         (conc-name (conc-name-for-type type conc-name))
          (index -1)
          (enum  (make-instance 'protobuf-enum
                   :class  type
@@ -186,7 +186,7 @@
                         collect (make-instance 'protobuf-option
                                   :name  (if (symbolp key) (slot-name->proto key) key)
                                   :value val)))
-         (conc-name (and conc-name (string conc-name)))
+         (conc-name (conc-name-for-type type conc-name))
          (message (make-instance 'protobuf-message
                     :class type
                     :name  name
@@ -246,15 +246,25 @@
          ,message
          ,forms))))
 
+(defun conc-name-for-type (type conc-name)
+  (and conc-name
+       (typecase conc-name
+         ((member t) (format nil "~A-" type))
+         ((or string symbol) (string conc-name))
+         (t nil))))
+
 (defmacro define-extension (from to)
   "Define an extension range within a message.
    The \"body\" is the start and end of the range, both inclusive."
-  `(progn
-     define-extension
-     ,(make-instance 'protobuf-extension
-        :from from
-        :to   (if (eq to 'max) #.(1- (ash 1 29)) to))
-     ()))
+  (let ((to (etypecase to
+              (integer to)
+              (symbol (if (string-equal to "MAX") #.(1- (ash 1 29)) to)))))
+    `(progn
+       define-extension
+       ,(make-instance 'protobuf-extension
+          :from from
+          :to   (if (eq to 'max) #.(1- (ash 1 29)) to))
+       ())))
 
 (defmacro define-extend (type (&key name conc-name options documentation)
                          &body fields &environment env)
@@ -278,7 +288,7 @@
                                   :name  (if (symbolp key) (slot-name->proto key) key)
                                   :value val)))
          (message   (find-message *protobuf* name))
-         (conc-name (or (and conc-name (string conc-name))
+         (conc-name (or (conc-name-for-type type conc-name)
                         (and message (proto-conc-name message))))
          (alias-for (and message (proto-alias-for message)))
          (extends (and message
@@ -455,7 +465,7 @@
                         collect (make-instance 'protobuf-option
                                   :name  (if (symbolp key) (slot-name->proto key) key)
                                   :value val)))
-         (conc-name (and conc-name (string conc-name)))
+         (conc-name (conc-name-for-type type conc-name))
          (reader  (or reader
                       (let ((msg-conc (proto-conc-name *protobuf*)))
                         (and msg-conc

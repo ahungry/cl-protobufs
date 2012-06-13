@@ -47,9 +47,20 @@
 
 
 ;; A few things (the pretty printer) want to keep track of the current schema
-(defvar *protobuf* nil)                         ;this can be schema, a message, ...
-(defvar *protobuf-package* nil)
-(defvar *protobuf-conc-name* nil)
+(defvar *protobuf* nil
+  "The Protobufs object currently being defined, e.g., a schema, a message, etc.")
+
+(defvar *protobuf-package* nil
+  "The Lisp package in which the Protobufs schema is being defined.")
+
+(defvar *protobuf-conc-name* nil
+  "A global conc-name to use for all the messages in this schema. This controls
+   the name of the accessors the fields of each message.
+   When it's nil, there is no global conc-name.
+   When it's t, each message will use the message name as the conc-name.
+   When it's a string, that string will be used as the conc-name for each message.
+   'parse-schema-from-file' defaults conc-name to \"\", meaning that each field in
+   every message has an accessor whose name is the name of the field.")
 
 
 ;;; The model classes
@@ -227,6 +238,13 @@
 
 (defmethod find-service ((schema protobuf-schema) (name string))
   (find-qualified-name name (proto-services schema)))
+
+;; Convenience function that accepts a schema name
+(defmethod find-service (schema-name name)
+  (let ((schema (find-schema schema-name)))
+    (assert schema ()
+            "There is no schema named ~A" schema-name)
+    (find-service schema name)))
 
 
 ;; We accept and store any option, but only act on a few: default, packed,

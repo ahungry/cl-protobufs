@@ -363,7 +363,7 @@
                           ~%  (unless (cl:find-package \"~A\") ~
                           ~%    (cl:defpackage ~A (:use :COMMON-LISP)))) ~
                           ~%(cl:in-package \"~A\") ~
-                          ~%(cl:export~%~{  ~S~^~%~})~%~%"
+                          ~%(cl:export '(~{~A~^             ~%~}))~%~%"
                   pkg pkg pkg (collect-exports schema))))
       (when documentation
         (write-schema-documentation type documentation stream :indentation indentation))
@@ -597,8 +597,15 @@
                                          (t default))))
                     (default  (and defaultp
                                    (if (stringp default) (escape-string default) default)))
-                    (reader (unless (eq (proto-reader field) value) (proto-reader field)))
-                    (writer (unless (eq (proto-writer field) value) (proto-writer field)))
+                    (conc-name (proto-conc-name message))
+                    (reader (when (and (not (eq (proto-reader field) value))
+                                       (not (string-equal (proto-reader field)
+                                                          (format nil "~A~A" conc-name value))))
+                              (proto-reader field)))
+                    (writer (when (and (not (eq (proto-writer field) value))
+                                       (not (string-equal (proto-writer field)
+                                                          (format nil "~A~A" conc-name value))))
+                              (proto-writer field)))
                     (slot-name (if *show-lisp-field-indexes*
                                  (format nil "(~(~S~) ~D)" value index)
                                  (format nil "~(~S~)" value))))
@@ -630,7 +637,7 @@
 (defmethod write-schema-as ((type (eql :lisp)) (service protobuf-service) stream
                             &key (indentation 0) more)
   (declare (ignore more))
-  (with-prefixed-accessors (class documentation conc-name) (proto- service)
+  (with-prefixed-accessors (class documentation) (proto- service)
     (when documentation
       (write-schema-documentation type documentation stream :indentation indentation))
     (format stream "~&~@[~VT~](proto:define-service ~(~S~)"
@@ -670,7 +677,7 @@
 
 (defmethod collect-exports ((schema protobuf-schema))
   (delete-duplicates
-   (delete-if #'(lambda (s) (string-equal s "NIL"))
+   (delete-if #'null
     (append (mapcan #'collect-exports (proto-enums schema))
             (mapcan #'collect-exports (proto-messages schema))
             (mapcan #'collect-exports (proto-services schema))))
@@ -678,16 +685,16 @@
 
 ;; Export just the type name
 (defmethod collect-exports ((enum protobuf-enum))
-  (list (symbol-name (proto-class enum))))
+  (list (proto-class enum)))
 
 ;; Export the class name and all of the accessor names
 (defmethod collect-exports ((message protobuf-message))
-  (append (list (symbol-name (proto-class message)))
+  (append (list (proto-class message))
           (mapcan #'collect-exports (proto-fields message))))
 
 ;; Export just the slot accessor name
 (defmethod collect-exports ((field protobuf-field))
-  (list (symbol-name (proto-slot field))))
+  (list (proto-slot field)))
 
 ;; Export the names of all the methods
 (defmethod collect-exports ((service protobuf-service))
@@ -695,4 +702,4 @@
 
 ;; Export just the method name
 (defmethod collect-exports ((method protobuf-method))
-  (list (symbol-name (proto-class method))))
+  (list (proto-client-stub method) (proto-server-stub method)))

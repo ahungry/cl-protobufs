@@ -300,7 +300,7 @@
      ;; Try looking under the given name and the all-uppercase name
      (or (find-package (string name))
          (find-package (string-upcase (string name)))))
-    ((cons)
+    (cons
      ;; If 'name' is a list, it's actually a fully-qualified path
      (or (find-proto-package (first name))
          (find-proto-package (format nil "~{~A~^.~}" name))))))
