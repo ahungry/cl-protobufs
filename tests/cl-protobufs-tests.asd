@@ -19,7 +19,9 @@
   :maintainer '("Scott McKay")
   :description      "Test code for Protobufs for Common Lisp"
   :long-description "Test code for Protobufs for Common Lisp"
-  :depends-on ()
+  :depends-on (:cl-protobufs :quux :test-tools
+	       ;; Some of these tests use QRes business data
+	       #+qres :qres-core)
   :serial t
   :components
     ((:module "packages"
