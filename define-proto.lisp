@@ -54,7 +54,7 @@
                      :documentation documentation))
          (*protobuf* schema)
          (*protobuf-package* (or (find-proto-package lisp-pkg) *package*)))
-    (apply #'process-imports schema imports)
+    (process-imports schema imports)
     (with-collectors ((forms collect-form))
       (dolist (msg messages)
         (assert (and (listp msg)

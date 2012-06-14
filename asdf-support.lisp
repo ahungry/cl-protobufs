@@ -17,22 +17,30 @@
 (defclass protobuf-file (cl-source-file)
   ((type :initform "proto")             ;default file type
    ;; If non-nil, use this relative pathname
-   (relative-pathname :accessor proto-relative-pathname
-                      :initform nil
-                      :initarg :relative-pathname)
+   (proto-pathname :accessor proto-relative-pathname
+                   :initform nil
+                   :initarg :proto-pathname
+                   :documentation "Relative pathname giving the location of the .proto file")
    ;; A search path to try when looking for system-provided .proto files
    (search-path :accessor proto-search-path
                 :initform ()
-                :initarg :search-path)
+                :initarg :search-path
+                :documentation
+                "List of directories where the protocol buffer compiler should search
+                 for imported protobuf files.  Relative pathnames are treated as relative
+                 to the directory containing the DEFSYSTEM form in which they appear.")
    (conc-name :accessor proto-conc-name
               :initform ""
               :initarg :conc-name))
   (:documentation
-   "This ASDF component defines COMPILE-OP and LOAD-OP operations
-    that compiles the .proto file into a .lisp file. You must then
-    compile the generated .lisp file in another module."))
+   "This ASDF component defines PROTO-TO-LISP, COMPILE-OP and LOAD-OP
+    operations that compile the .proto file into a .lisp file. The .lisp
+    file is then compiled, and possibly loaded, as well."))
 
-(defclass proto-to-lisp (compile-op) ())
+(defclass proto-to-lisp (compile-op) ()
+  (:documentation
+   "The ASDF operation that compiles a .proto file containing Protocol Buffers
+    definitions into a .lisp source file."))
 
 (defmethod component-depends-on ((op compile-op) (component protobuf-file))
   "Compiling a protocol buffer file depends on generating Lisp source code for it."
@@ -56,11 +64,11 @@
    translated into Lisp source code for this PROTO-FILE component."
   (check-type component protobuf-file)
   (if (proto-relative-pathname component)
-    ;; Path was specified with ':relative-pathname'
+    ;; Path was specified with ':proto-pathname'
     (subpathname (component-pathname (component-parent component))
                  (proto-relative-pathname component)
                  :type "proto")
-    ;; No ':relative-pathname', the path of the protobuf file
+    ;; No ':proto-pathname', the path of the protobuf file
     ;; defaults to that of the Lisp file with a ".proto" suffix
     (make-pathname :type "proto" :defaults (component-pathname component))))
 
@@ -79,25 +87,28 @@
    (merge-pathnames* path parent-path)))
 
 (defmethod input-files ((op proto-to-lisp) (component protobuf-file))
+  "The input file is just the .proto file."
   (list (protobuf-input-file component)))
 
 (defmethod output-files ((op proto-to-lisp) (component protobuf-file))
+  "The output file gets stored where .fasl files are stored."
   (values (list (component-pathname component))
           nil))
 
 (defmethod perform ((op proto-to-lisp) (component protobuf-file))
   (let* ((input  (protobuf-input-file component))
          (output (first (output-files op component)))
-         (paths  (cons (directory-namestring input) (resolve-search-path component))))
+         (paths  (cons (directory-namestring input) (resolve-search-path component)))
+         (proto-impl:*protobuf-search-path* paths)
+         (proto-impl:*protobuf-output-path* output))
     (dolist (path paths (error 'compile-failed
-                               :component component :operation op))
-      (let ((source (merge-pathnames path (pathname input))))
-        (when (probe-file source)
+                          :component component :operation op))
+      (let ((proto (make-pathname :type "proto" :defaults (merge-pathnames path (pathname input))))
+            (lisp  (make-pathname :type "lisp"  :defaults output)))
+        (when (probe-file proto)
           (return-from perform
-            (proto-impl:parse-protobuf-file
-             (make-pathname :type "proto" :defaults source)
-             (make-pathname :type "lisp"  :defaults output)
-             :conc-name (proto-conc-name component))))))))
+            (proto-impl:parse-protobuf-file proto lisp
+                                            :conc-name (proto-conc-name component))))))))
 
 (defmethod operation-description ((op proto-to-lisp) (component protobuf-file))
   (format nil (compatfmt "~@<proto-compiling ~3i~_~A~@:>")
@@ -106,15 +117,18 @@
                          :defaults (first (output-files op component)))))
 
 (defmethod perform ((op compile-op) (component protobuf-file))
-  (let ((source (make-pathname :name (pathname-name (component-pathname component))
-                               :type "lisp"
-                               :defaults (first (output-files op component))))
-        (output (first (output-files op component)))
-        (*compile-file-warnings-behaviour* (operation-on-warnings op))
-        (*compile-file-failure-behaviour* (operation-on-failure op)))
+  (let* ((input  (protobuf-input-file component))
+         (output (first (output-files op component)))
+         (lisp   (make-pathname :type "lisp"  :defaults output))
+         (fasl   output)
+         (paths  (cons (directory-namestring input) (resolve-search-path component)))
+         (proto-impl:*protobuf-search-path* paths)
+         (proto-impl:*protobuf-output-path* output)
+         (*compile-file-warnings-behaviour* (operation-on-warnings op))
+         (*compile-file-failure-behaviour* (operation-on-failure op)))
     (multiple-value-bind (output warnings-p failure-p)
-        (apply #'compile-file* source
-               :output-file output
+        (apply #'compile-file* lisp
+               :output-file fasl
                (compile-op-flags op))
       (when warnings-p
         (case (operation-on-warnings op)
@@ -138,6 +152,8 @@
                          :type "lisp"
                          :defaults (first (output-files op component)))))
 
+
+;;; Processing of imports
 
 (in-package "PROTO-IMPL")
 
@@ -152,59 +168,65 @@
   lisp-file)
 
 ;; Process 'import' lines
-(defun process-imports (schema &rest imports)
+(defun process-imports (schema imports
+                        &key (search-path *protobuf-search-path*)
+                             (output-path *protobuf-output-path*))
   "Imports all of the files given by 'imports'.
    If the file is a .proto file, it first parses it and writes a .lisp file.
    The .lisp file is the compiled and loaded."
   (dolist (import imports)
-    (let* ((import-dir  (pathname-directory (pathname import)))
-           (import-name (pathname-name (pathname import)))
-           (imported   (find-schema (class-name->proto import-name)))
-           ;;---*** This just isn't right, either in QRes or Google3
-           (base-dir   (ecase (car import-dir)
-                         (:relative
-                          (assert *compile-file-pathname* ()
-                                  "You need a compile-file pathname for relative imports")
-                          import-dir)
-                         (:absolute
-                          import-dir)))
-           (base-path  (make-pathname :name import-name :directory base-dir
-                                      :defaults *compile-file-pathname*))
-           (proto-file (make-pathname :type "proto" :defaults base-path))
-           (lisp-file  (make-pathname :type "lisp"  :defaults base-path))
-           (fasl-file  (compile-file-pathname lisp-file))
-           (proto-date (and (probe-file proto-file)
-                            (ignore-errors (file-write-date proto-file))))
-           (lisp-date  (and (probe-file lisp-file)
-                            (ignore-errors (file-write-date lisp-file))))
-           (fasl-date  (and (probe-file fasl-file)
-                            (ignore-errors (file-write-date fasl-file)))))
-      (when imported
-        (setf (proto-imported-schemas schema)
-              (nconc (proto-imported-schemas schema) (list imported)))
-        (return-from process-imports imported))
-      (when (string= (pathname-type base-path) "proto")
-        ;; The user asked to import a .proto file
-        ;; If there's no .lisp file or an older .lisp file, parse the .proto file now
-        (cond ((not proto-date)
-               (warn "Could not find the .proto file to be imported: ~A" proto-file))
-              ((or (not lisp-date)
-                   (< lisp-date proto-date))
-               (parse-protobuf-file proto-file lisp-file)
-               (setq lisp-date (file-write-date lisp-file)))))
-      ;; Compile the .lisp file, if necessary
-      (cond ((not lisp-date)
-             (unless (string= (pathname-type base-path) "proto")
-               (warn "Could not find the .lisp file to be compiled: ~A" lisp-file)))
-            (t
-             (when (or (not fasl-date)
-                       (< fasl-date lisp-date))
-               (setq fasl-file (compile-file lisp-file))
-               (setq fasl-date (file-write-date fasl-file)))
-             ;; Now we can load the .fasl file
-             (load fasl-file)))
-      (let* ((imported (find-schema base-path)))
+    (block import-one
+      (let* ((import      (pathname import))
+             (import-dir  (pathname-directory import))
+             (import-name (pathname-name import))
+             (imported    (find-schema (class-name->proto import-name))))
+        ;; If this schema has already been imported somewhere else,
+        ;; mark it as imported here and carry on
         (when imported
           (setf (proto-imported-schemas schema)
-                (nconc (proto-imported-schemas schema) (list imported))))
-        imported))))
+                (nconc (proto-imported-schemas schema) (list imported)))
+          (return-from import-one))
+        (dolist (path search-path (error "Could not import ~S" import))
+          (let* ((base-path  (ecase (car import-dir)
+                               ((:relative)
+                                (merge-pathnames import path))
+                               ((:absolute) import)))
+                 (proto-file (make-pathname :name import-name :type "proto"
+                                            :defaults base-path))
+                 (lisp-file  (if output-path
+                               (make-pathname :name import-name :type "lisp"
+                                              :directory (pathname-directory output-path))
+                               (make-pathname :type "lisp" :defaults base-path)))
+                 (fasl-file  (compile-file-pathname lisp-file))
+                 (proto-date (and (probe-file proto-file)
+                                  (ignore-errors (file-write-date proto-file))))
+                 (lisp-date  (and (probe-file lisp-file)
+                                  (ignore-errors (file-write-date lisp-file))))
+                 (fasl-date  (and (probe-file fasl-file)
+                                  (ignore-errors (file-write-date fasl-file)))))
+            (when (probe-file proto-file)
+              (when (string= (pathname-type base-path) "proto")
+                ;; The user asked to import a .proto file
+                ;; If there's no .lisp file or an older .lisp file, parse the .proto file now
+                (cond ((not proto-date)
+                       (warn "Could not find the .proto file to be imported: ~A" proto-file))
+                      ((or (not lisp-date)
+                           (< lisp-date proto-date))
+                       (parse-protobuf-file proto-file lisp-file)
+                       (setq lisp-date (file-write-date lisp-file)))))
+              ;; Compile the .lisp file, if necessary
+              (cond ((not lisp-date)
+                     (unless (string= (pathname-type base-path) "proto")
+                       (warn "Could not find the .lisp file to be compiled: ~A" lisp-file)))
+                    (t
+                     (when (or (not fasl-date)
+                               (< fasl-date lisp-date))
+                       (setq fasl-file (compile-file lisp-file))
+                       (setq fasl-date (file-write-date fasl-file)))
+                     ;; Now we can load the .fasl file
+                     (load fasl-file)))
+              (let* ((imported (find-schema base-path)))
+                (when imported
+                  (setf (proto-imported-schemas schema)
+                        (nconc (proto-imported-schemas schema) (list imported))))
+                (return-from import-one)))))))))

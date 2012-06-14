@@ -176,6 +176,8 @@
    "*PROTOBUF*"
    "*PROTOBUF-PACKAGE*"
    "*PROTOBUF-CONC-NAME*"
+   "*PROTOBUF-SEARCH-PATH*"
+   "*PROTOBUF-OUTPUT-PATH*"
  
    ;; Object lookup
    "*ALL-SCHEMAS*"

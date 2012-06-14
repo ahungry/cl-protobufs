@@ -62,6 +62,12 @@
    'parse-schema-from-file' defaults conc-name to \"\", meaning that each field in
    every message has an accessor whose name is the name of the field.")
 
+(defvar *protobuf-search-path* ()
+  "A search-path to use to resolve any relative pathnames.")
+
+(defvar *protobuf-output-path* ()
+  "A path to use to direct output during imports, etc.")
+
 
 ;;; The model classes
 

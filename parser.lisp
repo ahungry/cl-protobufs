@@ -262,9 +262,9 @@
     (let ((*compile-file-pathname* (pathname stream))
           (*compile-file-truename* (truename stream)))
       (parse-schema-from-stream stream
-                                  :name  (or name (class-name->proto (pathname-name (pathname stream))))
-                                  :class (or class (kintern (pathname-name (pathname stream))))
-                                  :conc-name conc-name))))
+                                :name  (or name (class-name->proto (pathname-name (pathname stream))))
+                                :class (or class (kintern (pathname-name (pathname stream))))
+                                :conc-name conc-name))))
 
 ;; The syntax for Protocol Buffers is so simple that it doesn't seem worth
 ;; writing a sophisticated parser
@@ -343,7 +343,7 @@
   (let ((import (prog1 (parse-string stream)
                   (expect-char stream terminator () "package")
                   (maybe-skip-comments stream))))
-    (process-imports schema import)
+    (process-imports schema (list import))
     (setf (proto-imports schema) (nconc (proto-imports schema) (list import)))))
 
 (defun parse-proto-option (stream protobuf &optional (terminators '(#\;)))
