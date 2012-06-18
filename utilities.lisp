@@ -87,6 +87,11 @@
        (string-equal string suffix :start1 (i- end (length suffix)) :end1 end)
        suffix))
 
+(defun strcat (&rest strings)
+  "Concatenate a bunch of strings."
+  (declare (dynamic-extent strings))
+  (apply #'concatenate 'string strings))
+
 
 ;; (camel-case "camel-case") => "CamelCase"
 (defun camel-case (string &optional (separators '(#\-)))
@@ -135,7 +140,7 @@
                                (cons #\. result)))
                      (t
                       (error "Invalid name character: ~A" ch))))))
-    (concatenate 'string (nreverse (uncamel (concatenate 'list name) nil ())))))
+    (strcat (nreverse (uncamel (concatenate 'list name) nil ())))))
 
 
 (defun split-string (line &key (start 0) (end (length line)) (separators '(#\-)))

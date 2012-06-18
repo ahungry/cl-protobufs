@@ -381,7 +381,8 @@
                  (maybe-skip-comments stream)))
          (enum (make-instance 'protobuf-enum
                  :class (proto->class-name name *protobuf-package*)
-                 :name name)))
+                 :name name
+                 :qualified-name (make-qualified-name protobuf name))))
     (loop
       (let ((name (parse-token stream)))
         (when (null name)
@@ -425,7 +426,8 @@
          (class (proto->class-name name *protobuf-package*))
          (message (make-instance 'protobuf-message
                     :class class
-                    :name name
+                    :name  name
+                    :qualified-name (make-qualified-name protobuf name)
                     :parent protobuf
                     ;; Maybe force accessors for all slots
                     :conc-name (conc-name-for-type class *protobuf-conc-name*)))
@@ -469,8 +471,9 @@
          (message (find-message protobuf name))
          (extends (and message
                        (make-instance 'protobuf-message
-                         :class  (proto->class-name name *protobuf-package*)
-                         :name   name
+                         :class (proto->class-name name *protobuf-package*)
+                         :name  name
+                         :qualified-name (make-qualified-name protobuf name)
                          :parent (proto-parent message)
                          :conc-name (proto-conc-name message)
                          :alias-for (proto-alias-for message)
@@ -529,6 +532,7 @@
                        :name  name
                        :type  type
                        :class class
+                       :qualified-name (make-qualified-name message name)
                        ;; One of :required, :optional or :repeated
                        :required reqd
                        :index idx
@@ -571,6 +575,7 @@
                   :name  name
                   :type  type
                   :class class
+                  :qualified-name (make-qualified-name message name)
                   :required (kintern required)
                   :index idx
                   :value slot
@@ -635,7 +640,8 @@
                  (maybe-skip-comments stream)))
          (service (make-instance 'protobuf-service
                     :class (proto->class-name name *protobuf-package*)
-                    :name name))
+                    :name name
+                    :qualified-name (make-qualified-name *protobuf* name)))
          (index 0))
     (loop
       (let ((token (parse-token stream)))
@@ -673,6 +679,7 @@
          (method (make-instance 'protobuf-method
                    :class stub
                    :name  name
+                   :qualified-name (make-qualified-name *protobuf* name)
                    :input-type  (proto->class-name in *protobuf-package*)
                    :input-name  in
                    :output-type (proto->class-name out *protobuf-package*)

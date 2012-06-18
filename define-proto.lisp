@@ -130,6 +130,7 @@
          (enum  (make-instance 'protobuf-enum
                   :class  type
                   :name   name
+                  :qualified-name (make-qualified-name *protobuf* name)
                   :alias-for alias-for
                   :options options
                   :documentation documentation)))
@@ -190,6 +191,7 @@
          (message (make-instance 'protobuf-message
                     :class type
                     :name  name
+                    :qualified-name (make-qualified-name *protobuf* name)
                     :parent *protobuf*
                     :alias-for alias-for
                     :conc-name conc-name
@@ -295,6 +297,7 @@
                        (make-instance 'protobuf-message
                          :class  type
                          :name   name
+                         :qualified-name (make-qualified-name *protobuf* name)
                          :parent (proto-parent message)
                          :alias-for alias-for
                          :conc-name conc-name
@@ -487,6 +490,7 @@
                     :name  (slot-name->proto slot)
                     :type  name
                     :class type
+                    :qualified-name (make-qualified-name *protobuf* (slot-name->proto slot))
                     :required arity
                     :index index
                     :value slot
@@ -495,6 +499,7 @@
          (message (make-instance 'protobuf-message
                     :class type
                     :name  name
+                    :qualified-name (make-qualified-name *protobuf* name)
                     :alias-for alias-for
                     :conc-name conc-name
                     :options   (remove-options options "default" "packed")
@@ -608,6 +613,7 @@
                           :name  (or name (slot-name->proto slot))
                           :type  ptype
                           :class pclass
+                          :qualified-name (make-qualified-name *protobuf* (or name (slot-name->proto slot)))
                           ;; One of :required, :optional or :repeated
                           :required reqd
                           :index  idx
@@ -639,6 +645,7 @@
          (service (make-instance 'protobuf-service
                     :class type
                     :name  name
+                    :qualified-name (make-qualified-name *protobuf* name)
                     :options options
                     :documentation documentation))
          (index 0))
@@ -661,6 +668,7 @@
                  (method  (make-instance 'protobuf-method
                             :class function
                             :name  (or name (class-name->proto function))
+                            :qualified-name (make-qualified-name *protobuf* (or name (class-name->proto function)))
                             :client-stub client-fn
                             :server-stub server-fn
                             :input-type  input-type

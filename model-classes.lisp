@@ -48,7 +48,7 @@
 
 ;; A few things (the pretty printer) want to keep track of the current schema
 (defvar *protobuf* nil
-  "The Protobufs object currently being defined, e.g., a schema, a message, etc.")
+  "The Protobufs object currently being defined, either a schema or a message.")
 
 (defvar *protobuf-package* nil
   "The Lisp package in which the Protobufs schema is being defined.")
@@ -82,10 +82,10 @@
          :reader proto-name
          :initarg :name
          :initform nil)
-   (full-name :type (or null string)            ;the fully qualified name, e.g., "proto2.MessageSet"
+   (qual-name :type string                      ;the fully qualified name, e.g., "proto2.MessageSet"
               :accessor proto-qualified-name
               :initarg :qualified-name
-              :initform nil)
+              :initform "")
    (options :type (list-of protobuf-option)     ;options, mostly just passed along
             :accessor proto-options
             :initarg :options
@@ -98,11 +98,13 @@
    "The base class for all Protobufs model classes."))
 
 (defun find-qualified-name (name protos
-                            &key (proto-key #'proto-name) (lisp-key #'proto-class))
+                            &key (proto-key #'proto-name) (full-key #'proto-qualified-name)
+                                 (lisp-key #'proto-class))
   "Find something by its string name.
    First do a simple name match.
    Failing that, exhaustively search qualified names."
   (or (find name protos :key proto-key :test #'string=)
+      (find name protos :key full-key  :test #'string=)
       ;; Get desperate in the face of incomplete namespace support
       ;;--- This needs to be more sophisticated than just using Lisp packages
       (multiple-value-bind (name package path other)
@@ -127,7 +129,7 @@
             :accessor proto-package
             :initarg :package
             :initform nil)
-   (lisp-pkg :type (or null string)              ;the Lisp package, from 'option lisp_package = ...'
+   (lisp-pkg :type (or null string)             ;the Lisp package, from 'option lisp_package = ...'
              :accessor proto-lisp-package
              :initarg :lisp-package
              :initform nil)
@@ -186,6 +188,16 @@
   (print-unreadable-object (s stream :type t :identity t)
     (format stream "~@[~S~]~@[ (package ~A)~]"
             (proto-class s) (proto-package s))))
+
+(defgeneric make-qualified-name (proto name)
+  (:documentation
+   "Give a schema or message and a name,
+    generate a fully qualified name string for the name."))
+
+(defmethod make-qualified-name ((schema protobuf-schema) name)
+  ;; If we're at the parent, the qualified name is the schema's
+  ;; packaged "dot" the name
+  (strcat (proto-package schema) "." name))
 
 (defgeneric find-enum (protobuf type)
   (:documentation
@@ -409,7 +421,7 @@
                  :accessor proto-message-type
                  :initarg :message-type
                  :initform :message))
-    (:documentation
+  (:documentation
    "The model class that represents a Protobufs message."))
 
 (defmethod make-load-form ((m protobuf-message) &optional environment)
@@ -440,6 +452,22 @@
             (proto-class m) (proto-alias-for m)
             (eq (proto-message-type m) :group)
             (eq (proto-message-type m) :extends))))
+
+(defmethod proto-package ((message protobuf-message))
+  (and (proto-parent message)
+       (proto-package (proto-parent message))))
+
+(defmethod proto-lisp-package ((message protobuf-message))
+  (and (proto-parent message)
+       (proto-lisp-package (proto-parent message))))
+
+(defmethod make-qualified-name ((message protobuf-message) name)
+  ;; If there's a parent for this message (there should be -- the schema),
+  ;; make a partially qualified name of message name "dot" name, then
+  ;; ask the parent to add its own qualifiers
+  (if (proto-parent message)
+    (make-qualified-name (proto-parent message) (strcat (proto-name message) "." name))
+    (strcat (proto-name message) "." name)))
 
 (defmethod find-message ((message protobuf-message) (type symbol))
   ;; Extended messages "shadow" non-extended ones
