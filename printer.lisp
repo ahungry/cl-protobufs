@@ -363,7 +363,7 @@
                           ~%  (unless (cl:find-package \"~A\") ~
                           ~%    (cl:defpackage ~A (:use :COMMON-LISP)))) ~
                           ~%(cl:in-package \"~A\") ~
-                          ~%(cl:export '(~{~A~^             ~%~}))~%~%"
+                          ~%(cl:export '(~{~A~^~%             ~}))~%~%"
                   pkg pkg pkg (collect-exports schema))))
       (when documentation
         (write-schema-documentation type documentation stream :indentation indentation))
@@ -570,7 +570,7 @@
                     (cond ((eq required :optional)
                            `(or null ,cl))
                           ((eq required :repeated)
-                           (if (eq (proto-default field) $empty-vector)
+                           (if (vector-field-p field)
                              `(vector-of ,cl)
                              `(list-of ,cl)))
                           (t cl)))))

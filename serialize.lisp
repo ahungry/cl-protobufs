@@ -247,7 +247,18 @@
                    `(let ((,vval ,value))
                       (if ,writer
                         (funcall ,writer ,object ,vval)
-                        (setf (slot-value ,object ,slot) ,vval))))))
+                        (setf (slot-value ,object ,slot) ,vval)))))
+               (push-slot (object slot reader writer value)
+                 (with-gensyms (vvals)
+                   `(let ((,vvals (read-slot ,object ,slot ,reader)))
+                      (if (i= (length ,vvals) 0)
+                        ;; We need the initial value to be a stretchy vector,
+                        ;; so scribble over it just to make sure
+                        (let ((,vvals (make-array 1
+                                        :fill-pointer t :adjustable t
+                                        :initial-contents (list ,value))))
+                          (write-slot ,object ,slot ,writer ,vvals))
+                        (vector-push-extend ,value ,vvals))))))
       (labels ((deserialize (type trace end end-tag)
                  (declare (type fixnum end end-tag))
                  (let* ((message (find-message trace type))
@@ -308,7 +319,7 @@
                                                (deserialize-prim type buffer index)
                                              (setq index idx)
                                              (cond (vectorp
-                                                    (vector-push-extend val (read-slot object slot reader)))
+                                                    (push-slot object slot reader writer val))
                                                    (t
                                                     (pushnew field rslots)
                                                     ;; This "push" could type-check the entire list if
@@ -324,7 +335,7 @@
                                              (let* ((etag (make-tag $wire-type-end-group fidx))
                                                     (obj  (deserialize type msg length etag)))
                                                (cond (vectorp
-                                                      (vector-push-extend obj (read-slot object slot reader)))
+                                                      (push-slot object slot reader writer obj))
                                                      (t
                                                       (pushnew field rslots)
                                                       (write-slot object slot writer
@@ -334,7 +345,7 @@
                                                (setq index idx)
                                                (let ((obj (deserialize type msg (+ index len) 0)))
                                                  (cond (vectorp
-                                                        (vector-push-extend obj (read-slot object slot reader)))
+                                                        (push-slot object slot reader writer obj))
                                                        (t
                                                         (pushnew field rslots)
                                                         (write-slot object slot writer
@@ -354,7 +365,7 @@
                                                  (deserialize-enum (proto-values msg) buffer index)
                                                (setq index idx)
                                                (cond (vectorp
-                                                      (vector-push-extend val (read-slot object slot reader)))
+                                                      (push-slot object slot reader writer val))
                                                      (t
                                                       (pushnew field rslots)
                                                       (write-slot object slot writer

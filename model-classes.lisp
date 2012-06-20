@@ -99,14 +99,15 @@
 
 (defun find-qualified-name (name protos
                             &key (proto-key #'proto-name) (full-key #'proto-qualified-name)
-                                 (lisp-key #'proto-class))
-  "Find something by its string name.
-   First do a simple name match.
-   Failing that, exhaustively search qualified names."
+                                 (lisp-key #'proto-class)
+                                 relative-to)
+  "Find something by its string name, first doing a simple name match,
+   and, if that fails, exhaustively searching qualified names."
+  (declare (ignore relative-to))
   (or (find name protos :key proto-key :test #'string=)
+      ;;--- This needs more sophisticated search, e.g., relative to current namespace
       (find name protos :key full-key  :test #'string=)
-      ;; Get desperate in the face of incomplete namespace support
-      ;;--- This needs to be more sophisticated than just using Lisp packages
+      ;; Maybe we can find the symbol in Lisp land?
       (multiple-value-bind (name package path other)
           (proto->class-name name)
         (declare (ignore path))
@@ -199,12 +200,13 @@
   ;; packaged "dot" the name
   (strcat (proto-package schema) "." name))
 
-(defgeneric find-enum (protobuf type)
+(defgeneric find-enum (protobuf type &optional relative-to)
   (:documentation
    "Given a Protobufs schema or message and the name of an enum type,
     returns the Protobufs enum corresponding to the type."))
 
-(defmethod find-enum ((schema protobuf-schema) (type symbol))
+(defmethod find-enum ((schema protobuf-schema) (type symbol) &optional relative-to)
+  (declare (ignore relative-to))
   (labels ((find-it (schema)
              (let ((enum (find type (proto-enums schema) :key #'proto-class)))
                (when enum
@@ -212,20 +214,23 @@
                (map () #'find-it (proto-imported-schemas schema)))))
     (find-it schema)))
 
-(defmethod find-enum ((schema protobuf-schema) (name string))
-  (labels ((find-it (schema)
-             (let ((enum (find-qualified-name name (proto-enums schema))))
-               (when enum
-                 (return-from find-enum enum))
-               (map () #'find-it (proto-imported-schemas schema)))))
-    (find-it schema)))
+(defmethod find-enum ((schema protobuf-schema) (name string) &optional relative-to)
+  (let ((relative-to (or relative-to schema)))
+    (labels ((find-it (schema)
+               (let ((enum (find-qualified-name name (proto-enums schema)
+                                                :relative-to relative-to)))
+                 (when enum
+                   (return-from find-enum enum))
+                 (map () #'find-it (proto-imported-schemas schema)))))
+      (find-it schema))))
 
-(defgeneric find-message (protobuf type)
+(defgeneric find-message (protobuf type &optional relative-to)
   (:documentation
    "Given a Protobufs schema or message and a type name or class name,
     returns the Protobufs message corresponding to the type."))
 
-(defmethod find-message ((schema protobuf-schema) (type symbol))
+(defmethod find-message ((schema protobuf-schema) (type symbol) &optional relative-to)
+  (declare (ignore relative-to))
   ;; Extended messages "shadow" non-extended ones
   (labels ((find-it (schema)
              (let ((message (or (find type (proto-extenders schema) :key #'proto-class)
@@ -235,17 +240,20 @@
                (map () #'find-it (proto-imported-schemas schema)))))
     (find-it schema)))
 
-(defmethod find-message ((schema protobuf-schema) (type class))
-  (find-message schema (class-name type)))
+(defmethod find-message ((schema protobuf-schema) (type class) &optional relative-to)
+  (find-message schema (class-name type) (or relative-to schema)))
 
-(defmethod find-message ((schema protobuf-schema) (name string))
-  (labels ((find-it (schema)
-             (let ((message (or (find-qualified-name name (proto-extenders schema))
-                                (find-qualified-name name (proto-messages  schema)))))
-               (when message
-                 (return-from find-message message))
-               (map () #'find-it (proto-imported-schemas schema)))))
-    (find-it schema)))
+(defmethod find-message ((schema protobuf-schema) (name string) &optional relative-to)
+  (let ((relative-to (or relative-to schema)))
+    (labels ((find-it (schema)
+               (let ((message (or (find-qualified-name name (proto-extenders schema)
+                                                       :relative-to relative-to)
+                                  (find-qualified-name name (proto-messages  schema)
+                                                       :relative-to relative-to))))
+                 (when message
+                   (return-from find-message message))
+                 (map () #'find-it (proto-imported-schemas schema)))))
+      (find-it schema))))
 
 (defgeneric find-service (protobuf name)
   (:documentation
@@ -469,40 +477,48 @@
     (make-qualified-name (proto-parent message) (strcat (proto-name message) "." name))
     (strcat (proto-name message) "." name)))
 
-(defmethod find-message ((message protobuf-message) (type symbol))
+(defmethod find-message ((message protobuf-message) (type symbol) &optional relative-to)
   ;; Extended messages "shadow" non-extended ones
   (or (find type (proto-extenders message) :key #'proto-class)
       (find type (proto-messages message) :key #'proto-class)
-      (find-message (proto-parent message) type)))
+      (find-message (proto-parent message) type (or relative-to message))))
 
-(defmethod find-message ((message protobuf-message) (type class))
-  (find-message message (class-name type)))
+(defmethod find-message ((message protobuf-message) (type class) &optional relative-to)
+  (find-message message (class-name type) (or relative-to message)))
 
-(defmethod find-message ((message protobuf-message) (name string))
-  (or (find-qualified-name name (proto-extenders message))
-      (find-qualified-name name (proto-messages message))
-      (find-message (proto-parent message) name)))
+(defmethod find-message ((message protobuf-message) (name string) &optional relative-to)
+  (let ((relative-to (or relative-to message)))
+    (or (find-qualified-name name (proto-extenders message)
+                             :relative-to relative-to)
+        (find-qualified-name name (proto-messages message)
+                             :relative-to relative-to)
+        (find-message (proto-parent message) name relative-to))))
 
-(defmethod find-enum ((message protobuf-message) type)
+(defmethod find-enum ((message protobuf-message) type &optional relative-to)
   (or (find type (proto-enums message) :key #'proto-class)
-      (find-enum (proto-parent message) type)))
+      (find-enum (proto-parent message) type (or relative-to message))))
 
-(defmethod find-enum ((message protobuf-message) (name string))
-  (or (find-qualified-name name (proto-enums message))
-      (find-enum (proto-parent message) name)))
+(defmethod find-enum ((message protobuf-message) (name string) &optional relative-to)
+  (let ((relative-to (or relative-to message)))
+    (or (find-qualified-name name (proto-enums message)
+                             :relative-to relative-to)
+        (find-enum (proto-parent message) name relative-to))))
 
-(defgeneric find-field (message name)
+(defgeneric find-field (message name &optional relative-to)
   (:documentation
    "Given a Protobufs message and a slot name, field name or index,
     returns the Protobufs field having that name."))
 
-(defmethod find-field ((message protobuf-message) (name symbol))
+(defmethod find-field ((message protobuf-message) (name symbol) &optional relative-to)
+  (declare (ignore relative-to))
   (find name (proto-fields message) :key #'proto-value))
 
-(defmethod find-field ((message protobuf-message) (name string))
-  (find-qualified-name name (proto-fields message) :lisp-key #'proto-value))
+(defmethod find-field ((message protobuf-message) (name string) &optional relative-to)
+  (find-qualified-name name (proto-fields message) :lisp-key #'proto-value
+                       :relative-to (or relative-to message)))
 
-(defmethod find-field ((message protobuf-message) (index integer))
+(defmethod find-field ((message protobuf-message) (index integer) &optional relative-to)
+  (declare (ignore relative-to))
   (find index (proto-fields message) :key #'proto-index))
 
 
@@ -608,7 +624,7 @@
           (eq default $empty-vector)
           ;; Special handling for imported CLOS classes
           (and (not (eq (proto-required field) :optional))
-               (or (null default) (equal default #())))))))
+               (or (null default) (equalp default #())))))))
 
 (defgeneric vector-field-p (field)
   (:documentation

@@ -41,17 +41,33 @@
 ;; A pretty useful subset of geographic business data
 (defclass geodata ()
   ;; This one stores the data in lists
-  ((countries :type (proto:list-of qres-core::country) :initform () :initarg :countries)
-   (regions :type (proto:list-of qres-core::region) :initform () :initarg :regions)
-   (cities :type (proto:list-of qres-core::city) :initform () :initarg :cities)
-   (airports :type (proto:list-of qres-core::airport) :initform () :initarg :airports)))
+  ((countries :type (proto:list-of qres-core::country)
+              :initform ()
+              :initarg :countries)
+   (regions :type (proto:list-of qres-core::region)
+            :initform ()
+            :initarg :regions)
+   (cities :type (proto:list-of qres-core::city)
+           :initform ()
+           :initarg :cities)
+   (airports :type (proto:list-of qres-core::airport)
+             :initform ()
+             :initarg :airports)))
 
 (defclass geodata-v ()
   ;; This one stores the data in vectors
-  ((countries :type (proto:vector-of qres-core::country) :initform #() :initarg :countries)
-   (regions :type (proto:vector-of qres-core::region) :initform #() :initarg :regions)
-   (cities :type (proto:vector-of qres-core::city) :initform #() :initarg :cities)
-   (airports :type (proto:vector-of qres-core::airport) :initform #() :initarg :airports)))
+  ((countries :type (proto:vector-of qres-core::country)
+              :initform #()
+              :initarg :countries)
+   (regions :type (proto:vector-of qres-core::region)
+            :initform #()
+            :initarg :regions)
+   (cities :type (proto:vector-of qres-core::city)
+           :initform #()
+           :initarg :cities)
+   (airports :type (proto:vector-of qres-core::airport)
+             :initform #()
+             :initarg :airports)))
 
 (setq *geodata* (proto:generate-schema-for-classes
                  '(qres-core::country

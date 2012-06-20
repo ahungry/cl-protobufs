@@ -198,6 +198,7 @@
                     :options   (remove-options options "default" "packed")
                     :documentation documentation))
          (index 0)
+         ;; Only now can we bind *protobuf* to the new message
          (*protobuf* message))
     (with-collectors ((slots collect-slot)
                       (forms collect-form))
@@ -309,6 +310,7 @@
                          :extensions (copy-list (proto-extensions message))
                          :message-type :extends         ;this message is an extension
                          :documentation documentation)))
+         ;; Only now can we bind *protobuf* to the new extended message
          (*protobuf* extends)
          (index 0))
     (assert message ()
@@ -353,7 +355,6 @@
                                        ,@(and writer `((defmethod ,writer ((object ,type) value)
                                                          (declare (type ,stype value))
                                                          (setf (gethash object ,stable) value))))
-                                       ,@(and writer `((defsetf ,reader ,writer)))
                                        ;; For Python compatibility
                                        (defmethod get-extension ((object ,type) (slot (eql ',sname)))
                                          (values (gethash object ,stable ,default)))
@@ -365,7 +366,11 @@
                                            (declare (ignore value))
                                            foundp))
                                        (defmethod clear-extension ((object ,type) (slot (eql ',sname)))
-                                         (remhash object ,stable)))))))
+                                         (remhash object ,stable)))
+                                     ,@(and writer
+                                            ;; 'defsetf' needs to be visible at compile time
+                                            `((eval-when (:compile-toplevel :load-toplevel :execute)
+                                                (defsetf ,reader ,writer))))))))
                 (setf (proto-message-type extra-field) :extends) ;this field is an extension
                 (setf (proto-fields extends) (nconc (proto-fields extends) (list extra-field)))
                 (setf (proto-extended-fields extends) (nconc (proto-extended-fields extends) (list extra-field)))))))
@@ -405,8 +410,6 @@
                                     ,@(and writer `((defmethod ,writer ((object ,type) value)
                                                       (declare (type ,stype value))
                                                       (setf (gethash object ,stable) value))))
-                                    ,@(and writer `((defsetf ,reader ,writer)))
-                                    ;; For Python compatibility
                                     (defmethod get-extension ((object ,type) (slot (eql ',sname)))
                                       (values (gethash object ,stable ,default)))
                                     (defmethod set-extension ((object ,type) (slot (eql ',sname)) value)
@@ -417,7 +420,10 @@
                                         (declare (ignore value))
                                         foundp))
                                     (defmethod clear-extension ((object ,type) (slot (eql ',sname)))
-                                      (remhash object ,stable)))))
+                                      (remhash object ,stable)))
+                                  ,@(and writer
+                                         `((eval-when (:compile-toplevel :load-toplevel :execute)
+                                             (defsetf ,reader ,writer))))))
                  ;; This so that (de)serialization works
                  (setf (proto-reader field) reader
                        (proto-writer field) writer)))
@@ -500,12 +506,14 @@
                     :class type
                     :name  name
                     :qualified-name (make-qualified-name *protobuf* name)
+                    :parent *protobuf*
                     :alias-for alias-for
                     :conc-name conc-name
                     :options   (remove-options options "default" "packed")
                     :message-type :group                ;this message is a group
                     :documentation documentation))
          (index 0)
+         ;; Only now can we bind *protobuf* to the (group) message
          (*protobuf* message))
     (with-collectors ((slots collect-slot)
                       (forms collect-form))
