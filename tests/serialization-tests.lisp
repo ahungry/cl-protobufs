@@ -13,6 +13,8 @@
 
 ;;; Basic serialization unit tests
 
+(eval-when (:compile-toplevel :load-toplevel :execute)
+
 (defclass basic-test1 ()
   ((intval :type (signed-byte 32)
            :initarg :intval)))
@@ -68,12 +70,14 @@
             :initform ()
             :initarg :recvals)))
 
+)       ;eval-when
+
 (defvar *basic-test-schema*
   (generate-schema-for-classes
     '(basic-test1 basic-test2 basic-test3 basic-test4 basic-test5 basic-test6)
     :install t))
 
-(qtest:define-test basic-serialization ()
+(define-test basic-serialization ()
   (let* ((test1  (make-instance 'basic-test1 :intval 150))
          (test1b (make-instance 'basic-test1 :intval -150))
          (test2  (make-instance 'basic-test2 :strval "testing"))
@@ -91,20 +95,20 @@
           (tser4  (serialize-object-to-bytes test4 'basic-test4))
           (tser5  (serialize-object-to-bytes test5 'basic-test5))
           (tser6  (serialize-object-to-bytes test6 'basic-test6)))
-      (qtest:assert-true (equalp tser1 #(#x08 #x96 #x01)))
-      (qtest:assert-true (equalp tser1b #(#x08 #xEA #xFE #xFF #xFF #x0F)))
-      (qtest:assert-true (equalp tser2 #(#x12 #x07 #x74 #x65 #x73 #x74 #x69 #x6E #x67)))
-      (qtest:assert-true (equalp tser3 #(#x1A #x03 #x08 #x96 #x01)))
-      (qtest:assert-true (equalp tser4 #(#x1A #x09 #x12 #x07 #x74 #x65 #x73 #x74 #x69 #x6E #x67)))
-      (qtest:assert-true (equalp tser5 #(#x08 #x00
-                                         #x10 #x04 #x02 #x03 #x05 #x07
-                                         #x1A #x03 #x74 #x77 #x6F #x1A #x05 #x74 #x68 #x72 #x65 #x65 #x1A #x04 #x66 #x69 #x76 #x65 #x1A #x05 #x73 #x65 #x76 #x65 #x6E)))
-      (qtest:assert-true (equalp tser6 #(#x08 #x04 #x02 #x03 #x05 #x07 #x12 #x03 #x74 #x77 #x6F #x12 #x05 #x74 #x68 #x72 #x65 #x65 #x12 #x04 #x66 #x69 #x76 #x65 #x12 #x05 #x73 #x65 #x76 #x65 #x6E #x1A #x09 #x12 #x07 #x74 #x65 #x73 #x74 #x69 #x6E #x67 #x1A #x07 #x12 #x05 #x31 #x20 #x32 #x20 #x33)))
+      (assert-true (equalp tser1 #(#x08 #x96 #x01)))
+      (assert-true (equalp tser1b #(#x08 #xEA #xFE #xFF #xFF #x0F)))
+      (assert-true (equalp tser2 #(#x12 #x07 #x74 #x65 #x73 #x74 #x69 #x6E #x67)))
+      (assert-true (equalp tser3 #(#x1A #x03 #x08 #x96 #x01)))
+      (assert-true (equalp tser4 #(#x1A #x09 #x12 #x07 #x74 #x65 #x73 #x74 #x69 #x6E #x67)))
+      (assert-true (equalp tser5 #(#x08 #x00
+                                   #x10 #x04 #x02 #x03 #x05 #x07
+                                   #x1A #x03 #x74 #x77 #x6F #x1A #x05 #x74 #x68 #x72 #x65 #x65 #x1A #x04 #x66 #x69 #x76 #x65 #x1A #x05 #x73 #x65 #x76 #x65 #x6E)))
+      (assert-true (equalp tser6 #(#x08 #x04 #x02 #x03 #x05 #x07 #x12 #x03 #x74 #x77 #x6F #x12 #x05 #x74 #x68 #x72 #x65 #x65 #x12 #x04 #x66 #x69 #x76 #x65 #x12 #x05 #x73 #x65 #x76 #x65 #x6E #x1A #x09 #x12 #x07 #x74 #x65 #x73 #x74 #x69 #x6E #x67 #x1A #x07 #x12 #x05 #x31 #x20 #x32 #x20 #x33)))
       (macrolet ((slots-equalp (obj1 obj2 &rest slots)
-                   (quux:with-gensyms (vobj1 vobj2)
-                     (quux:with-collectors ((forms collect-form))
+                   (proto-impl::with-gensyms (vobj1 vobj2)
+                     (proto-impl::with-collectors ((forms collect-form))
                        (dolist (slot slots)
-                         (collect-form `(qtest:assert-true
+                         (collect-form `(assert-true
                                          (equalp (slot-value ,vobj1 ',slot) (slot-value ,vobj2 ',slot)))))
                        `(let ((,vobj1 ,obj1)
                               (,vobj2 ,obj2))
@@ -136,7 +140,7 @@
                       (second (slot-value (deserialize-object 'basic-test6 tser6) 'recvals))
                       strval)))))
 
-(qtest:define-test basic-optimized-serialization ()
+(define-test basic-optimized-serialization ()
   (dolist (class '(basic-test1 basic-test2 basic-test3 basic-test4 basic-test5 basic-test6))
     (let ((message (find-message *basic-test-schema* class)))
       (eval (generate-object-size  message))
@@ -159,20 +163,20 @@
           (tser4  (serialize-object-to-bytes test4 'basic-test4))
           (tser5  (serialize-object-to-bytes test5 'basic-test5))
           (tser6  (serialize-object-to-bytes test6 'basic-test6)))
-      (qtest:assert-true (equalp tser1 #(#x08 #x96 #x01)))
-      (qtest:assert-true (equalp tser1b #(#x08 #xEA #xFE #xFF #xFF #x0F)))
-      (qtest:assert-true (equalp tser2 #(#x12 #x07 #x74 #x65 #x73 #x74 #x69 #x6E #x67)))
-      (qtest:assert-true (equalp tser3 #(#x1A #x03 #x08 #x96 #x01)))
-      (qtest:assert-true (equalp tser4 #(#x1A #x09 #x12 #x07 #x74 #x65 #x73 #x74 #x69 #x6E #x67)))
-      (qtest:assert-true (equalp tser5 #(#x08 #x00
-                                         #x10 #x04 #x02 #x03 #x05 #x07
-                                         #x1A #x03 #x74 #x77 #x6F #x1A #x05 #x74 #x68 #x72 #x65 #x65 #x1A #x04 #x66 #x69 #x76 #x65 #x1A #x05 #x73 #x65 #x76 #x65 #x6E)))
-      (qtest:assert-true (equalp tser6 #(#x08 #x04 #x02 #x03 #x05 #x07 #x12 #x03 #x74 #x77 #x6F #x12 #x05 #x74 #x68 #x72 #x65 #x65 #x12 #x04 #x66 #x69 #x76 #x65 #x12 #x05 #x73 #x65 #x76 #x65 #x6E #x1A #x09 #x12 #x07 #x74 #x65 #x73 #x74 #x69 #x6E #x67 #x1A #x07 #x12 #x05 #x31 #x20 #x32 #x20 #x33)))
+      (assert-true (equalp tser1 #(#x08 #x96 #x01)))
+      (assert-true (equalp tser1b #(#x08 #xEA #xFE #xFF #xFF #x0F)))
+      (assert-true (equalp tser2 #(#x12 #x07 #x74 #x65 #x73 #x74 #x69 #x6E #x67)))
+      (assert-true (equalp tser3 #(#x1A #x03 #x08 #x96 #x01)))
+      (assert-true (equalp tser4 #(#x1A #x09 #x12 #x07 #x74 #x65 #x73 #x74 #x69 #x6E #x67)))
+      (assert-true (equalp tser5 #(#x08 #x00
+                                   #x10 #x04 #x02 #x03 #x05 #x07
+                                   #x1A #x03 #x74 #x77 #x6F #x1A #x05 #x74 #x68 #x72 #x65 #x65 #x1A #x04 #x66 #x69 #x76 #x65 #x1A #x05 #x73 #x65 #x76 #x65 #x6E)))
+      (assert-true (equalp tser6 #(#x08 #x04 #x02 #x03 #x05 #x07 #x12 #x03 #x74 #x77 #x6F #x12 #x05 #x74 #x68 #x72 #x65 #x65 #x12 #x04 #x66 #x69 #x76 #x65 #x12 #x05 #x73 #x65 #x76 #x65 #x6E #x1A #x09 #x12 #x07 #x74 #x65 #x73 #x74 #x69 #x6E #x67 #x1A #x07 #x12 #x05 #x31 #x20 #x32 #x20 #x33)))
       (macrolet ((slots-equalp (obj1 obj2 &rest slots)
-                   (quux:with-gensyms (vobj1 vobj2)
-                     (quux:with-collectors ((forms collect-form))
+                   (proto-impl::with-gensyms (vobj1 vobj2)
+                     (proto-impl::with-collectors ((forms collect-form))
                        (dolist (slot slots)
-                         (collect-form `(qtest:assert-true
+                         (collect-form `(assert-true
                                          (equalp (slot-value ,vobj1 ',slot) (slot-value ,vobj2 ',slot)))))
                        `(let ((,vobj1 ,obj1)
                               (,vobj2 ,obj2))
@@ -204,7 +208,7 @@
                       (second (slot-value (deserialize-object 'basic-test6 tser6) 'recvals))
                       strval)))))
 
-(qtest:define-test text-serialization ()
+(define-test text-serialization ()
   (let* ((test1  (make-instance 'basic-test1 :intval 150))
          (test1b (make-instance 'basic-test1 :intval -150))
          (test2  (make-instance 'basic-test2 :strval "testing"))
@@ -223,43 +227,43 @@
           (tser5  (serialize-object-to-bytes test5 'basic-test5))
           (tser6  (serialize-object-to-bytes test6 'basic-test6)))
       (macrolet ((slots-equalp (obj1 obj2 &rest slots)
-                   (quux:with-gensyms (vobj1 vobj2)
-                     (quux:with-collectors ((forms collect-form))
+                   (proto-impl::with-gensyms (vobj1 vobj2)
+                     (proto-impl::with-collectors ((forms collect-form))
                        (dolist (slot slots)
-                         (collect-form `(qtest:assert-true
+                         (collect-form `(assert-true
                                          (equalp (slot-value ,vobj1 ',slot) (slot-value ,vobj2 ',slot)))))
                        `(let ((,vobj1 ,obj1)
                               (,vobj2 ,obj2))
                           ,@forms)))))
         (let ((text (with-output-to-string (s)
                       (print-text-format test1 'basic-test1 :stream s))))
-          (qtest:assert-true (string= text (with-output-to-string (s)
-                                             (print-text-format
-                                               (deserialize-object 'basic-test1 tser1) 'basic-test1 :stream s))))
+          (assert-true (string= text (with-output-to-string (s)
+                                       (print-text-format
+                                         (deserialize-object 'basic-test1 tser1) 'basic-test1 :stream s))))
           (slots-equalp test1 (with-input-from-string (s text)
                                 (parse-text-format 'basic-test1 :stream s))
                         intval))
         (let ((text (with-output-to-string (s)
                       (print-text-format test1b 'basic-test1 :stream s))))
-          (qtest:assert-true (string= text (with-output-to-string (s)
-                                             (print-text-format
-                                               (deserialize-object 'basic-test1 tser1b) 'basic-test1 :stream s))))
+          (assert-true (string= text (with-output-to-string (s)
+                                       (print-text-format
+                                         (deserialize-object 'basic-test1 tser1b) 'basic-test1 :stream s))))
           (slots-equalp test1b (with-input-from-string (s text)
                                  (parse-text-format 'basic-test1 :stream s))
                         intval))
         (let ((text (with-output-to-string (s)
                       (print-text-format test2 'basic-test2 :stream s))))
-          (qtest:assert-true (string= text (with-output-to-string (s)
-                                             (print-text-format
-                                               (deserialize-object 'basic-test2 tser2) 'basic-test2 :stream s))))
+          (assert-true (string= text (with-output-to-string (s)
+                                       (print-text-format
+                                         (deserialize-object 'basic-test2 tser2) 'basic-test2 :stream s))))
           (slots-equalp test2 (with-input-from-string (s text)
                                 (parse-text-format 'basic-test2 :stream s))
                         intval strval))
         (let ((text (with-output-to-string (s)
                       (print-text-format test3 'basic-test3 :stream s))))
-          (qtest:assert-true (string= text (with-output-to-string (s)
-                                             (print-text-format
-                                               (deserialize-object 'basic-test3 tser3) 'basic-test3 :stream s))))
+          (assert-true (string= text (with-output-to-string (s)
+                                       (print-text-format
+                                         (deserialize-object 'basic-test3 tser3) 'basic-test3 :stream s))))
           (slots-equalp test3 (with-input-from-string (s text)
                                 (parse-text-format 'basic-test3 :stream s))
                         intval strval)
@@ -269,9 +273,9 @@
                         intval))
         (let ((text (with-output-to-string (s)
                       (print-text-format test4 'basic-test4 :stream s))))
-          (qtest:assert-true (string= text (with-output-to-string (s)
-                                             (print-text-format
-                                               (deserialize-object 'basic-test4 tser4) 'basic-test4 :stream s))))
+          (assert-true (string= text (with-output-to-string (s)
+                                       (print-text-format
+                                         (deserialize-object 'basic-test4 tser4) 'basic-test4 :stream s))))
           (slots-equalp test4 (with-input-from-string (s text)
                                 (parse-text-format 'basic-test4 :stream s))
                         intval strval)
@@ -281,17 +285,17 @@
                         intval strval))
         (let ((text (with-output-to-string (s)
                       (print-text-format test5 'basic-test5 :stream s))))
-          (qtest:assert-true (string= text (with-output-to-string (s)
-                                             (print-text-format
-                                               (deserialize-object 'basic-test5 tser5) 'basic-test5 :stream s))))
+          (assert-true (string= text (with-output-to-string (s)
+                                       (print-text-format
+                                         (deserialize-object 'basic-test5 tser5) 'basic-test5 :stream s))))
           (slots-equalp test5 (with-input-from-string (s text)
                                 (parse-text-format 'basic-test5 :stream s))
                         color intvals strvals))
         (let ((text (with-output-to-string (s)
                       (print-text-format test6 'basic-test6 :stream s))))
-          (qtest:assert-true (string= text (with-output-to-string (s)
-                                             (print-text-format
-                                               (deserialize-object 'basic-test6 tser6) 'basic-test6 :stream s))))
+          (assert-true (string= text (with-output-to-string (s)
+                                       (print-text-format
+                                         (deserialize-object 'basic-test6 tser6) 'basic-test6 :stream s))))
           (slots-equalp test6 (with-input-from-string (s text)
                                 (parse-text-format 'basic-test6 :stream s))
                         intvals strvals)
@@ -316,18 +320,18 @@
     (simple :type (or null inner))
     (i :type (or null integer))))
 
-(qtest:define-test serialization-integrity ()
+(define-test serialization-integrity ()
   (flet ((do-test (message)
            (let* ((type (type-of message))
                   (buf (proto:serialize-object-to-bytes message type))
                   (new (proto:deserialize-object type buf))
                   (newbuf (proto:serialize-object-to-bytes new type)))
-             (qtest:assert-true (equalp (length buf) (length newbuf)))
-             (qtest:assert-true (equalp buf newbuf))
-             (qtest:assert-true (string= (with-output-to-string (s)
-                                           (proto:print-text-format message nil :stream s))
-                                         (with-output-to-string (s)
-                                           (proto:print-text-format new nil :stream s)))))))
+             (assert-true (equalp (length buf) (length newbuf)))
+             (assert-true (equalp buf newbuf))
+             (assert-true (string= (with-output-to-string (s)
+                                     (proto:print-text-format message nil :stream s))
+                                   (with-output-to-string (s)
+                                     (proto:print-text-format new nil :stream s)))))))
     (do-test (make-instance 'outer :i 4))
     (do-test (make-instance 'outer :i -4))
     (do-test (make-instance 'outer 
@@ -342,11 +346,15 @@
 
 #+qres (progn
 
+(eval-when (:compile-toplevel :load-toplevel :execute)
+
 (defclass geodata ()
   ((countries :type (proto:list-of qres-core::country) :initform () :initarg :countries)
    (regions :type (proto:list-of qres-core::region) :initform () :initarg :regions)
    (cities :type (proto:list-of qres-core::city) :initform () :initarg :cities)
    (airports :type (proto:list-of qres-core::airport) :initform () :initarg :airports)))
+
+)       ;eval-when
 
 (defvar *geodata-schema*
   (proto:generate-schema-for-classes
@@ -358,7 +366,7 @@
      geodata)
    :install t))
 
-(qtest:define-test geodata-serialization ()
+(define-test geodata-serialization ()
   (let* ((countries (loop for v being the hash-values of (qres-core::country-business-data) collect (car v)))
          (regions   (loop for v being the hash-values of (qres-core::region-business-data) collect v))
          (cities    (loop for v being the hash-values of (qres-core::city-business-data) collect (car v)))
@@ -369,10 +377,10 @@
                     :cities cities
                     :airports airports)))
     (let ((gser (proto:serialize-object-to-bytes geodata 'geodata)))
-      (qtest:assert-true (equalp gser (proto:serialize-object-to-bytes
-                                       (proto:deserialize-object 'geodata gser) 'geodata))))))
+      (assert-true (equalp gser (proto:serialize-object-to-bytes
+                                 (proto:deserialize-object 'geodata gser) 'geodata))))))
 
-(qtest:define-test geodata-optimized-serialization ()
+(define-test geodata-optimized-serialization ()
   (dolist (class '(qres-core::country qres-core::region qres-core::region-key
                    qres-core::city qres-core::airport
                    qres-core::timezone qres-core::tz-variation
@@ -393,8 +401,8 @@
                     :cities cities
                     :airports airports)))
     (let ((gser (proto:serialize-object-to-bytes geodata 'geodata)))
-      (qtest:assert-true (equalp gser (proto:serialize-object-to-bytes
-                                       (proto:deserialize-object 'geodata gser) 'geodata))))))
+      (assert-true (equalp gser (proto:serialize-object-to-bytes
+                                  (proto:deserialize-object 'geodata gser) 'geodata))))))
 
 )       ;#+qres
 
@@ -432,7 +440,7 @@
     (buy-car (buy-car-request buy-car-response)
       :options (:deadline 1.0))))
 
-(qtest:define-test extension-serialization ()
+(define-test extension-serialization ()
   (let* ((color1 (make-instance 'auto-color :r-value 100 :g-value 0 :b-value 100))
          (car1   (make-instance 'automobile :model "Audi" :color color1))
          (rqst1  (make-instance 'buy-car-request :auto car1))
@@ -441,24 +449,24 @@
          (rqst2  (make-instance 'buy-car-request :auto car2)))
     (setf (auto-color-paint-type color2) :metallic)
     (let ((ser1 (proto:serialize-object-to-bytes rqst1 'buy-car-request)))
-      (qtest:assert-true (string= (with-output-to-string (s)
-                                    (proto:print-text-format rqst1 nil :stream s))
-                                  (with-output-to-string (s)
-                                    (proto:print-text-format
-                                      (proto:deserialize-object 'buy-car-request ser1)  nil :stream s)))))
+      (assert-true (string= (with-output-to-string (s)
+                              (proto:print-text-format rqst1 nil :stream s))
+                            (with-output-to-string (s)
+                              (proto:print-text-format
+                                (proto:deserialize-object 'buy-car-request ser1)  nil :stream s)))))
     (let ((ser2 (proto:serialize-object-to-bytes rqst2 'buy-car-request)))
-      (qtest:assert-true (string= (with-output-to-string (s)
-                                    (proto:print-text-format rqst2 nil :stream s))
-                                  (with-output-to-string (s)
-                                    (proto:print-text-format
-                                      (proto:deserialize-object 'buy-car-request ser2) nil :stream s)))))
+      (assert-true (string= (with-output-to-string (s)
+                              (proto:print-text-format rqst2 nil :stream s))
+                            (with-output-to-string (s)
+                              (proto:print-text-format
+                                (proto:deserialize-object 'buy-car-request ser2) nil :stream s)))))
     (let ((str1 (with-output-to-string (s)
                   (proto:print-text-format rqst1 nil :stream s)))
           (str2 (with-output-to-string (s)
                   (proto:print-text-format rqst2 nil :stream s))))
-      (qtest:assert-false (string= str1 str2))
-      (qtest:assert-false (search "paint_type:" str1 :test #'char=))
-      (qtest:assert-true (search "paint_type:" str2 :test #'char=)))))
+      (assert-false (string= str1 str2))
+      (assert-false (search "paint_type:" str1 :test #'char=))
+      (assert-true (search "paint_type:" str2 :test #'char=)))))
 
 
 ;; Group example
@@ -512,7 +520,7 @@
     (wheel :type color-wheel2)
     (color :type color2)))
 
-(qtest:define-test group-serialization ()
+(define-test group-serialization ()
   (let* ((meta1  (make-instance 'metadata1 :revision "1.0"))
          (wheel1 (make-instance 'color-wheel1 :name "Colors" :metadata meta1))
          (color1 (make-instance 'color1 :r-value 100 :g-value 0 :b-value 100))
@@ -523,26 +531,26 @@
          (rqst2  (make-instance 'add-color2 :wheel wheel2 :color color2)))
     (let ((ser1 (proto:serialize-object-to-bytes rqst1 'add-color1))
           (ser2 (proto:serialize-object-to-bytes rqst2 'add-color2)))
-      (qtest:assert-true (string= (with-output-to-string (s)
-                                    (proto:print-text-format rqst1 nil :stream s))
-                                  (with-output-to-string (s)
-                                    (proto:print-text-format rqst2 nil :stream s))))
-      (qtest:assert-true (string= (with-output-to-string (s)
-                                    (proto:print-text-format
-                                      (proto:deserialize-object 'add-color1 ser1) nil :stream s))
-                                  (with-output-to-string (s)
-                                    (proto:print-text-format
-                                      (proto:deserialize-object 'add-color2 ser2) nil :stream s)))))))
+      (assert-true (string= (with-output-to-string (s)
+                              (proto:print-text-format rqst1 nil :stream s))
+                            (with-output-to-string (s)
+                              (proto:print-text-format rqst2 nil :stream s))))
+      (assert-true (string= (with-output-to-string (s)
+                              (proto:print-text-format
+                                (proto:deserialize-object 'add-color1 ser1) nil :stream s))
+                            (with-output-to-string (s)
+                              (proto:print-text-format
+                                (proto:deserialize-object 'add-color2 ser2) nil :stream s)))))))
 
 
-(qtest:define-test-suite serialization-tests ()
+(define-test-suite serialization-tests ()
   (basic-serialization
    basic-optimized-serialization
    text-serialization
    serialization-integrity
-   geodata-serialization
-   geodata-optimized-serialization
+   #+qres geodata-serialization
+   #+qres geodata-optimized-serialization
    extension-serialization
    group-serialization))
 
-(qtest:register-test 'serialization-tests)
+(register-test 'serialization-tests)

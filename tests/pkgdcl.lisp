@@ -17,7 +17,16 @@
   (:nicknames :proto-test)
   (:use :common-lisp :protobufs :protobufs-implementation)
   (:shadowing-import-from :protobufs-implementation
-   "FIND-METHOD"))
+   "FIND-METHOD")
+  #+test-tools
+  (:import-from :qtest
+   "DEFINE-TEST"
+   "DEFINE-TEST-SUITE"
+   "REGISTER-TEST"
+   "RUN-TEST"
+   "ASSERT-EQUAL"
+   "ASSERT-TRUE"
+   "ASSERT-FALSE"))
 
 (defpackage protobuf-unittest
   (:use :common-lisp :protobufs)

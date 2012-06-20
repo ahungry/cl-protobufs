@@ -82,7 +82,10 @@
 (defun class-to-protobuf-message (class schema
                                   &key slot-filter type-filter enum-filter value-filter)
   "Given a CLOS class, return a Protobufs model object for it."
-  (let* ((class (find-class class))
+  (let* ((class (let ((c (find-class class)))
+                  (unless (class-finalized-p c)
+                    (finalize-inheritance c))           ;so the rest of the MOP will work
+                  c))
          (slots (class-slots class)))
     (with-collectors ((enums  collect-enum)
                       (msgs   collect-msg)

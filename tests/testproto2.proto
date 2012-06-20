@@ -36,7 +36,7 @@ message TimeProtocol {
     required int32 V1 = 2;
     required int32 V2 = 3;
   };
-  repeated string Debug = 4;
+  repeated string DebugString = 4;
 };
 
 message TestMessage {

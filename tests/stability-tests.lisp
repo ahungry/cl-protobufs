@@ -80,7 +80,7 @@ service StableColorWheel {
   }
 }")
 
-(qtest:define-test color-wheel-stability ()
+(define-test color-wheel-stability ()
   (let* ((schema1 (find-schema 'stable-color-wheel))
          (schema2 (with-input-from-string (s *color-wheel-proto*)
                     (parse-schema-from-stream s
@@ -88,19 +88,19 @@ service StableColorWheel {
                       :name (proto-name schema1)
                       :class (proto-class schema1)
                       :conc-name nil))))
-    (qtest:assert-true (schemas-equal schema1 schema2))
-    (qtest:assert-true (string=
-                         (with-output-to-string (s)
-                           (write-schema schema1 :type :proto :stream s))
-                         (with-output-to-string (s)
-                           (write-schema schema2 :type :proto :stream s))))
-    (qtest:assert-true (string=
-                         (with-output-to-string (s)
-                           (write-schema schema1 :type :lisp :stream s))
-                         (with-output-to-string (s)
-                           (write-schema schema2 :type :lisp :stream s))))))
+    (assert-true (schemas-equal schema1 schema2))
+    (assert-true (string=
+                   (with-output-to-string (s)
+                     (write-schema schema1 :type :proto :stream s))
+                   (with-output-to-string (s)
+                     (write-schema schema2 :type :proto :stream s))))
+    (assert-true (string=
+                   (with-output-to-string (s)
+                     (write-schema schema1 :type :lisp :stream s))
+                   (with-output-to-string (s)
+                     (write-schema schema2 :type :lisp :stream s))))))
 
-(qtest:define-test-suite stability-tests ()
+(define-test-suite stability-tests ()
   (color-wheel-stability))
 
-(qtest:register-test 'stability-tests)
+(register-test 'stability-tests)

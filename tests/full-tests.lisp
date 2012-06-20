@@ -14,13 +14,13 @@
 
 ;;; Comprehensive functionality unit tests
 
-(qtest:define-test TEST-NAME ()
+(define-test TEST-NAME ()
 
-(qtest:define-test-suite SUITE-NAME ()
+(define-test-suite SUITE-NAME ()
   (TEST-NAME)
   ...)
 
-(qtest:register-test 'SUITE-NAME)
+(register-test 'SUITE-NAME)
 
 
 (defconst +pwd+ #.(make-pathname

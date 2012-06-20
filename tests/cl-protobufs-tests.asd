@@ -21,8 +21,6 @@
   :long-description "Test code for Protobufs for Common Lisp"
   :defsystem-depends-on (:cl-protobufs)
   :depends-on (:cl-protobufs
-               ;; Right now, this uses the QRes test framework
-               ;; Sorry about that
                #+qres :quux
                #+qres :test-tools
                #+qres :qres-core)
@@ -32,7 +30,8 @@
               :serial t
               :pathname #p""
               :components
-               ((:file "pkgdcl")))
+               ((:file "pkgdcl")
+		#-qres (:file "qtest")))
      ;; Wire format tests
      (:module "wire-level-tests"
               :serial t
