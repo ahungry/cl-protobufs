@@ -635,6 +635,11 @@
                           :documentation documentation)))
             (values field cslot idx)))))))
 
+(defparameter *rpc-package* nil
+  "The Lisp package that implements RPC.")
+(defparameter *rpc-call-function* nil
+  "The Lisp function that implements RPC client-side calls.")
+
 ;; Define a service named 'type' with generic functions declared for
 ;; each of the methods within the service
 (defmacro define-service (type (&key name options documentation)
@@ -704,7 +709,15 @@
               ;; asynchronous calls simpler.
               (collect-form `(defgeneric ,client-fn (,vchannel ,vinput ,voutput &key ,vcallback)
                                ,@(and documentation `((:documentation ,documentation)))
-                               #-sbcl (declare (values ,output-type))))
+                               #-sbcl (declare (values ,output-type))
+                               (:method (,vchannel (,vinput ,input-type) (,voutput ,output-type) &key ,vcallback)
+                                 (declare (ignorable ,vchannel ,vcallback))
+                                 (let ((call (and *rpc-package* *rpc-call-function*
+                                                  (find-symbol *rpc-call-function* *rpc-package*))))
+                                   (assert call ()
+                                           "There is no RPC package loaded!")
+                                   (funcall call ,vchannel ',method ,vinput ,voutput
+                                            :callback ,vcallback)))))
               ;; The server side stub, e.g., 'do-read-air-reservation'.
               ;; The expectation is that the server-side program will implement
               ;; a method with the business logic for this on each kind of channel

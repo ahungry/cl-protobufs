@@ -278,4 +278,8 @@
 
    ;; Stuff for ASDF
    "PARSE-PROTOBUF-FILE"
-   "PROCESS-IMPORTS"))
+   "PROCESS-IMPORTS"
+
+   ;; Stuff for RPC stubs
+   "*RPC-PACKAGE*"
+   "*RPC-CALL-FUNCTION*"))
