@@ -205,26 +205,31 @@
                  (fasl-date  (and (probe-file fasl-file)
                                   (ignore-errors (file-write-date fasl-file)))))
             (when (probe-file proto-file)
-              (when (string= (pathname-type base-path) "proto")
-                ;; The user asked to import a .proto file
-                ;; If there's no .lisp file or an older .lisp file, parse the .proto file now
-                (cond ((not proto-date)
-                       (warn "Could not find the .proto file to be imported: ~A" proto-file))
-                      ((or (not lisp-date)
-                           (< lisp-date proto-date))
-                       (parse-protobuf-file proto-file lisp-file)
-                       (setq lisp-date (file-write-date lisp-file)))))
-              ;; Compile the .lisp file, if necessary
-              (cond ((not lisp-date)
-                     (unless (string= (pathname-type base-path) "proto")
-                       (warn "Could not find the .lisp file to be compiled: ~A" lisp-file)))
-                    (t
-                     (when (or (not fasl-date)
-                               (< fasl-date lisp-date))
-                       (setq fasl-file (compile-file lisp-file))
-                       (setq fasl-date (file-write-date fasl-file)))
-                     ;; Now we can load the .fasl file
-                     (load fasl-file)))
+              (let ((*protobuf-pathname* proto-file))
+                (when (string= (pathname-type base-path) "proto")
+                  ;; The user asked to import a .proto file
+                  ;; If there's no .lisp file or an older .lisp file, parse the .proto file now
+                  (cond ((not proto-date)
+                         (warn "Could not find the .proto file to be imported: ~A" proto-file))
+                        ((or (not lisp-date)
+                             (< lisp-date proto-date))
+                         (parse-protobuf-file proto-file lisp-file)
+                         (setq lisp-date (file-write-date lisp-file)))))
+                ;; Compile the .lisp file, if necessary
+                (cond ((not lisp-date)
+                       (unless (string= (pathname-type base-path) "proto")
+                         (warn "Could not find the .lisp file to be compiled: ~A" lisp-file)))
+                      (t
+                       (when (or (not fasl-date)
+                                 (< fasl-date lisp-date))
+                         (let ((*compile-file-pathname* lisp-file)
+                               (*load-pathname* nil))
+                           (setq fasl-file (compile-file lisp-file)))
+                         (setq fasl-date (file-write-date fasl-file)))
+                       ;; Now we can load the .fasl file
+                       (let ((*compile-file-pathname* nil)
+                             (*load-pathname* fasl-file))
+                         (load fasl-file)))))
               (let* ((imported (find-schema base-path)))
                 (when imported
                   (setf (proto-imported-schemas schema)

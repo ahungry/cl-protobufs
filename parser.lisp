@@ -259,7 +259,8 @@
                    :direction :input
                    :external-format :utf-8
                    :element-type 'character)
-    (let ((*compile-file-pathname* (pathname stream))
+    (let ((*protobuf-pathname* (pathname stream))
+          (*compile-file-pathname* (pathname stream))
           (*compile-file-truename* (truename stream)))
       (parse-schema-from-stream stream
                                 :name  (or name (class-name->proto (pathname-name (pathname stream))))

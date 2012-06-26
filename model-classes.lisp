@@ -28,7 +28,7 @@
 
 (defmethod find-schema ((path pathname))
   "Given a pathname, return the 'protobuf-schema' object that came from that path."
-  (values (gethash (make-pathname :type nil :defaults (truename path)) *all-schemas*)))
+  (values (gethash (make-pathname :type nil :defaults path) *all-schemas*)))
 
 
 (defvar *all-messages* (make-hash-table :test #'equal)
@@ -61,6 +61,9 @@
    When it's a string, that string will be used as the conc-name for each message.
    'parse-schema-from-file' defaults conc-name to \"\", meaning that each field in
    every message has an accessor whose name is the name of the field.")
+
+(defvar *protobuf-pathname* ()
+  "The name of the file from where the .proto file is being parsed.")
 
 (defvar *protobuf-search-path* ()
   "A search-path to use to resolve any relative pathnames.")
@@ -180,10 +183,10 @@
         (setf (gethash (keywordify symbol) *all-schemas*) schema))
       (when name
         (setf (gethash (string-upcase name) *all-schemas*) schema))
-      (let ((path (or *compile-file-pathname* *load-pathname*)))
+      (let ((path (or *protobuf-pathname* *compile-file-pathname*)))
         (when path
           ;; Record the file from which the Protobufs schema came, sans file type
-          (setf (gethash (make-pathname :type nil :defaults (truename path)) *all-schemas*) schema))))))
+          (setf (gethash (make-pathname :type nil :defaults path) *all-schemas*) schema))))))
 
 (defmethod print-object ((s protobuf-schema) stream)
   (print-unreadable-object (s stream :type t :identity t)
