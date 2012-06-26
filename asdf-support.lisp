@@ -103,7 +103,7 @@
          (proto-impl:*protobuf-output-path* output))
     (dolist (path paths (error 'compile-failed
                           :component component :operation op))
-      (let ((proto (make-pathname :type "proto" :defaults (merge-pathnames path (pathname input))))
+      (let ((proto (make-pathname :type "proto" :defaults (merge-pathnames* path (pathname input))))
             (lisp  (make-pathname :type "lisp"  :defaults output)))
         (when (probe-file proto)
           (return-from perform
@@ -119,7 +119,7 @@
 (defmethod perform ((op compile-op) (component protobuf-file))
   (let* ((input  (protobuf-input-file component))
          (output (first (output-files op component)))
-         (lisp   (make-pathname :type "lisp"  :defaults output))
+         (lisp   (make-pathname :type "lisp" :defaults output))
          (fasl   output)
          (paths  (cons (directory-namestring input) (resolve-search-path component)))
          (proto-impl:*protobuf-search-path* paths)
@@ -187,10 +187,7 @@
                 (nconc (proto-imported-schemas schema) (list imported)))
           (return-from import-one))
         (dolist (path search-path (error "Could not import ~S" import))
-          (let* ((base-path  (ecase (car import-dir)
-                               ((:relative)
-                                (merge-pathnames import path))
-                               ((:absolute) import)))
+          (let* ((base-path (merge-pathnames* import path))
                  (proto-file (make-pathname :name import-name :type "proto"
                                             :defaults base-path))
                  (lisp-file  (if output-path
@@ -198,12 +195,10 @@
                                               :directory (pathname-directory output-path))
                                (make-pathname :type "lisp" :defaults base-path)))
                  (fasl-file  (compile-file-pathname lisp-file))
-                 (proto-date (and (probe-file proto-file)
-                                  (ignore-errors (file-write-date proto-file))))
-                 (lisp-date  (and (probe-file lisp-file)
-                                  (ignore-errors (file-write-date lisp-file))))
-                 (fasl-date  (and (probe-file fasl-file)
-                                  (ignore-errors (file-write-date fasl-file)))))
+                 (*asdf-verbose* nil) ;; for safe-file-write-date
+                 (proto-date (asdf::safe-file-write-date proto-file))
+                 (lisp-date  (asdf::safe-file-write-date lisp-file))
+                 (fasl-date  (asdf::safe-file-write-date fasl-file)))
             (when (probe-file proto-file)
               (let ((*protobuf-pathname* proto-file))
                 (when (string= (pathname-type base-path) "proto")
