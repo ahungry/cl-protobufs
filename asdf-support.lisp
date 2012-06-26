@@ -177,7 +177,6 @@
   (dolist (import imports)
     (block import-one
       (let* ((import      (pathname import))
-             (import-dir  (pathname-directory import))
              (import-name (pathname-name import))
              (imported    (find-schema (class-name->proto import-name))))
         ;; If this schema has already been imported somewhere else,
@@ -195,7 +194,7 @@
                                               :directory (pathname-directory output-path))
                                (make-pathname :type "lisp" :defaults base-path)))
                  (fasl-file  (compile-file-pathname lisp-file))
-                 (*asdf-verbose* nil) ;; for safe-file-write-date
+                 (asdf:*asdf-verbose* nil) ;; for safe-file-write-date
                  (proto-date (asdf::safe-file-write-date proto-file))
                  (lisp-date  (asdf::safe-file-write-date lisp-file))
                  (fasl-date  (asdf::safe-file-write-date fasl-file)))
