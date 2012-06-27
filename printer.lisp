@@ -42,7 +42,7 @@
 
 (defmethod write-schema-as ((type (eql :proto)) (schema protobuf-schema) stream
                             &key (indentation 0))
-  (with-prefixed-accessors (name documentation syntax package imports options) (proto- schema)
+  (with-prefixed-accessors (documentation syntax package imports options) (proto- schema)
     (when documentation
       (write-schema-documentation type documentation stream :indentation indentation))
     (when syntax
@@ -134,9 +134,15 @@
     (cond (colon-p                              ;~:/protobuf-option/ -- .proto format
            (let ((fmt-control
                   (cond ((find (proto-name option) *lisp-options* :key #'first :test #'string=)
-                         (if (eq type 'symbol) "(~A)~@[ = ~A~]" "(~A)~@[ = ~S~]"))
+                         (case type
+                           ((symbol) "(~A)~@[ = ~A~]")
+                           ((boolean) "(~A)~@[ = ~(~A~)~]")
+                           (otherwise "(~A)~@[ = ~S~]")))
                         (t
-                         (if (eq type 'symbol) "~A~@[ = ~A~]" "~A~@[ = ~S~]")))))
+                         (case type
+                           ((symbol) "~A~@[ = ~A~]")
+                           ((boolean) "~A~@[ = ~(~A~)~]")
+                           (otherwise "~A~@[ = ~S~]"))))))
              (format stream fmt-control (proto-name option) (proto-value option))))
           (atsign-p                             ;~@/protobuf-option/ -- .lisp format
            (let ((fmt-control (if (eq type 'symbol) "~(~S~) ~A" "~(~S~) ~S")))
@@ -180,63 +186,78 @@
 (defmethod write-schema-as ((type (eql :proto)) (message protobuf-message) stream
                             &key (indentation 0) more index arity)
   (declare (ignore more arity))
-  (with-prefixed-accessors (name class alias-for message-type documentation options) (proto- message)
-    (cond ((eq message-type :group)
-           ;; If we've got a group, the printer for fields has already
-           ;; printed a partial line (nice modularity, huh?)
-           (format stream "group ~A = ~D {~%" name index)
-           (let ((other (and class (not (string-equal name (class-name->proto class))) class)))
-             (when other
-               (format stream "~&~VToption (lisp_name) = \"~A:~A\";~%"
-                       (+ indentation 2) (package-name (symbol-package class)) (symbol-name class))))
-           (when alias-for
-             (format stream "~&~VToption (lisp_alias) = \"~A:~A\";~%"
-                     (+ indentation 2) (package-name (symbol-package alias-for)) (symbol-name alias-for)))
-           (dolist (option options)
-             (format stream "~&~VToption ~:/protobuf-option/;~%"
-                     (+ indentation 2) option))
-           (loop for (enum . more) on (proto-enums message) doing
-             (write-schema-as type enum stream :indentation (+ indentation 2) :more more))
-           (loop for (field . more) on (proto-fields message) doing
-             (write-schema-as type field stream
-                              :indentation (+ indentation 2) :more more :message message))
-           (format stream "~&~@[~VT~]}~%"
-                   (and (not (zerop indentation)) indentation)))
-          (t
-           (when documentation
-             (write-schema-documentation type documentation stream :indentation indentation))
-           (format stream "~&~@[~VT~]~A ~A {~%"
-                   (and (not (zerop indentation)) indentation)
-                   (if (eq message-type :message) "message" "extend") name)
-           (let ((other (and class (not (string-equal name (class-name->proto class))) class)))
-             (when other
-               (format stream "~&~VToption (lisp_name) = \"~A:~A\";~%"
-                       (+ indentation 2) (package-name (symbol-package class)) (symbol-name class))))
-           (when alias-for
-             (format stream "~&~VToption (lisp_alias) = \"~A:~A\";~%"
-                     (+ indentation 2) (package-name (symbol-package alias-for)) (symbol-name alias-for)))
-           (dolist (option options)
-             (format stream "~&~VToption ~:/protobuf-option/;~%"
-                     (+ indentation 2) option))
-           (cond ((eq message-type :extends)
-                  (loop for (field . more) on (proto-extended-fields message) doing
-                    (write-schema-as type field stream
-                                     :indentation (+ indentation 2) :more more
-                                     :message message)))
-                 (t
-                  (loop for (enum . more) on (proto-enums message) doing
-                    (write-schema-as type enum stream :indentation (+ indentation 2) :more more))
-                  (loop for (msg . more) on (proto-messages message) doing
-                    (unless (eq (proto-message-type msg) :group)
-                      (write-schema-as type msg stream :indentation (+ indentation 2) :more more)))
-                  (loop for (field . more) on (proto-fields message) doing
-                    (write-schema-as type field stream
-                                     :indentation (+ indentation 2) :more more
-                                     :message message))
-                  (loop for (extension . more) on (proto-extensions message) doing
-                    (write-schema-as type extension stream :indentation (+ indentation 2) :more more))))
-           (format stream "~&~@[~VT~]}~%"
-                   (and (not (zerop indentation)) indentation))))))
+  (let ((*protobuf* message))
+    (with-prefixed-accessors (name class alias-for message-type documentation options) (proto- message)
+      (cond ((eq message-type :group)
+             ;; If we've got a group, the printer for fields has already
+             ;; printed a partial line (nice modularity, huh?)
+             (format stream "group ~A = ~D {~%" name index)
+             (let ((other (and class (not (string-equal name (class-name->proto class))) class)))
+               (when other
+                 (format stream "~&~VToption (lisp_name) = \"~A:~A\";~%"
+                         (+ indentation 2) (package-name (symbol-package class)) (symbol-name class))))
+             (when alias-for
+               (format stream "~&~VToption (lisp_alias) = \"~A:~A\";~%"
+                       (+ indentation 2) (package-name (symbol-package alias-for)) (symbol-name alias-for)))
+             (dolist (option options)
+               (format stream "~&~VToption ~:/protobuf-option/;~%"
+                       (+ indentation 2) option))
+             (loop for (enum . more) on (proto-enums message) doing
+               (write-schema-as type enum stream :indentation (+ indentation 2) :more more))
+             (loop for (field . more) on (proto-fields message) doing
+               (write-schema-as type field stream
+                                :indentation (+ indentation 2) :more more :message message))
+             (format stream "~&~@[~VT~]}~%"
+                     (and (not (zerop indentation)) indentation)))
+            (t
+             (when documentation
+               (write-schema-documentation type documentation stream :indentation indentation))
+             (format stream "~&~@[~VT~]~A ~A {~%"
+                     (and (not (zerop indentation)) indentation)
+                     (if (eq message-type :message) "message" "extend") 
+                     (maybe-qualified-name message))
+             (let ((other (and class (not (string-equal name (class-name->proto class))) class)))
+               (when other
+                 (format stream "~&~VToption (lisp_name) = \"~A:~A\";~%"
+                         (+ indentation 2) (package-name (symbol-package class)) (symbol-name class))))
+             (when alias-for
+               (format stream "~&~VToption (lisp_alias) = \"~A:~A\";~%"
+                       (+ indentation 2) (package-name (symbol-package alias-for)) (symbol-name alias-for)))
+             (dolist (option options)
+               (format stream "~&~VToption ~:/protobuf-option/;~%"
+                       (+ indentation 2) option))
+             (cond ((eq message-type :extends)
+                    (loop for (field . more) on (proto-extended-fields message) doing
+                      (write-schema-as type field stream
+                                       :indentation (+ indentation 2) :more more
+                                       :message message)))
+                   (t
+                    (loop for (enum . more) on (proto-enums message) doing
+                      (write-schema-as type enum stream :indentation (+ indentation 2) :more more))
+                    (loop for (msg . more) on (proto-messages message) doing
+                      (unless (eq (proto-message-type msg) :group)
+                        (write-schema-as type msg stream :indentation (+ indentation 2) :more more)))
+                    (loop for (field . more) on (proto-fields message) doing
+                      (write-schema-as type field stream
+                                       :indentation (+ indentation 2) :more more
+                                       :message message))
+                    (loop for (extension . more) on (proto-extensions message) doing
+                      (write-schema-as type extension stream :indentation (+ indentation 2) :more more))))
+             (format stream "~&~@[~VT~]}~%"
+                     (and (not (zerop indentation)) indentation)))))))
+
+(defun maybe-qualified-name (message &optional name)
+  "Given a message, return a fully qualified name if the short name
+   is not sufficient to name the message in the current scope."
+  (etypecase message
+    (protobuf-message
+     (cond ((string= (make-qualified-name (proto-parent message) (proto-name message))
+                     (proto-qualified-name message))
+            (proto-name message))
+           (t
+            (proto-qualified-name message))))
+    ((or null protobuf-enum)
+     name)))
 
 (defparameter *protobuf-field-comment-column* 56)
 (defmethod write-schema-as ((type (eql :proto)) (field protobuf-field) stream
@@ -282,7 +303,8 @@
                                  ~:[~*~; [default = ~A]~]~@[ [packed = true]~*~]~{ [~:/protobuf-option/]~};~
                                  ~:[~*~*~;~VT// ~A~]~%")
                        (and (not (zerop indentation)) indentation)
-                       required type name index defaultp default packed options
+                       required (maybe-qualified-name msg type) name index
+                       defaultp default packed options
                        documentation *protobuf-field-comment-column* documentation)))))))
 
 (defun escape-string (string)
@@ -318,21 +340,26 @@
 (defmethod write-schema-as ((type (eql :proto)) (method protobuf-method) stream
                             &key (indentation 0) more)
   (declare (ignore more))
-  (with-prefixed-accessors (name documentation input-name output-name options) (proto- method)
-    (when documentation
-      (write-schema-documentation type documentation stream :indentation indentation))
-    (format stream "~&~@[~VT~]rpc ~A (~@[~A~])~@[ returns (~A)~]"
-            (and (not (zerop indentation)) indentation)
-            name input-name output-name)
-    (cond (options
-           (format stream " {~%")
-           (dolist (option options)
-             (format stream "~&~@[~VT~]option ~:/protobuf-option/;~%"
-                     (+ indentation 2) option))
-           (format stream "~@[~VT~]}"
-                   (and (not (zerop indentation)) indentation)))
-          (t
-           (format stream ";~%")))))
+  (with-prefixed-accessors
+      (name documentation input-name output-name options) (proto- method)
+    (let* ((imsg (find-message *protobuf* input-name))
+           (omsg (find-message *protobuf* output-name))
+           (iname (maybe-qualified-name imsg))
+           (oname (maybe-qualified-name omsg)))
+      (when documentation
+        (write-schema-documentation type documentation stream :indentation indentation))
+      (format stream "~&~@[~VT~]rpc ~A (~@[~A~])~@[ returns (~A)~]"
+              (and (not (zerop indentation)) indentation)
+              name iname oname)
+      (cond (options
+             (format stream " {~%")
+             (dolist (option options)
+               (format stream "~&~@[~VT~]option ~:/protobuf-option/;~%"
+                       (+ indentation 2) option))
+             (format stream "~@[~VT~]}"
+                     (and (not (zerop indentation)) indentation)))
+            (t
+             (format stream ";~%"))))))
 
 
 ;;; Pretty print a schema as a .lisp file
@@ -462,85 +489,86 @@
 (defmethod write-schema-as ((type (eql :lisp)) (message protobuf-message) stream
                             &key (indentation 0) more index arity)
   (declare (ignore more))
-  (with-prefixed-accessors (name class alias-for conc-name message-type documentation) (proto- message)
-    (cond ((eq message-type :group)
-           (when documentation
-             (write-schema-documentation type documentation stream :indentation indentation))
-           (format stream "~&~@[~VT~](proto:define-group ~(~S~)"
-                   (and (not (zerop indentation)) indentation) class)
-           (let ((other (and name (not (string-equal name (class-name->proto class))) name)))
-             (format stream "~%~@[~VT~](:index ~D~@[~%~VT~]~
-                                        :arity ~(~S~)~@[~%~VT~]~
-                                        ~:[~*~*~;:name ~(~S~)~@[~%~VT~]~]~
-                                        ~:[~*~*~;:alias-for ~(~S~)~@[~%~VT~]~]~
-                                        ~:[~*~*~;:conc-name ~(~S~)~@[~%~VT~]~]~
-                                        ~:[~*~;:documentation ~S~])"
-                     (+ indentation 4)
-                     index (+ indentation 5)
-                     arity (and (or other alias-for conc-name documentation) (+ indentation 5))
-                     other other (and (or alias-for conc-name documentation) (+ indentation 5))
-                     alias-for alias-for (and (or documentation conc-name) (+ indentation 5))
-                     conc-name conc-name (and documentation (+ indentation 5))
-                     documentation documentation))
-           (loop for (enum . more) on (proto-enums message) doing
-             (write-schema-as type enum stream :indentation (+ indentation 2) :more more)
-             (when more
-               (terpri stream)))
-           (loop for (field . more) on (proto-fields message) doing
-             (write-schema-as type field stream
-                              :indentation (+ indentation 2) :more more
-                              :message message)
-             (when more
-               (terpri stream))))
-          (t
-           (when documentation
-             (write-schema-documentation type documentation stream :indentation indentation))
-           (format stream "~&~@[~VT~](proto:define-~A ~(~S~)"
-                   (and (not (zerop indentation)) indentation)
-                   (if (eq message-type :message) "message" "extend") class)
-           (let ((other (and name (not (string-equal name (class-name->proto class))) name)))
+  (let ((*protobuf* message))
+    (with-prefixed-accessors (name class alias-for conc-name message-type documentation) (proto- message)
+      (cond ((eq message-type :group)
+             (when documentation
+               (write-schema-documentation type documentation stream :indentation indentation))
+             (format stream "~&~@[~VT~](proto:define-group ~(~S~)"
+                     (and (not (zerop indentation)) indentation) class)
+             (let ((other (and name (not (string-equal name (class-name->proto class))) name)))
+               (format stream "~%~@[~VT~](:index ~D~@[~%~VT~]~
+                                          :arity ~(~S~)~@[~%~VT~]~
+                                          ~:[~*~*~;:name ~(~S~)~@[~%~VT~]~]~
+                                          ~:[~*~*~;:alias-for ~(~S~)~@[~%~VT~]~]~
+                                          ~:[~*~*~;:conc-name ~(~S~)~@[~%~VT~]~]~
+                                          ~:[~*~;:documentation ~S~])"
+                       (+ indentation 4)
+                       index (+ indentation 5)
+                       arity (and (or other alias-for conc-name documentation) (+ indentation 5))
+                       other other (and (or alias-for conc-name documentation) (+ indentation 5))
+                       alias-for alias-for (and (or documentation conc-name) (+ indentation 5))
+                       conc-name conc-name (and documentation (+ indentation 5))
+                       documentation documentation))
+             (loop for (enum . more) on (proto-enums message) doing
+               (write-schema-as type enum stream :indentation (+ indentation 2) :more more)
+               (when more
+                 (terpri stream)))
+             (loop for (field . more) on (proto-fields message) doing
+               (write-schema-as type field stream
+                                :indentation (+ indentation 2) :more more
+                                :message message)
+               (when more
+                 (terpri stream))))
+            (t
+             (when documentation
+               (write-schema-documentation type documentation stream :indentation indentation))
+             (format stream "~&~@[~VT~](proto:define-~A ~(~S~)"
+                     (and (not (zerop indentation)) indentation)
+                     (if (eq message-type :message) "message" "extend") class)
+             (let ((other (and name (not (string-equal name (class-name->proto class))) name)))
+               (cond ((eq message-type :extends)
+                      (format stream " ()"))
+                     ((or other alias-for conc-name documentation)
+                      (format stream "~%~@[~VT~](~:[~*~*~;:name ~(~S~)~@[~%~VT~]~]~
+                                                 ~:[~*~*~;:alias-for ~(~S~)~@[~%~VT~]~]~
+                                                 ~:[~*~*~;:conc-name ~(~S~)~@[~%~VT~]~]~
+                                                 ~:[~*~;:documentation ~S~])"
+                              (+ indentation 4)
+                              other other (and (or alias-for conc-name documentation) (+ indentation 5))
+                              alias-for alias-for (and (or documentation conc-name) (+ indentation 5))
+                              conc-name conc-name (and documentation (+ indentation 5))
+                              documentation documentation))
+                     (t
+                      (format stream " ()"))))
              (cond ((eq message-type :extends)
-                    (format stream " ()"))
-                   ((or other alias-for conc-name documentation)
-                    (format stream "~%~@[~VT~](~:[~*~*~;:name ~(~S~)~@[~%~VT~]~]~
-                                               ~:[~*~*~;:alias-for ~(~S~)~@[~%~VT~]~]~
-                                               ~:[~*~*~;:conc-name ~(~S~)~@[~%~VT~]~]~
-                                               ~:[~*~;:documentation ~S~])"
-                            (+ indentation 4)
-                            other other (and (or alias-for conc-name documentation) (+ indentation 5))
-                            alias-for alias-for (and (or documentation conc-name) (+ indentation 5))
-                            conc-name conc-name (and documentation (+ indentation 5))
-                            documentation documentation))
-                   (t
-                    (format stream " ()"))))
-           (cond ((eq message-type :extends)
-                  (loop for (field . more) on (proto-extended-fields message) doing
-                    (write-schema-as type field stream
-                                     :indentation (+ indentation 2) :more more
-                                     :message message)
-                    (when more
-                      (terpri stream))))
-                 (t
-                  (loop for (enum . more) on (proto-enums message) doing
-                    (write-schema-as type enum stream :indentation (+ indentation 2) :more more)
-                    (when more
-                      (terpri stream)))
-                  (loop for (msg . more) on (proto-messages message) doing
-                    (unless (eq (proto-message-type msg) :group)
-                      (write-schema-as type msg stream :indentation (+ indentation 2) :more more)
+                    (loop for (field . more) on (proto-extended-fields message) doing
+                      (write-schema-as type field stream
+                                       :indentation (+ indentation 2) :more more
+                                       :message message)
                       (when more
                         (terpri stream))))
-                  (loop for (field . more) on (proto-fields message) doing
-                    (write-schema-as type field stream
-                                     :indentation (+ indentation 2) :more more
-                                     :message message)
-                    (when more
-                      (terpri stream)))
-                  (loop for (extension . more) on (proto-extensions message) doing
-                    (write-schema-as type extension stream :indentation (+ indentation 2) :more more)
-                    (when more
-                      (terpri stream)))))))
-    (format stream ")")))
+                   (t
+                    (loop for (enum . more) on (proto-enums message) doing
+                      (write-schema-as type enum stream :indentation (+ indentation 2) :more more)
+                      (when more
+                        (terpri stream)))
+                    (loop for (msg . more) on (proto-messages message) doing
+                      (unless (eq (proto-message-type msg) :group)
+                        (write-schema-as type msg stream :indentation (+ indentation 2) :more more)
+                        (when more
+                          (terpri stream))))
+                    (loop for (field . more) on (proto-fields message) doing
+                      (write-schema-as type field stream
+                                       :indentation (+ indentation 2) :more more
+                                       :message message)
+                      (when more
+                        (terpri stream)))
+                    (loop for (extension . more) on (proto-extensions message) doing
+                      (write-schema-as type extension stream :indentation (+ indentation 2) :more more)
+                      (when more
+                        (terpri stream)))))))
+      (format stream ")"))))
 
 (defparameter *protobuf-slot-comment-column* 56)
 (defmethod write-schema-as ((type (eql :lisp)) (field protobuf-field) stream

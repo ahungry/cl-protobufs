@@ -199,9 +199,11 @@
     generate a fully qualified name string for the name."))
 
 (defmethod make-qualified-name ((schema protobuf-schema) name)
-  ;; If we're at the parent, the qualified name is the schema's
-  ;; packaged "dot" the name
-  (strcat (proto-package schema) "." name))
+  ;; If we're at the schema, the qualified name is the schema's
+  ;; package "dot" the name
+  (if (proto-package schema)
+    (strcat (proto-package schema) "." name)
+    name))
 
 (defgeneric find-enum (protobuf type &optional relative-to)
   (:documentation
@@ -473,12 +475,14 @@
        (proto-lisp-package (proto-parent message))))
 
 (defmethod make-qualified-name ((message protobuf-message) name)
-  ;; If there's a parent for this message (there should be -- the schema),
-  ;; make a partially qualified name of message name "dot" name, then
-  ;; ask the parent to add its own qualifiers
-  (if (proto-parent message)
-    (make-qualified-name (proto-parent message) (strcat (proto-name message) "." name))
-    (strcat (proto-name message) "." name)))
+  ;; The qualified name is the message name "dot" the name
+  (let ((qual-name (strcat (proto-name message) "." name)))
+    (if (proto-parent message)
+      ;; If there's a parent for this message (either a message or
+      ;; the schema), prepend the name (or package) of the parent
+      (make-qualified-name (proto-parent message) qual-name)
+      ;; Guard against a message in the middle of nowhere
+      qual-name)))
 
 (defmethod find-message ((message protobuf-message) (type symbol) &optional relative-to)
   ;; Extended messages "shadow" non-extended ones

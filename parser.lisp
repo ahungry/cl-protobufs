@@ -472,18 +472,20 @@
          (message (find-message protobuf name))
          (extends (and message
                        (make-instance 'protobuf-message
-                         :class (proto->class-name name *protobuf-package*)
-                         :name  name
-                         :qualified-name (make-qualified-name protobuf name)
+                         :class (proto-class message)
+                         :name  (proto-name message)
+                         :qualified-name (proto-qualified-name message)
                          :parent (proto-parent message)
-                         :conc-name (proto-conc-name message)
                          :alias-for (proto-alias-for message)
+                         :conc-name (proto-conc-name message)
                          :enums    (copy-list (proto-enums message))
                          :messages (copy-list (proto-messages message))
                          :fields   (copy-list (proto-fields message))
                          :extensions (copy-list (proto-extensions message))
                          :message-type :extends)))      ;this message is an extension
          (*protobuf* extends))
+    (assert message ()
+            "There is no message named ~A to extend" name)
     (loop
       (let ((token (parse-token stream)))
         (when (null token)

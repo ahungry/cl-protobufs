@@ -296,18 +296,18 @@
          (alias-for (and message (proto-alias-for message)))
          (extends (and message
                        (make-instance 'protobuf-message
-                         :class  type
-                         :name   name
-                         :qualified-name (make-qualified-name *protobuf* name)
+                         :class  (proto-class message)
+                         :name   (proto-name message)
+                         :qualified-name (proto-qualified-name message)
                          :parent (proto-parent message)
                          :alias-for alias-for
                          :conc-name conc-name
                          :enums    (copy-list (proto-enums message))
                          :messages (copy-list (proto-messages message))
                          :fields   (copy-list (proto-fields message))
+                         :extensions (copy-list (proto-extensions message))
                          :options  (remove-options
                                      (or options (copy-list (proto-options message))) "default" "packed")
-                         :extensions (copy-list (proto-extensions message))
                          :message-type :extends         ;this message is an extension
                          :documentation documentation)))
          ;; Only now can we bind *protobuf* to the new extended message
