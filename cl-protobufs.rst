@@ -383,6 +383,12 @@ and Lisp types ``(proto:list-of <T>)`` and ``(proto:vector-of <T>)``
 turn into repeated fields representing by lists or vectors,
 respectively.
 
+Note also that the macros have assigned indexes to the fields for each
+method; similarly, they will assign values to enumerations as well.
+*This is not stable*, that is, if you add new fields or enum values,
+the indexes could change, which would result in an incompatible
+Protobufs schema. 
+
 ::
 
   proto:define-schema (type (&key name syntax import            [Macro]
@@ -394,8 +400,9 @@ Defines a Protobufs "schema" whose name is given by the symbol *type*,
 corresponding to a .proto file of that name. By a "schema", we mean an
 object that corresponds to the contents of one .proto file. If *name*
 is not supplied, the Protobufs name of the schema is the camel-cased
-rendition of *type* (e.g., ``color-wheel`` becomes ``ColorWheel``);
-otherwise the Protobufs name is the string *name*.
+rendition of *type* (e.g., the schema named ``color-wheel``, by
+default, becomes ``ColorWheel``); otherwise the Protobufs name is the
+string *name*.
 
 *imports* is a list of pathname strings to be imported. This corresponds
 to ``import`` in a .proto file. Note that ``proto:define-schema`` can
@@ -450,8 +457,10 @@ alias for an enum type.
 in the .proto file.
 
 *body* consists of the enum values, each of which is either a symbol
-or a list of the form ``(name index)``. By default, the indexes start at
-0 and are incremented by 1 for each new enum value.
+or a list of the form ``(name index)``. By default, the indexes start
+at 0 and are incremented by 1 for each new enum value. For schema
+forward and backward compatibility, you should always use the
+``(name index)`` form.
 
 ``proto:define-enum`` can be used only within ``proto:define-schema``
 or ``proto:define-message``.
@@ -462,13 +471,14 @@ or ``proto:define-message``.
                                    options documentation)
                         &body fields)
 
-Defines a Protobuf message and a corresponding Lisp defclass whose name
-is given by the symbol *type*. If *name* is not supplied, the Protobufs
-name of the class is the camel-cased rendition of *type*; otherwise the
-Protobufs name is the string *name*. If *conc-name* is given, it will
-be used as the prefix for all of the slot accessor names. In a .proto
-file, you can use ``option (lisp_name)`` to override the default name
-for the class in Lisp.
+Defines a Protobuf message and a corresponding Lisp defclass whose
+name is given by the symbol *type*. If *name* is not supplied, the
+Protobufs name of the class is the camel-cased rendition of *type*
+(e.g., the class named ``color-wheel``, by default, becomes
+``ColorWheel``); otherwise the Protobufs name is the string *name*. If
+*conc-name* is given, it will be used as the prefix for all of the
+slot accessor names. In a .proto file, you can use ``option (lisp_name)``
+to override the default name for the class in Lisp.
 
 If *alias-for* is given, no Lisp defclass is defined. Instead, the
 message will be used as an alias for a class that already exists in
@@ -491,13 +501,17 @@ Fields take the form ``(slot &key type name default reader writer)``.
 *slot* can be either a symbol giving the slot name or a list of the
 form ``(slot index)``. By default, the field indexes start at 1 and
 are incremented by 1 for each new field value. *type* is the type of
-the slot. *name* can be used to override the defaultly generated
-Protobufs field name (for example, ``color-name`` becomes
-``colorName``). *default* is the default value for the slot. *reader*
-is the name of a Lisp slot reader function to use to get the value during
-serialization, as opposed to using ``slot-value``; this is meant to be
-used when aliasing an existing class. *writer* can be similarly used
-to name a Lisp slot writer function.
+the slot.  For schema forward and backward compatibility, you should
+always use the ``(slot index)`` form.
+
+*name* can be used to override the defaultly generated Protobufs field
+name (for example, a Lisp field called ``color-name``, by default,
+becomes ``color_name``). *default* is the default value for the
+slot. *reader* is the name of a Lisp slot reader function to use to
+get the value during serialization, as opposed to using
+``slot-value``; this is meant to be used when aliasing an existing
+class. *writer* can be similarly used to name a Lisp slot writer
+function.
 
 Note that the Protobufs does not support full Lisp type expressions in
 the types of fields. The following type expressions are supported:
