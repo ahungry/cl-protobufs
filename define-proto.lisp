@@ -131,6 +131,7 @@
                   :class  type
                   :name   name
                   :qualified-name (make-qualified-name *protobuf* name)
+                  :parent *protobuf*
                   :alias-for alias-for
                   :options options
                   :documentation documentation)))
@@ -142,9 +143,10 @@
                (val-name  (kintern (if conc-name (format nil "~A~A" conc-name name) (symbol-name name))))
                (enum-name (if conc-name (format nil "~A~A" conc-name name) (symbol-name name)))
                (enum-val  (make-instance 'protobuf-enum-value
-                            :name  (enum-name->proto enum-name)
-                            :index idx
-                            :value val-name)))
+                            :name   (enum-name->proto enum-name)
+                            :index  idx
+                            :value  val-name
+                            :parent enum)))
           (collect-val val-name)
           (setf (proto-values enum) (nconc (proto-values enum) (list enum-val)))))
       (if alias-for
@@ -497,6 +499,7 @@
                     :type  name
                     :class type
                     :qualified-name (make-qualified-name *protobuf* (slot-name->proto slot))
+                    :parent *protobuf*
                     :required arity
                     :index index
                     :value slot
@@ -622,6 +625,7 @@
                           :type  ptype
                           :class pclass
                           :qualified-name (make-qualified-name *protobuf* (or name (slot-name->proto slot)))
+                          :parent *protobuf*
                           ;; One of :required, :optional or :repeated
                           :required reqd
                           :index  idx
@@ -659,6 +663,7 @@
                     :class type
                     :name  name
                     :qualified-name (make-qualified-name *protobuf* name)
+                    :parent *protobuf*
                     :options options
                     :documentation documentation))
          (index 0))
@@ -682,6 +687,7 @@
                             :class function
                             :name  (or name (class-name->proto function))
                             :qualified-name (make-qualified-name *protobuf* (or name (class-name->proto function)))
+                            :parent service
                             :client-stub client-fn
                             :server-stub server-fn
                             :input-type  input-type

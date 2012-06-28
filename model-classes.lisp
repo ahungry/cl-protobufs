@@ -89,6 +89,9 @@
               :accessor proto-qualified-name
               :initarg :qualified-name
               :initform "")
+   (parent :type (or null base-protobuf)        ;this object's parent
+           :accessor proto-parent
+           :initarg :parent)
    (options :type (list-of protobuf-option)     ;options, mostly just passed along
             :accessor proto-options
             :initarg :options
@@ -393,10 +396,7 @@
 
 ;; A Protobufs message
 (defclass protobuf-message (base-protobuf)
-  ((parent :type (or protobuf-schema protobuf-message)
-           :accessor proto-parent
-           :initarg :parent)
-   (conc :type (or null string)                 ;the conc-name used for Lisp accessors
+  ((conc :type (or null string)                 ;the conc-name used for Lisp accessors
          :accessor proto-conc-name
          :initarg :conc-name
          :initform nil)

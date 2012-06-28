@@ -383,7 +383,8 @@
          (enum (make-instance 'protobuf-enum
                  :class (proto->class-name name *protobuf-package*)
                  :name name
-                 :qualified-name (make-qualified-name protobuf name))))
+                 :qualified-name (make-qualified-name protobuf name)
+                 :parent protobuf)))
     (loop
       (let ((name (parse-token stream)))
         (when (null name)
@@ -412,7 +413,8 @@
          (value (make-instance 'protobuf-enum-value
                   :name  name
                   :index idx
-                  :value (proto->enum-name name *protobuf-package*))))
+                  :value (proto->enum-name name *protobuf-package*)
+                  :parent enum)))
     (setf (proto-values enum) (nconc (proto-values enum) (list value)))
     value))
 
@@ -536,6 +538,7 @@
                        :type  type
                        :class class
                        :qualified-name (make-qualified-name message name)
+                       :parent message
                        ;; One of :required, :optional or :repeated
                        :required reqd
                        :index idx
@@ -579,6 +582,7 @@
                   :type  type
                   :class class
                   :qualified-name (make-qualified-name message name)
+                  :parent message
                   :required (kintern required)
                   :index idx
                   :value slot
@@ -644,7 +648,8 @@
          (service (make-instance 'protobuf-service
                     :class (proto->class-name name *protobuf-package*)
                     :name name
-                    :qualified-name (make-qualified-name *protobuf* name)))
+                    :qualified-name (make-qualified-name *protobuf* name)
+                    :parent schema))
          (index 0))
     (loop
       (let ((token (parse-token stream)))
@@ -683,6 +688,7 @@
                    :class stub
                    :name  name
                    :qualified-name (make-qualified-name *protobuf* name)
+                   :parent service
                    :input-type  (proto->class-name in *protobuf-package*)
                    :input-name  in
                    :output-type (proto->class-name out *protobuf-package*)

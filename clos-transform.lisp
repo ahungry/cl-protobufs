@@ -105,14 +105,23 @@
           (when field
             (incf index 1)                              ;don't worry about the 19000-19999 restriction
             (collect-field field))))
-      (make-instance 'protobuf-message
-        :class (class-name class)
-        :name  (class-name->proto (class-name class))
-        :parent schema
-        :alias-for (and *alias-existing-classes* (class-name class))
-        :enums    (delete-duplicates enums :key #'proto-name :test #'string=)
-        :messages (delete-duplicates msgs :key #'proto-name :test #'string=)
-        :fields   fields))))
+      (let ((message
+             (make-instance 'protobuf-message
+               :class (class-name class)
+               :name  (class-name->proto (class-name class))
+               :parent schema
+               :alias-for (and *alias-existing-classes* (class-name class))
+               :enums    (delete-duplicates enums :key #'proto-name :test #'string=)
+               :messages (delete-duplicates msgs :key #'proto-name :test #'string=)
+               :fields   fields)))
+        ;; Give every child a proper parent
+        (dolist (enum (proto-enums message))
+          (setf (proto-parent enum) message))
+        (dolist (msg (proto-messages message))
+          (setf (proto-parent msg) message))
+        (dolist (field (proto-fields message))
+          (setf (proto-parent field) message))
+        message))))
 
 ;; Returns a field, (optionally) an inner message, and (optionally) an inner enum
 (defun slot-to-protobuf-field (class slot index slots
@@ -146,16 +155,21 @@
                                  #+ignore         ;this happens constantly, the warning is not useful
                                  (protobufs-warn "Use DEFTYPE to define a MEMBER type instead of directly using ~S"
                                                  expanded-type))
-                               (make-instance 'protobuf-enum
-                                 :class  etype
-                                 :name   (class-name->proto ename)
-                                 :values (loop for name in names
-                                               for val in enums
-                                               for index upfrom 0
-                                               collect (make-instance 'protobuf-enum-value
-                                                         :name name
-                                                         :index index
-                                                         :value val))))))
+                               (let* ((enum
+                                       (make-instance 'protobuf-enum
+                                         :class etype
+                                         :name  (class-name->proto ename)))
+                                      (values
+                                       (loop for name in names
+                                             for val in enums
+                                             for index upfrom 0
+                                             collect (make-instance 'protobuf-enum-value
+                                                       :name name
+                                                       :index index
+                                                       :value val
+                                                       :parent enum))))
+                                 (setf (proto-values enum) values)
+                                 enum))))
                  (default (if (slot-definition-initfunction slot)
                             (clos-init-to-protobuf-default
                              (slot-definition-initform slot) expanded-type value-filter)

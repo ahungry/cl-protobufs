@@ -46,6 +46,12 @@
    "PROTOBUF-SERVICE"
    "PROTOBUF-METHOD"
 
+   ;; Object lookup
+   "FIND-MESSAGE"
+   "FIND-MESSAGE-FOR-CLASS"
+   "FIND-SCHEMA"
+   "FIND-SERVICE"
+
    ;; .proto parsing and printing
    "PARSE-SCHEMA-FROM-FILE"
    "PARSE-SCHEMA-FROM-STREAM"
@@ -187,11 +193,7 @@
    "*ALL-MESSAGES*"
    "FIND-ENUM"
    "FIND-FIELD"
-   "FIND-MESSAGE"
-   "FIND-MESSAGE-FOR-CLASS"
    "FIND-METHOD"                ;if you ":use proto-impl", watch for name clash
-   "FIND-SCHEMA"
-   "FIND-SERVICE"
    "FIND-OPTION"
    "REMOVE-OPTIONS"
 
