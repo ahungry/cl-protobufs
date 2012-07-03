@@ -197,7 +197,8 @@
   (:documentation
    "Serialize 'object' into 'buffer' using the wire format, starting at the index
    'start' and going no farther than 'end'. 'object' is an object whose Lisp class
-   corresponds to a Protobufs message.")
+   corresponds to a Protobufs message.
+   Returns two values, the final index and the buffer.")
   (:method ((object standard-object) &optional buffer (start 0) end)
     (declare (ignore end))
     (let* ((class   (type-of object))
@@ -214,7 +215,7 @@
         (multiple-value-bind (nbuf nend)
             (serialize-object object type buffer start visited)
         (declare (ignore nbuf))
-        nend)))))
+        (values nend buffer))))))
 
 (defgeneric merge-from-array (object buffer &optional start end)
   (:documentation

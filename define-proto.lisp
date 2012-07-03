@@ -640,9 +640,11 @@
             (values field cslot idx)))))))
 
 (defparameter *rpc-package* nil
-  "The Lisp package that implements RPC.")
+  "The Lisp package that implements RPC.
+   This should be set when an RPC package that uses CL-Protobufs gets loaded.")
 (defparameter *rpc-call-function* nil
-  "The Lisp function that implements RPC client-side calls.")
+  "The Lisp function that implements RPC client-side calls.
+   This should be set when an RPC package that uses CL-Protobufs gets loaded.")
 
 ;; Define a service named 'type' with generic functions declared for
 ;; each of the methods within the service
@@ -718,8 +720,7 @@
                                #-sbcl (declare (values ,output-type))
                                (:method (,vchannel (,vinput ,input-type) (,voutput ,output-type) &key ,vcallback)
                                  (declare (ignorable ,vchannel ,vcallback))
-                                 (let ((call (and *rpc-package* *rpc-call-function*
-                                                  (find-symbol *rpc-call-function* *rpc-package*))))
+                                 (let ((call (and *rpc-package* *rpc-call-function*)))
                                    (assert call ()
                                            "There is no RPC package loaded!")
                                    (funcall call ,vchannel ',method ,vinput ,voutput
