@@ -109,8 +109,16 @@
                              (mapcar #'generate-deserializer messages)))))
              ,var))))))
 
+(defmacro with-proto-source-location ((name type &optional pathname file-position) &body body)
+  "Establish a context which causes the generated Lisp code to have
+   source location information that points to the .proto file."
+  (declare (ignorable name type pathname file-position))
+  ;;--- Note sure how to do this, but it'll be different for every Lisp implementation
+  `(progn ,@body))
+
 ;; Define an enum type named 'type' and a Lisp 'deftype'
-(defmacro define-enum (type (&key name conc-name alias-for options documentation)
+(defmacro define-enum (type (&key name conc-name alias-for options
+                                  documentation source-location)
                        &body values)
   "Define a Protobufs enum type and a Lisp 'deftype' named 'type'.
    'name' can be used to override the defaultly generated Protobufs enum name.
@@ -134,7 +142,8 @@
                   :parent *protobuf*
                   :alias-for alias-for
                   :options options
-                  :documentation documentation)))
+                  :documentation documentation
+                  :source-location source-location)))
     (with-collectors ((vals  collect-val)
                       (forms collect-form))
       (dolist (val values)
@@ -159,10 +168,12 @@
       `(progn
          define-enum
          ,enum
-         ,forms))))
+         ((with-proto-source-location (,type define-enum ,@source-location)
+            ,@forms))))))
 
 ;; Define a message named 'name' and a Lisp 'defclass'
-(defmacro define-message (type (&key name conc-name alias-for options documentation)
+(defmacro define-message (type (&key name conc-name alias-for options
+                                     documentation source-location)
                           &body fields &environment env)
   "Define a message named 'type' and a Lisp 'defclass'.
    'name' can be used to override the defaultly generated Protobufs message name.
@@ -198,7 +209,8 @@
                     :alias-for alias-for
                     :conc-name conc-name
                     :options   (remove-options options "default" "packed")
-                    :documentation documentation))
+                    :documentation documentation
+                    :source-location source-location))
          (index 0)
          ;; Only now can we bind *protobuf* to the new message
          (*protobuf* message))
@@ -249,7 +261,8 @@
       `(progn
          define-message
          ,message
-         ,forms))))
+         ((with-proto-source-location (,type define-message ,@source-location)
+            ,@forms))))))
 
 (defun conc-name-for-type (type conc-name)
   (and conc-name
@@ -444,7 +457,8 @@
                    (i<= index (proto-extension-to ext))))
           extensions)))
 
-(defmacro define-group (type (&key index arity name conc-name alias-for reader options documentation)
+(defmacro define-group (type (&key index arity name conc-name alias-for reader options
+                                   documentation source-location)
                         &body fields &environment env)
   "Define a message named 'type' and a Lisp 'defclass', *and* a field named type.
    This is deprecated in Protobufs, but if you have to use it, you must give
@@ -514,7 +528,8 @@
                     :conc-name conc-name
                     :options   (remove-options options "default" "packed")
                     :message-type :group                ;this message is a group
-                    :documentation documentation))
+                    :documentation documentation
+                    :source-location source-location))
          (index 0)
          ;; Only now can we bind *protobuf* to the (group) message
          (*protobuf* message))
@@ -565,7 +580,8 @@
       `(progn
          define-group
          ,message
-         ,forms
+         ((with-proto-source-location (,type define-group ,@source-location)
+            ,@forms))
          ,mfield
          ,mslot))))
 
@@ -648,7 +664,8 @@
 
 ;; Define a service named 'type' with generic functions declared for
 ;; each of the methods within the service
-(defmacro define-service (type (&key name options documentation)
+(defmacro define-service (type (&key name options
+                                     documentation source-location)
                           &body method-specs)
   "Define a service named 'type' and Lisp 'defgeneric' for all its methods.
    'name' can be used to override the defaultly generated Protobufs service name.
@@ -667,11 +684,13 @@
                     :qualified-name (make-qualified-name *protobuf* name)
                     :parent *protobuf*
                     :options options
-                    :documentation documentation))
+                    :documentation documentation
+                    :source-location source-location))
          (index 0))
     (with-collectors ((forms collect-form))
       (dolist (method method-specs)
-        (destructuring-bind (function (input-type output-type) &key name options documentation) method
+        (destructuring-bind (function (input-type output-type)
+                             &key name options documentation source-location) method
           (let* ((input-name (and (listp input-type)
                                   (getf (cdr input-type) :name)))
                  (input-type (if (listp input-type) (car input-type) input-type))
@@ -698,7 +717,8 @@
                             :output-name (or output-name (class-name->proto output-type))
                             :index (iincf index)
                             :options options
-                            :documentation documentation)))
+                            :documentation documentation
+                            :source-location source-location)))
             (setf (proto-methods service) (nconc (proto-methods service) (list method)))
             ;; The following are the hooks to CL-Stubby
             (let* ((vinput    (intern (format nil "~A-~A" (symbol-name input-type) 'in) package))
@@ -742,7 +762,8 @@
       `(progn
          define-service
          ,service
-         ,forms))))
+         ((with-proto-source-location (,type define-service ,@source-location)
+            ,@forms))))))
 
 
 ;;; Ensure everything in a Protobufs schema is defined

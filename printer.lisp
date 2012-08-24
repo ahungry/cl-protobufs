@@ -156,6 +156,10 @@
            (let ((fmt-control (if (eq type 'symbol) "~(:~A~) ~A" "~(:~A~) ~S")))
              (format stream fmt-control (proto-name option) (proto-value option)))))))
 
+(defun cl-user::source-location (stream location colon-p atsign-p)
+  (declare (ignore colon-p atsign-p))
+  (format stream "(~S ~D)" (first location) (second location)))
+
 (defmethod write-schema-as ((type (eql :proto)) (enum protobuf-enum) stream
                             &key (indentation 0) more)
   (declare (ignore more))
@@ -458,20 +462,23 @@
                             &key (indentation 0) more)
   (declare (ignore more))
   (terpri stream)
-  (with-prefixed-accessors (name class alias-for documentation) (proto- enum)
+  (with-prefixed-accessors (name class alias-for
+                            documentation source-location) (proto- enum)
     (when documentation
       (write-schema-documentation type documentation stream :indentation indentation))
     (format stream "~@[~VT~](proto:define-enum ~(~S~)"
             (and (not (zerop indentation)) indentation) class)
     (let ((other (and name (not (string-equal name (class-name->proto class))) name)))
-      (cond ((or other alias-for documentation)
+      (cond ((or other alias-for documentation source-location)
              (format stream "~%~@[~VT~](~:[~*~*~;:name ~(~S~)~@[~%~VT~]~]~
                                         ~:[~*~*~;:alias-for ~(~S~)~@[~%~VT~]~]~
-                                        ~:[~*~;:documentation ~S~])"
+                                        ~:[~*~;:documentation ~S~@[~%~VT~]~]~
+                                        ~:[~*~;:source-location ~/source-location/~])"
                      (+ indentation 4)
                      other other (and (or alias-for documentation) (+ indentation 5))
-                     alias-for alias-for (and documentation (+ indentation 5))
-                     documentation documentation))
+                     alias-for alias-for (and (or documentation source-location) (+ indentation 5))
+                     documentation documentation (and source-location (+ indentation 5))
+                     source-location source-location))
             (t
              (format stream " ()"))))
     (loop for (value . more) on (proto-values enum) doing
@@ -495,7 +502,8 @@
                             &key (indentation 0) more index arity)
   (declare (ignore more))
   (let ((*protobuf* message))
-    (with-prefixed-accessors (name class alias-for conc-name message-type documentation) (proto- message)
+    (with-prefixed-accessors (name class alias-for conc-name message-type
+                              documentation source-location) (proto- message)
       (cond ((eq message-type :group)
              (when documentation
                (write-schema-documentation type documentation stream :indentation indentation))
@@ -507,14 +515,16 @@
                                           ~:[~*~*~;:name ~(~S~)~@[~%~VT~]~]~
                                           ~:[~*~*~;:alias-for ~(~S~)~@[~%~VT~]~]~
                                           ~:[~*~*~;:conc-name ~(~S~)~@[~%~VT~]~]~
-                                          ~:[~*~;:documentation ~S~])"
+                                          ~:[~*~;:documentation ~S~@[~%~VT~]~]~
+                                          ~:[~*~;:source-location ~/source-location/~])"
                        (+ indentation 4)
                        index (+ indentation 5)
-                       arity (and (or other alias-for conc-name documentation) (+ indentation 5))
-                       other other (and (or alias-for conc-name documentation) (+ indentation 5))
-                       alias-for alias-for (and (or documentation conc-name) (+ indentation 5))
-                       conc-name conc-name (and documentation (+ indentation 5))
-                       documentation documentation))
+                       arity (and (or other alias-for conc-name documentation source-location) (+ indentation 5))
+                       other other (and (or alias-for conc-name documentation source-location) (+ indentation 5))
+                       alias-for alias-for (and (or conc-name documentation source-location) (+ indentation 5))
+                       conc-name conc-name (and (or documentation source-location) (+ indentation 5))
+                       documentation documentation (and source-location (+ indentation 5))
+                       source-location source-location))
              (loop for (enum . more) on (proto-enums message) doing
                (write-schema-as type enum stream :indentation (+ indentation 2) :more more)
                (when more
@@ -534,16 +544,18 @@
              (let ((other (and name (not (string-equal name (class-name->proto class))) name)))
                (cond ((eq message-type :extends)
                       (format stream " ()"))
-                     ((or other alias-for conc-name documentation)
+                     ((or other alias-for conc-name documentation source-location)
                       (format stream "~%~@[~VT~](~:[~*~*~;:name ~(~S~)~@[~%~VT~]~]~
                                                  ~:[~*~*~;:alias-for ~(~S~)~@[~%~VT~]~]~
                                                  ~:[~*~*~;:conc-name ~(~S~)~@[~%~VT~]~]~
-                                                 ~:[~*~;:documentation ~S~])"
+                                                 ~:[~*~;:documentation ~S~@[~%~VT~]~]~
+                                                 ~:[~*~;:source-location ~/source-location/~])"
                               (+ indentation 4)
-                              other other (and (or alias-for conc-name documentation) (+ indentation 5))
-                              alias-for alias-for (and (or documentation conc-name) (+ indentation 5))
-                              conc-name conc-name (and documentation (+ indentation 5))
-                              documentation documentation))
+                              other other (and (or alias-for conc-name documentation source-location) (+ indentation 5))
+                              alias-for alias-for (and (or conc-name documentation source-location) (+ indentation 5))
+                              conc-name conc-name (and (or documentation source-location) (+ indentation 5))
+                              documentation documentation (and source-location (+ indentation 5))
+                              source-location source-location))
                      (t
                       (format stream " ()"))))
              (cond ((eq message-type :extends)
@@ -670,14 +682,17 @@
 (defmethod write-schema-as ((type (eql :lisp)) (service protobuf-service) stream
                             &key (indentation 0) more)
   (declare (ignore more))
-  (with-prefixed-accessors (class documentation) (proto- service)
+  (with-prefixed-accessors (class documentation source-location) (proto- service)
     (when documentation
       (write-schema-documentation type documentation stream :indentation indentation))
     (format stream "~&~@[~VT~](proto:define-service ~(~S~)"
             (and (not (zerop indentation)) indentation) (proto-class service))
-    (cond (documentation
-           (format stream "~%~@[~VT~](:documentation ~S)"
-                   (+ indentation 4) documentation))
+    (cond ((or documentation source-location)
+           (format stream "~%~@[~VT~](~:[~*~;:documentation ~S~@[~%~VT~]~]~
+                                      ~:[~*~;:source-location ~/source-location/~])"
+                   (+ indentation 4)
+                   documentation documentation (and source-location (+ indentation 5))
+                   source-location source-location))
           (t
            (format stream " ()")))
     (loop for (method . more) on (proto-methods service) doing
@@ -689,8 +704,8 @@
 (defmethod write-schema-as ((type (eql :lisp)) (method protobuf-method) stream
                             &key (indentation 0) more)
   (declare (ignore more))
-  (with-prefixed-accessors
-      (class documentation input-type output-type options) (proto- method)
+  (with-prefixed-accessors (class input-type output-type options
+                            documentation source-location) (proto- method)
     (when documentation
       (write-schema-documentation type documentation stream :indentation indentation))
     (format stream "~&~@[~VT~](~(~S~) (~(~S~) ~(~S~))"

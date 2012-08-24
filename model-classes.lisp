@@ -62,7 +62,7 @@
    'parse-schema-from-file' defaults conc-name to \"\", meaning that each field in
    every message has an accessor whose name is the name of the field.")
 
-(defvar *protobuf-pathname* ()
+(defvar *protobuf-pathname* nil
   "The name of the file from where the .proto file is being parsed.")
 
 (defvar *protobuf-search-path* ()
@@ -99,7 +99,10 @@
    (doc :type (or null string)                  ;documentation for this object
         :accessor proto-documentation
         :initarg :documentation
-        :initform nil))
+        :initform nil)
+   (location :accessor proto-source-location    ;a list of (pathname file-position)
+             :initarg :source-location
+             :initform nil))
   (:documentation
    "The base class for all Protobufs model classes."))
 
