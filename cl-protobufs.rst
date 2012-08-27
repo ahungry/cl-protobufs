@@ -501,7 +501,7 @@ Fields take the form ``(slot &key type name default reader writer)``.
 *slot* can be either a symbol giving the slot name or a list of the
 form ``(slot index)``. By default, the field indexes start at 1 and
 are incremented by 1 for each new field value. *type* is the type of
-the slot.  For schema forward and backward compatibility, you should
+the slot. For schema forward and backward compatibility, you should
 always use the ``(slot index)`` form.
 
 *name* can be used to override the defaultly generated Protobufs field
@@ -650,17 +650,17 @@ Protobufs service stubs
 
 When you use the ``proto:define-service`` macro to define a service
 with some methods, the macro defines "stubs" (CLOS generic functions)
-for each of the methods in the service. Each method gets a client stub
-and a server stub whose signatures are, respectively::
+for each of the methods in the service. Each method named ``foo`` gets
+a client stub and a server stub whose signatures are, respectively::
 
-  (rpc-channel input output &key callback) => output
-  (rpc-channel input output) => output
+  foo    (rpc-channel request &key callback) => response
+  do-foo (rpc-channel request) => response
 
 The type of *rpc-channel* is unspecified, but is meant to be a
-"channel" over which some sort of RPC call will be done. The types of
-*input* and *output* are classes that were defined via
+"channel" over which the RPC call will be done. The types of *request*
+and *response* are message classes that were defined via
 Protobufs. *callback* is a function of two arguments, the RPC channel
-and the output; it is intended for use by asynchronous RPC calls.
+and the response; it is intended for use by asynchronous RPC calls.
 
 For example, this fragment defines four stubs::
 
@@ -672,6 +672,20 @@ The client stubs are ``get-color`` and ``add-color``, the server stubs
 are ``do-get-color`` and ``do-add-color``. An RPC library will implement
 a method for the client stub. You must fill in the server stub yourself;
 it will implement the desired functionality.
+
+The client stub also gets a single method defined for it that looks like
+something like this::
+
+  (defmethod foo (rpc-channel (request input-type) &key callback)
+    (let ((call (and *rpc-package* *rpc-call-function*)))
+      (funcall call rpc-channel method request :callback vcallback)))
+
+where *rpc-channel*, *request* and *callback* are as above.
+The special variables ``*rpc-package*`` and ``*rpc-call-function*``
+are filled in when the RPC package is loaded. *method* is the
+``proto:protobuf-method`` that describes the method; this is
+included so that the RPC implementation can determine what type
+of response object to create, what timeout to use, etc.
 
 It is beyond the scope of this Protobufs library to provide the RPC
 service; that is the domain of another library.

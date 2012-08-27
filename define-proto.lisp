@@ -744,43 +744,45 @@
                             :documentation documentation
                             :source-location source-location)))
             (setf (proto-methods service) (nconc (proto-methods service) (list method)))
-            ;; The following are the hooks to CL-Stubby
-            (let* ((vinput    (intern (format nil "~A-~A" (symbol-name input-type) 'in) package))
-                   (voutput   (intern (format nil "~A-~A" (symbol-name output-type) 'out) package))
+            ;; The following are the hooks to an RPC implementation
+            (let* ((vrequest  (intern (symbol-name 'request) package))
                    (vchannel  (intern (symbol-name 'channel) package))
                    (vcallback (intern (symbol-name 'callback) package)))
               ;; The client side stub, e.g., 'read-air-reservation'.
-              ;; The expectation is that CL-Stubby will provide macrology to make it
+              ;; The expectation is that the RPC implementation will provide code to make it
               ;; easy to implement a method for this on each kind of channel (HTTP, TCP socket,
               ;; IPC, etc). Unlike C++/Java/Python, we don't need a client-side subclass,
               ;; because we can just use multi-methods.
-              ;; The CL-Stubby macros take care of serializing the input, transmitting the
+              ;; The 'do-XXX' method calls the RPC code with the channel, the method
+              ;; (i.e., a 'protobuf-method' object), the request and the callback function.
+              ;; The RPC code should take care of serializing the input, transmitting the
               ;; request over the wire, waiting for input (or not if it's asynchronous),
-              ;; filling in the output, and calling the callback (if it's asynchronous).
-              ;; It's not very Lispy to side-effect an output object, but it makes
-              ;; asynchronous calls simpler.
-              (collect-form `(defgeneric ,client-fn (,vchannel ,vinput ,voutput &key ,vcallback)
+              ;; filling in the output, and either returning the response (if synchronous)
+              ;; or calling the callback with the response as an argument (if asynchronous).
+              ;; It will also deserialize the response so that the client code sees the
+              ;; response as an application object.
+              (collect-form `(defgeneric ,client-fn (,vchannel ,vrequest &key ,vcallback)
                                ,@(and documentation `((:documentation ,documentation)))
                                #-sbcl (declare (values ,output-type))
-                               (:method (,vchannel (,vinput ,input-type) (,voutput ,output-type) &key ,vcallback)
+                               (:method (,vchannel (,vrequest ,input-type) &key ,vcallback)
                                  (declare (ignorable ,vchannel ,vcallback))
                                  (let ((call (and *rpc-package* *rpc-call-function*)))
                                    (assert call ()
                                            "There is no RPC package loaded!")
-                                   (funcall call ,vchannel ',method ,vinput ,voutput
+                                   (funcall call ,vchannel ',method ,vrequest
                                             :callback ,vcallback)))))
               ;; The server side stub, e.g., 'do-read-air-reservation'.
               ;; The expectation is that the server-side program will implement
               ;; a method with the business logic for this on each kind of channel
               ;; (HTTP, TCP socket, IPC, etc), possibly on a server-side subclass
-              ;; of the input class
+              ;; of the input class.
               ;; The business logic is expected to perform the correct operations on
               ;; the input object, which arrived via Protobufs, and produce an output
-              ;; of the given type, which will be serialized as a result.
+              ;; of the given type, which will be serialized and sent back over the wire.
               ;; The channel objects hold client identity information, deadline info,
-              ;; etc, and can be side-effected to indicate success or failure
-              ;; CL-Stubby provides the channel classes and does (de)serialization, etc
-              (collect-form `(defgeneric ,server-fn (,vchannel ,vinput ,voutput)
+              ;; etc, and can be side-effected to indicate success or failure.
+              ;; The RPC code provides the channel classes and does (de)serialization, etc
+              (collect-form `(defgeneric ,server-fn (,vchannel ,vrequest)
                                ,@(and documentation `((:documentation ,documentation)))
                                #-sbcl (declare (values ,output-type))))))))
       `(progn

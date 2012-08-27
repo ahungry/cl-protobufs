@@ -721,7 +721,7 @@
           :initarg :output-name
           :initform nil)
    (index :type (unsigned-byte 32)              ;an identifying index for this method
-          :accessor proto-index                 ; (used by Stubby)
+          :accessor proto-index                 ; (used by the RPC implementation)
           :initarg :index))
   (:documentation
    "The model class that represents one method with a Protobufs service."))
