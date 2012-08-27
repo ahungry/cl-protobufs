@@ -158,7 +158,9 @@
 
 (defun cl-user::source-location (stream location colon-p atsign-p)
   (declare (ignore colon-p atsign-p))
-  (format stream "(~S ~D)" (first location) (second location)))
+  (format stream "(~S ~D ~D)" 
+          (source-location-pathname location)
+          (source-location-start-pos location) (source-location-end-pos location)))
 
 (defmethod write-schema-as ((type (eql :proto)) (enum protobuf-enum) stream
                             &key (indentation 0) more)

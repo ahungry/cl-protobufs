@@ -100,7 +100,7 @@
         :accessor proto-documentation
         :initarg :documentation
         :initform nil)
-   (location :accessor proto-source-location    ;a list of (pathname file-position)
+   (location :accessor proto-source-location    ;a list of (pathname start-pos end-pos)
              :initarg :source-location
              :initform nil))
   (:documentation

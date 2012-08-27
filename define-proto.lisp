@@ -109,12 +109,36 @@
                              (mapcar #'generate-deserializer messages)))))
              ,var))))))
 
-(defmacro with-proto-source-location ((name type &optional pathname file-position) &body body)
+(defmacro with-proto-source-location ((type name definition-type
+                                       &optional pathname start-pos end-pos)
+                                      &body body)
   "Establish a context which causes the generated Lisp code to have
-   source location information that points to the .proto file."
-  (declare (ignorable name type pathname file-position))
-  ;;--- Note sure how to do this, but it'll be different for every Lisp implementation
-  `(progn ,@body))
+   source location information that points to the .proto file.
+   'type' is the name of the Lisp definition (a symbol).
+   'name' is the name of the Protobufs definition (a string).
+   'definition-type' is the kind of definition, e.g., 'protobuf-enum'.
+   'pathname', 'start-pos' and 'end-pos' give the location of the definition
+   in the .proto file."
+  `(progn
+     (record-proto-source-location ',type ,name ',definition-type
+                                   ,pathname ,start-pos ,end-pos)
+     ,@body))
+
+#+ccl
+(defun record-proto-source-location (type name definition-type
+                                     &optional pathname start-pos end-pos)
+  (declare (ignore name))
+  (when (and ccl::*record-source-file*
+             (typep pathname '(or string pathname)))
+    (let ((ccl::*loading-toplevel-location* (ccl::make-source-note :filename  pathname
+                                                                   :start-pos start-pos
+                                                                   :end-pos   end-pos)))
+      (ccl:record-source-file type definition-type))))
+
+#-(or ccl)
+(defun record-proto-source-location (type name definition-type
+                                     &optional pathname start-pos end-pos)
+  (declare (ignorable name type definition-type pathname start-pos end-pos)))
 
 ;; Define an enum type named 'type' and a Lisp 'deftype'
 (defmacro define-enum (type (&key name conc-name alias-for options
@@ -168,7 +192,7 @@
       `(progn
          define-enum
          ,enum
-         ((with-proto-source-location (,type define-enum ,@source-location)
+         ((with-proto-source-location (,type ,name protobuf-enum ,@source-location)
             ,@forms))))))
 
 ;; Define a message named 'name' and a Lisp 'defclass'
@@ -261,7 +285,7 @@
       `(progn
          define-message
          ,message
-         ((with-proto-source-location (,type define-message ,@source-location)
+         ((with-proto-source-location (,type ,name protobuf-message ,@source-location)
             ,@forms))))))
 
 (defun conc-name-for-type (type conc-name)
@@ -580,7 +604,7 @@
       `(progn
          define-group
          ,message
-         ((with-proto-source-location (,type define-group ,@source-location)
+         ((with-proto-source-location (,type ,name protobuf-message ,@source-location)
             ,@forms))
          ,mfield
          ,mslot))))
@@ -762,7 +786,7 @@
       `(progn
          define-service
          ,service
-         ((with-proto-source-location (,type define-service ,@source-location)
+         ((with-proto-source-location (,type ,name protobuf-service ,@source-location)
             ,@forms))))))
 
 

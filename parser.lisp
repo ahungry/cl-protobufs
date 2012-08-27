@@ -267,12 +267,21 @@
                                 :class (or class (kintern (pathname-name (pathname stream))))
                                 :conc-name conc-name))))
 
-(defun make-source-location (stream)
+;; 'with-proto-source-location' counts on this being a 3-element list
+;; Yeah, it's a kludge, but we really don't need anything complicated for this
+(defstruct (source-location (:type list) (:constructor %make-source-location))
+  pathname
+  start-pos
+  end-pos)
+
+(defun make-source-location (stream start end)
   "Create a \"source locator\" for the stream at the current position.
    With any luck, we can get meta-dot to pay attention to it."
+  (declare (ignore stream))
   ;; Don't record source locations if we're not parsing from a file
   (and *protobuf-pathname*
-       (list *protobuf-pathname* (file-position stream))))
+       (%make-source-location :pathname *protobuf-pathname*
+                              :start-pos start :end-pos end)))
 
 ;; The syntax for Protocol Buffers is so simple that it doesn't seem worth
 ;; writing a sophisticated parser
@@ -384,7 +393,7 @@
   "Parse a Protobufs 'enum' from 'stream'.
    Updates the 'protobuf-schema' or 'protobuf-message' object to have the enum."
   (check-type protobuf (or protobuf-schema protobuf-message))
-  (let* ((loc  (make-source-location stream))
+  (let* ((loc  (file-position stream))
          (name (prog1 (parse-token stream)
                  (expect-char stream #\{ () "enum")
                  (maybe-skip-comments stream)))
@@ -393,7 +402,7 @@
                  :name name
                  :qualified-name (make-qualified-name protobuf name)
                  :parent protobuf
-                 :source-location loc)))
+                 :source-location (make-source-location stream loc (i+ loc (length name))))))
     (loop
       (let ((name (parse-token stream)))
         (when (null name)
@@ -432,7 +441,7 @@
   "Parse a Protobufs 'message' from 'stream'.
    Updates the 'protobuf-schema' or 'protobuf-message' object to have the message."
   (check-type protobuf (or protobuf-schema protobuf-message))
-  (let* ((loc  (make-source-location stream))
+  (let* ((loc  (file-position stream))
          (name (prog1 (or name (parse-token stream))
                  (expect-char stream #\{ () "message")
                  (maybe-skip-comments stream)))
@@ -444,7 +453,7 @@
                     :parent protobuf
                     ;; Maybe force accessors for all slots
                     :conc-name (conc-name-for-type class *protobuf-conc-name*)
-                    :source-location loc))
+                    :source-location (make-source-location stream loc (i+ loc (length name)))))
          (*protobuf* message))
     (loop
       (let ((token (parse-token stream)))
@@ -479,7 +488,7 @@
   "Parse a Protobufs 'extend' from 'stream'.
    Updates the 'protobuf-schema' or 'protobuf-message' object to have the message."
   (check-type protobuf (or protobuf-schema protobuf-message))
-  (let* ((loc  (make-source-location stream))
+  (let* ((loc  (file-position stream))
          (name (prog1 (parse-token stream)
                  (expect-char stream #\{ () "extend")
                  (maybe-skip-comments stream)))
@@ -497,7 +506,7 @@
                          :fields   (copy-list (proto-fields message))
                          :extensions (copy-list (proto-extensions message))
                          :message-type :extends         ;this message is an extension
-                         :source-location loc)))
+                         :source-location (make-source-location stream loc (i+ loc (length name))))))
          (*protobuf* extends))
     (assert message ()
             "There is no message named ~A to extend" name)
@@ -655,7 +664,7 @@
   "Parse a Protobufs 'service' from 'stream'.
    Updates the 'protobuf-schema' object to have the service."
   (check-type schema protobuf-schema)
-  (let* ((loc  (make-source-location stream))
+  (let* ((loc  (file-position stream))
          (name (prog1 (parse-token stream)
                  (expect-char stream #\{ () "service")
                  (maybe-skip-comments stream)))
@@ -664,7 +673,7 @@
                     :name name
                     :qualified-name (make-qualified-name *protobuf* name)
                     :parent schema
-                    :source-location loc))
+                    :source-location (make-source-location stream loc (i+ loc (length name)))))
          (index 0))
     (loop
       (let ((token (parse-token stream)))
@@ -685,7 +694,7 @@
   "Parse a Protobufs method from 'stream'.
    Updates the 'protobuf-service' object to have the method."
   (check-type service protobuf-service)
-  (let* ((loc  (make-source-location stream))
+  (let* ((loc  (file-position stream))
          (name (parse-token stream))
          (in   (prog2 (expect-char stream #\( () "service")
                    (parse-token stream)
@@ -711,7 +720,7 @@
                    :output-name out
                    :index index
                    :options opts
-                   :source-location loc)))
+                   :source-location (make-source-location stream loc (i+ loc (length name))))))
     (let* ((name (find-option method "lisp_name"))
            (stub (or (and name (make-lisp-symbol name))
                      stub)))
