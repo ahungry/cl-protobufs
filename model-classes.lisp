@@ -375,6 +375,16 @@
     (format stream "~S~@[ (alias for ~S)~]"
             (proto-class e) (proto-alias-for e))))
 
+(defmethod make-qualified-name ((enum protobuf-enum) name)
+  ;; The qualified name is the enum name "dot" the name
+  (let ((qual-name (strcat (proto-name enum) "." name)))
+    (if (proto-parent enum)
+      ;; If there's a parent for this enum (either a message or
+      ;; the schema), prepend the name (or package) of the parent
+      (make-qualified-name (proto-parent enum) qual-name)
+      ;; Guard against a message in the middle of nowhere
+      qual-name)))
+
 
 ;; A Protobufs value within an enumeration
 (defclass protobuf-enum-value (base-protobuf)

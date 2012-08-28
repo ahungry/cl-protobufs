@@ -113,7 +113,7 @@
                  qres-core::country-currencies
                  qres-core::carrier
                  geodata geodata-v))
-  (let ((message (proto-impl:find-message *geodata* class)))
+  (let ((message (proto:find-message *geodata* class)))
     (eval (proto-impl:generate-object-size  message))
     (eval (proto-impl:generate-serializer   message))
     (eval (proto-impl:generate-deserializer message))))

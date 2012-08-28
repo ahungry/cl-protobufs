@@ -175,8 +175,10 @@
                (name (if (listp val) (first val)  val))
                (val-name  (kintern (if conc-name (format nil "~A~A" conc-name name) (symbol-name name))))
                (enum-name (if conc-name (format nil "~A~A" conc-name name) (symbol-name name)))
+               (vname     (enum-name->proto enum-name))
                (enum-val  (make-instance 'protobuf-enum-value
-                            :name   (enum-name->proto enum-name)
+                            :name   vname
+                            :qualified-name (make-qualified-name enum vname)
                             :index  idx
                             :value  val-name
                             :parent enum)))

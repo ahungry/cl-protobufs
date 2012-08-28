@@ -418,11 +418,12 @@
           (return-from parse-proto-enum enum))
         (if (string= name "option")
           (parse-proto-option stream enum)
-          (parse-proto-enum-value stream enum name))))))
+          (parse-proto-enum-value stream protobuf enum name))))))
 
-(defun parse-proto-enum-value (stream enum name)
+(defun parse-proto-enum-value (stream protobuf enum name)
   "Parse a Protobufs enum value from 'stream'.
    Updates the 'protobuf-enum' object to have the enum value."
+  (declare (ignore protobuf))
   (check-type enum protobuf-enum)
   (expect-char stream #\= () "enum")
   (let* ((idx  (prog1 (parse-signed-int stream)
@@ -430,6 +431,7 @@
                  (maybe-skip-comments stream)))
          (value (make-instance 'protobuf-enum-value
                   :name  name
+                  :qualified-name (make-qualified-name enum name)
                   :index idx
                   :value (proto->enum-name name *protobuf-package*)
                   :parent enum)))

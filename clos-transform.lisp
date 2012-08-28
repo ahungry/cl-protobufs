@@ -60,6 +60,8 @@
                      :package package
                      :lisp-package lisp-pkg
                      :syntax "proto2"))
+         (*protobuf* schema)
+         (*protobuf-package* (or (find-proto-package lisp-pkg) *package*))
          (messages (mapcar #'(lambda (c)
                                (class-to-protobuf-message c schema
                                 :slot-filter slot-filter
@@ -105,15 +107,21 @@
           (when field
             (incf index 1)                              ;don't worry about the 19000-19999 restriction
             (collect-field field))))
-      (let ((message
-             (make-instance 'protobuf-message
-               :class (class-name class)
-               :name  (class-name->proto (class-name class))
-               :parent schema
-               :alias-for (and *alias-existing-classes* (class-name class))
-               :enums    (delete-duplicates enums :key #'proto-name :test #'string=)
-               :messages (delete-duplicates msgs :key #'proto-name :test #'string=)
-               :fields   fields)))
+      (let* ((cname (class-name class))
+             (pname (class-name->proto cname))
+             (message
+              ;;--- Making the message this late means its children won't
+              ;;--- have the right qualified names
+              (make-instance 'protobuf-message
+                :class cname
+                :name  pname
+                :qualified-name (make-qualified-name *protobuf* pname)
+                :parent schema
+                :alias-for (and *alias-existing-classes* cname)
+                :enums    (delete-duplicates enums :key #'proto-name :test #'string=)
+                :messages (delete-duplicates msgs :key #'proto-name :test #'string=)
+                :fields   fields))
+             (*protobuf* message))
         ;; Give every child a proper parent
         (dolist (enum (proto-enums message))
           (setf (proto-parent enum) message))
@@ -155,16 +163,20 @@
                                  #+ignore         ;this happens constantly, the warning is not useful
                                  (protobufs-warn "Use DEFTYPE to define a MEMBER type instead of directly using ~S"
                                                  expanded-type))
-                               (let* ((enum
+                               (let* ((pname (class-name->proto ename))
+                                      (enum
                                        (make-instance 'protobuf-enum
                                          :class etype
-                                         :name  (class-name->proto ename)))
+                                         :name  pname
+                                         :qualified-name (make-qualified-name *protobuf* pname)
+                                         :parent *protobuf*))
                                       (values
                                        (loop for name in names
                                              for val in enums
                                              for index upfrom 0
                                              collect (make-instance 'protobuf-enum-value
                                                        :name name
+                                                       :qualified-name (make-qualified-name enum name)
                                                        :index index
                                                        :value val
                                                        :parent enum))))

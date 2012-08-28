@@ -169,7 +169,8 @@
     (when documentation
       (write-schema-documentation type documentation stream :indentation indentation))
     (format stream "~&~@[~VT~]enum ~A {~%"
-            (and (not (zerop indentation)) indentation) name)
+            (and (not (zerop indentation)) indentation)
+            (maybe-qualified-name enum))
     (let ((other (and class (not (string-equal name (class-name->proto class))) class)))
       (when other
         (format stream "~&~VToption (lisp_name) = \"~A:~A\";~%"
@@ -190,7 +191,8 @@
   (declare (ignore more))
   (with-prefixed-accessors (name documentation index) (proto- val)
     (format stream "~&~@[~VT~]~A = ~D;~:[~*~*~;~VT// ~A~]~%"
-            (and (not (zerop indentation)) indentation) name index
+            (and (not (zerop indentation)) indentation)
+            (maybe-qualified-name val) index
             documentation *protobuf-enum-comment-column* documentation)))
 
 
@@ -257,18 +259,17 @@
              (format stream "~&~@[~VT~]}~%"
                      (and (not (zerop indentation)) indentation)))))))
 
-(defun maybe-qualified-name (message &optional name)
+(defun maybe-qualified-name (x &optional name)
   "Given a message, return a fully qualified name if the short name
    is not sufficient to name the message in the current scope."
-  (etypecase message
-    (protobuf-message
-     (cond ((string= (make-qualified-name (proto-parent message) (proto-name message))
-                     (proto-qualified-name message))
-            (proto-name message))
+  (etypecase x
+    ((or protobuf-message protobuf-enum  protobuf-enum-value)
+     (cond ((string= (make-qualified-name (proto-parent x) (proto-name x))
+                     (proto-qualified-name x))
+            (proto-name x))
            (t
-            (proto-qualified-name message))))
-    ((or null protobuf-enum)
-     name)))
+            (proto-qualified-name x))))
+    (null name)))
 
 (defparameter *protobuf-field-comment-column* 56)
 (defmethod write-schema-as ((type (eql :proto)) (field protobuf-field) stream

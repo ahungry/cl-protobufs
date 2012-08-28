@@ -678,7 +678,7 @@ something like this::
 
   (defmethod foo (rpc-channel (request input-type) &key callback)
     (let ((call (and *rpc-package* *rpc-call-function*)))
-      (funcall call rpc-channel method request :callback vcallback)))
+      (funcall call rpc-channel method request :callback callback)))
 
 where *rpc-channel*, *request* and *callback* are as above.
 The special variables ``*rpc-package*`` and ``*rpc-call-function*``
