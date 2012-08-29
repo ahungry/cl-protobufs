@@ -397,6 +397,7 @@
         (declare (dynamic-extent #'deserialize))
         (deserialize (proto-class message) message length end-tag)))))
 
+
 ;;; Object sizes
 
 ;; Allow clients to add their own methods
