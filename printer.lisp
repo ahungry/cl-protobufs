@@ -61,6 +61,9 @@
     (loop for (enum . more) on (proto-enums schema) doing
       (write-schema-as type enum stream :indentation indentation :more more)
       (terpri stream))
+    (loop for (alias . more) on (proto-type-aliases schema) doing
+      (write-schema-as type alias stream :indentation indentation :more more)
+      (terpri stream))
     (loop for (msg . more) on (proto-messages schema) doing
       (write-schema-as type msg stream :indentation indentation :more more)
       (terpri stream))
@@ -195,6 +198,15 @@
             (maybe-qualified-name val) index
             documentation *protobuf-enum-comment-column* documentation)))
 
+(defmethod write-schema-as ((type (eql :proto)) (alias protobuf-type-alias) stream
+                            &key (indentation 0) more)
+  (declare (ignore more))
+  (with-prefixed-accessors (name lisp-type proto-type) (proto- alias)
+    (let ((comment (format nil "Note: there is an alias ~A that maps Lisp ~(~S~) to Protobufs ~(~A~)"
+                           name lisp-type proto-type)))
+      (write-schema-documentation type comment stream :indentation indentation))
+    (format stream "~&~@[~VT~]~%"
+            (and (not (zerop indentation)) indentation))))
 
 (defmethod write-schema-as ((type (eql :proto)) (message protobuf-message) stream
                             &key (indentation 0) more index arity)
@@ -263,7 +275,8 @@
   "Given a message, return a fully qualified name if the short name
    is not sufficient to name the message in the current scope."
   (etypecase x
-    ((or protobuf-message protobuf-enum  protobuf-enum-value)
+    ((or protobuf-message protobuf-enum  protobuf-enum-value
+         protobuf-type-alias)
      (cond ((string= (make-qualified-name (proto-parent x) (proto-name x))
                      (proto-qualified-name x))
             (proto-name x))
@@ -278,7 +291,9 @@
   (with-prefixed-accessors (name documentation required type index packed options) (proto- field)
     (let* ((class (if (eq (proto-class field) 'boolean) :bool (proto-class field)))
            (msg   (and (not (keywordp class))
-                       (or (find-message message class) (find-enum message class)))))
+                       (or (find-message message class)
+                           (find-enum message class)
+                           (find-type-alias message class)))))
       (cond ((and (typep msg 'protobuf-message)
                   (eq (proto-message-type msg) :group))
              (format stream "~&~@[~VT~]~(~A~) "
@@ -305,19 +320,29 @@
                                          (t default))))
                     (default  (and defaultp
                                    (if (stringp default) (escape-string default) default))))
-               (format stream (if (and (keywordp class) (not (eq class :bool)))
-                                ;; Keyword class means a primitive type, print default with ~S
-                                "~&~@[~VT~]~(~A~) ~A ~A = ~D~
+               (if (typep msg 'protobuf-type-alias)
+                 (format stream "~&~@[~VT~]~(~A~) ~(~A~) ~A = ~D~
                                  ~:[~*~; [default = ~S]~]~@[ [packed = true]~*~]~{ [~:/protobuf-option/]~};~
                                  ~:[~*~*~;~VT// ~A~]~%"
-                                ;; Non-keyword class means an enum type, print default with ~A"
-                                "~&~@[~VT~]~(~A~) ~A ~A = ~D~
-                                 ~:[~*~; [default = ~A]~]~@[ [packed = true]~*~]~{ [~:/protobuf-option/]~};~
-                                 ~:[~*~*~;~VT// ~A~]~%")
-                       (and (not (zerop indentation)) indentation)
-                       required (maybe-qualified-name msg type) name index
-                       defaultp default packed options
-                       documentation *protobuf-field-comment-column* documentation)))))))
+                         (and (not (zerop indentation)) indentation)
+                         required (proto-proto-type msg) name index
+                         defaultp default packed options
+                         t *protobuf-field-comment-column*
+                         (format nil "alias maps Lisp ~(~S~) to Protobufs ~(~A~)"
+                                 (proto-lisp-type msg) (proto-proto-type msg)))
+                 (format stream (if (and (keywordp class) (not (eq class :bool)))
+                                  ;; Keyword class means a primitive type, print default with ~S
+                                  "~&~@[~VT~]~(~A~) ~A ~A = ~D~
+                                   ~:[~*~; [default = ~S]~]~@[ [packed = true]~*~]~{ [~:/protobuf-option/]~};~
+                                   ~:[~*~*~;~VT// ~A~]~%"
+                                  ;; Non-keyword class means an enum type, print default with ~A"
+                                  "~&~@[~VT~]~(~A~) ~A ~A = ~D~
+                                   ~:[~*~; [default = ~A]~]~@[ [packed = true]~*~]~{ [~:/protobuf-option/]~};~
+                                   ~:[~*~*~;~VT// ~A~]~%")
+                         (and (not (zerop indentation)) indentation)
+                         required (maybe-qualified-name msg type) name index
+                         defaultp default packed options
+                         documentation *protobuf-field-comment-column* documentation))))))))
 
 (defun escape-string (string)
   (if (every #'(lambda (ch) (and (standard-char-p ch) (graphic-char-p ch))) string)
@@ -334,7 +359,6 @@
     (format stream "~&~@[~VT~]extensions ~D~:[~*~; to ~D~];~%"
             (and (not (zerop indentation)) indentation)
             from (not (eql from to)) (if (eql to #.(1- (ash 1 29))) "max" to))))
-
 
 (defmethod write-schema-as ((type (eql :proto)) (service protobuf-service) stream
                             &key (indentation 0) more)
@@ -444,6 +468,8 @@
       (format stream ")")
       (loop for (enum . more) on (proto-enums schema) doing
         (write-schema-as type enum stream :indentation 2 :more more))
+      (loop for (alias . more) on (proto-type-aliases schema) doing
+        (write-schema-as type alias stream :indentation 2 :more more))
       (loop for (msg . more) on (proto-messages schema) doing
         (write-schema-as type msg stream :indentation 2 :more more))
       (loop for (svc . more) on (proto-services schema) doing
@@ -500,6 +526,22 @@
       (format stream "~&~@[~VT~]~(~A~)"
               (and (not (zerop indentation)) indentation) value))))
 
+(defmethod write-schema-as ((type (eql :lisp)) (alias protobuf-type-alias) stream
+                            &key (indentation 0) more)
+  (declare (ignore more))
+  (terpri stream)
+  (with-prefixed-accessors (class lisp-type proto-type serializer deserializer) (proto- alias)
+    (format stream "~@[~VT~](proto:define-type-alias ~(~S~)"
+            (and (not (zerop indentation)) indentation) class)
+    (format stream " ()")                       ;no options yet
+    (format stream "~%~@[~VT~]:lisp-type ~(~S~)~
+                    ~%~@[~VT~]:proto-type ~(~A~)~
+                    ~%~@[~VT~]:serializer ~(~S~)~
+                    ~%~@[~VT~]:deserializer ~(~S~))"
+            (+ indentation 2) lisp-type
+            (+ indentation 2) proto-type
+            (+ indentation 2) serializer
+            (+ indentation 2) deserializer)))
 
 (defmethod write-schema-as ((type (eql :lisp)) (message protobuf-message) stream
                             &key (indentation 0) more index arity)
@@ -596,7 +638,9 @@
   (with-prefixed-accessors (value required index packed options documentation) (proto- field)
     (let* ((class (if (eq (proto-class field) 'boolean) :bool (proto-class field)))
            (msg   (and (not (keywordp class))
-                       (or (find-message message class) (find-enum message class))))
+                       (or (find-message message class)
+                           (find-enum message class)
+                           (find-type-alias message class))))
            (type  (let ((cl (case class
                               ((:int32)       'int32)
                               ((:int64)       'int64)
@@ -680,7 +724,6 @@
     (format stream "~&~@[~VT~](proto:define-extension ~D ~D)"
             (and (not (zerop indentation)) indentation)
             from (if (eql to #.(1- (ash 1 29))) "max" to))))
-
 
 (defmethod write-schema-as ((type (eql :lisp)) (service protobuf-service) stream
                             &key (indentation 0) more)

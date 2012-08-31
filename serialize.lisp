@@ -108,7 +108,8 @@
                                                  (setq index (serialize-prim v type tag buffer index)))
                                              (read-slot object slot reader))))
                                   ((typep (setq msg (and type (or (find-message trace type)
-                                                                  (find-enum trace type))))
+                                                                  (find-enum trace type)
+                                                                  (find-type-alias trace type))))
                                           'protobuf-message)
                                    (if (eq (proto-message-type msg) :group)
                                      (map () #'(lambda (v)
@@ -140,7 +141,14 @@
                                                                           (proto-values msg) tag buffer index))
                                        (map () #'(lambda (v)
                                                    (setq index (serialize-enum v (proto-values msg) tag buffer index)))
-                                               (read-slot object slot reader)))))))
+                                               (read-slot object slot reader)))))
+                                  ((typep msg 'protobuf-type-alias)
+                                   (let* ((type (proto-proto-type msg))
+                                          (tag  (make-tag type (proto-index field))))
+                                     (map () #'(lambda (v)
+                                                 (let ((v (funcall (proto-serializer msg) v)))
+                                                   (setq index (serialize-prim v type tag buffer index))))
+                                             (read-slot object slot reader))))))
                            (t
                             (cond ((eq type :bool)
                                    ;; We have to handle optional boolean fields specially
@@ -160,7 +168,8 @@
                                        (let ((tag (make-tag type (proto-index field))))
                                          (setq index (serialize-prim v type tag buffer index))))))
                                   ((typep (setq msg (and type (or (find-message trace type)
-                                                                  (find-enum trace type))))
+                                                                  (find-enum trace type)
+                                                                  (find-type-alias trace type))))
                                           'protobuf-message)
                                    (let ((v (if slot (read-slot object slot reader) object)))
                                      (when v
@@ -181,7 +190,14 @@
                                    (let ((v (read-slot object slot reader)))
                                      (when v
                                        (let ((tag (make-tag $wire-type-varint (proto-index field))))
-                                         (setq index (serialize-enum v (proto-values msg) tag buffer index)))))))))))))
+                                         (setq index (serialize-enum v (proto-values msg) tag buffer index))))))
+                                  ((typep msg 'protobuf-type-alias)
+                                   (let ((v (read-slot object slot reader)))
+                                     (when v
+                                       (let* ((v    (funcall (proto-serializer msg) v))
+                                              (type (proto-proto-type msg))
+                                              (tag  (make-tag type (proto-index field))))
+                                         (setq index (serialize-prim v type tag buffer index)))))))))))))
         (declare (dynamic-extent #'do-field))
         (map () (curry #'do-field object message) (proto-fields message))))
     (values buffer index)))
@@ -329,7 +345,8 @@
                                                     (write-slot object slot writer
                                                                 (cons val (read-slot object slot reader)))))))
                                           ((typep (setq msg (and type (or (find-message trace type)
-                                                                          (find-enum trace type))))
+                                                                          (find-enum trace type)
+                                                                          (find-type-alias trace type))))
                                                   'protobuf-message)
                                            (if (eq (proto-message-type msg) :group)
                                              (let* ((etag (make-tag $wire-type-end-group fidx))
@@ -369,7 +386,20 @@
                                                      (t
                                                       (pushnew field rslots)
                                                       (write-slot object slot writer
-                                                                  (cons val (read-slot object slot reader)))))))))))
+                                                                  (cons val (read-slot object slot reader))))))))
+                                          ((typep msg 'protobuf-type-alias)
+                                           (let ((type (proto-proto-type msg)))
+                                             (multiple-value-bind (val idx)
+                                                 (deserialize-prim type buffer index)
+                                               (setq index idx)
+                                               (cond (vectorp
+                                                      (push-slot object slot reader writer
+                                                                 (funcall (proto-deserializer msg) val)))
+                                                     (t
+                                                      (pushnew field rslots)
+                                                      (write-slot object slot writer
+                                                                  (cons (funcall (proto-deserializer msg) val)
+                                                                        (read-slot object slot reader)))))))))))
                                  (t
                                   (cond ((keywordp type)
                                          (multiple-value-bind (val idx)
@@ -377,7 +407,8 @@
                                            (setq index idx)
                                            (write-slot object slot writer val)))
                                         ((typep (setq msg (and type (or (find-message trace type)
-                                                                        (find-enum trace type))))
+                                                                        (find-enum trace type)
+                                                                        (find-type-alias trace type))))
                                                 'protobuf-message)
                                          ;;--- If there's already a value in the slot, merge messages
                                          (if (eq (proto-message-type msg) :group)
@@ -393,7 +424,14 @@
                                          (multiple-value-bind (val idx)
                                              (deserialize-enum (proto-values msg) buffer index)
                                            (setq index idx)
-                                           (write-slot object slot writer val)))))))))))))
+                                           (write-slot object slot writer val)))
+                                        ((typep msg 'protobuf-type-alias)
+                                         (let ((type (proto-proto-type msg)))
+                                           (multiple-value-bind (val idx)
+                                               (deserialize-prim type buffer index)
+                                             (setq index idx)
+                                             (write-slot object slot writer
+                                                         (funcall (proto-deserializer msg) val)))))))))))))))
         (declare (dynamic-extent #'deserialize))
         (deserialize (proto-class message) message length end-tag)))))
 
@@ -450,7 +488,8 @@
                                                  (iincf size (prim-size v type tag)))
                                              (read-slot object slot reader))))
                                   ((typep (setq msg (and type (or (find-message trace type)
-                                                                  (find-enum trace type))))
+                                                                  (find-enum trace type)
+                                                                  (find-type-alias trace type))))
                                           'protobuf-message)
                                    (if (eq (proto-message-type msg) :group)
                                      (map () #'(lambda (v)
@@ -475,7 +514,14 @@
                                        (iincf size (packed-enum-size (read-slot object slot reader) type tag))
                                        (map () #'(lambda (v)
                                                    (iincf size (enum-size v (proto-values msg) tag)))
-                                               (read-slot object slot reader)))))))
+                                               (read-slot object slot reader)))))
+                                  ((typep msg 'protobuf-type-alias)
+                                   (let* ((type (proto-proto-type msg))
+                                          (tag  (make-tag type (proto-index field))))
+                                     (map () #'(lambda (v)
+                                                 (let ((v (funcall (proto-serializer msg) v)))
+                                                   (iincf size (prim-size v type tag))))
+                                             (read-slot object slot reader))))))
                            (t
                             (cond ((eq type :bool)
                                    (let ((v (cond ((or (eq (proto-required field) :required)
@@ -493,7 +539,8 @@
                                        (let ((tag (make-tag type (proto-index field))))
                                          (iincf size (prim-size v type tag))))))
                                   ((typep (setq msg (and type (or (find-message trace type)
-                                                                  (find-enum trace type))))
+                                                                  (find-enum trace type)
+                                                                  (find-type-alias trace type))))
                                           'protobuf-message)
                                    (let ((v (if slot (read-slot object slot reader) object)))
                                      (when v
@@ -514,7 +561,14 @@
                                    (let ((v (read-slot object slot reader)))
                                      (when v
                                        (let ((tag (make-tag $wire-type-varint (proto-index field))))
-                                         (iincf size (enum-size (read-slot object slot reader) (proto-values msg) tag)))))))))))))
+                                         (iincf size (enum-size (read-slot object slot reader) (proto-values msg) tag))))))
+                                  ((typep msg 'protobuf-type-alias)
+                                   (let ((v (read-slot object slot reader)))
+                                     (when v
+                                       (let* ((v    (funcall (proto-serializer msg) v))
+                                              (type (proto-proto-type msg))
+                                              (tag  (make-tag type (proto-index field))))
+                                         (iincf size (prim-size v type tag)))))))))))))
         (declare (dynamic-extent #'do-field))
         (map () (curry #'do-field object message) (proto-fields message))
         (when visited
@@ -544,7 +598,8 @@
         (let* ((class  (if (eq (proto-class field) 'boolean) :bool (proto-class field)))
                (msg    (and class (not (keywordp class))
                             (or (find-message message class)
-                                (find-enum message class))))
+                                (find-enum message class)
+                                (find-type-alias message class))))
                (reader (cond ((proto-reader field)
                               `(,(proto-reader field) ,vobj))
                              ((proto-value field)
@@ -589,7 +644,14 @@
                                  `(setq ,vidx (serialize-packed-enum ,reader '(,@(proto-values msg)) ,tag ,vbuf ,vidx))
 
                                  `(,iterator (,vval ,reader)
-                                    (setq ,vidx (serialize-enum ,vval '(,@(proto-values msg)) ,tag ,vbuf ,vidx))))))))))
+                                    (setq ,vidx (serialize-enum ,vval '(,@(proto-values msg)) ,tag ,vbuf ,vidx)))))))
+                           ((typep msg 'protobuf-type-alias)
+                            (collect-serializer
+                             (let* ((class (proto-proto-type msg))
+                                    (tag   (make-tag class (proto-index field))))
+                               `(,iterator (,vval ,reader)
+                                  (let ((,vval (funcall #',(proto-serializer msg) ,vval)))
+                                    (setq ,vidx (serialize-prim ,vval ,class ,tag ,vbuf ,vidx))))))))))
                   (t
                    (cond ((keywordp class)
                           (collect-serializer
@@ -634,7 +696,15 @@
                            (let ((tag (make-tag $wire-type-varint index)))
                              `(let ((,vval ,reader))
                                 (when ,vval
-                                  (setq ,vidx (serialize-enum ,vval '(,@(proto-values msg)) ,tag ,vbuf ,vidx)))))))))))))
+                                  (setq ,vidx (serialize-enum ,vval '(,@(proto-values msg)) ,tag ,vbuf ,vidx)))))))
+                         ((typep msg 'protobuf-type-alias)
+                          (collect-serializer
+                           (let* ((class (proto-proto-type msg))
+                                  (tag   (make-tag class (proto-index field))))
+                             `(let ((,vval ,reader))
+                                (when ,vval
+                                  (let ((,vval (funcall #',(proto-serializer msg) ,vval)))
+                                    (setq ,vidx (serialize-prim ,vval ,class ,tag ,vbuf ,vidx))))))))))))))
       `(defmethod serialize-object
            (,vobj (,vclass (eql ,message)) ,vbuf &optional (,vidx 0) visited)
          (declare #.$optimize-serialization)
@@ -676,7 +746,8 @@
           (let* ((class  (if (eq (proto-class field) 'boolean) :bool (proto-class field)))
                  (msg    (and class (not (keywordp class))
                               (or (find-message message class)
-                                  (find-enum message class))))
+                                  (find-enum message class)
+                                  (find-type-alias message class))))
                  (index  (proto-index field)))
             (cond ((eq (proto-required field) :repeated)
                    (cond ((and (proto-packed field) (packed-type-p class))
@@ -733,7 +804,17 @@
                                  (multiple-value-bind (,vval idx)
                                      (deserialize-enum '(,@(proto-values msg)) ,vbuf ,vidx)
                                    (setq ,vidx idx)
-                                   (push ,vval ,temp)))))))))
+                                   (push ,vval ,temp)))))))
+                         ((typep msg 'protobuf-type-alias)
+                          (let ((class (proto-proto-type msg))
+                                (temp  (gensym (string (proto-value field)))))
+                            (collect-rslot (list field temp))
+                            (collect-deserializer
+                             `((,(make-tag class index))
+                               (multiple-value-bind (,vval idx)
+                                   (deserialize-prim ,class ,vbuf ,vidx)
+                                 (setq ,vidx idx)
+                                 (push (funcall #',(proto-deserializer msg) ,vval) ,temp))))))))
                   (t
                    (cond ((keywordp class)
                           (collect-deserializer
@@ -765,7 +846,16 @@
                              (multiple-value-bind (,vval idx)
                                  (deserialize-enum '(,@(proto-values msg)) ,vbuf ,vidx)
                                (setq ,vidx idx)
-                               ,(write-slot vobj field vval)))))))))))
+                               ,(write-slot vobj field vval)))))
+                         ((typep msg 'protobuf-type-alias)
+                          (let ((class (proto-proto-type msg)))
+                            (collect-deserializer
+                             `((,(make-tag class index))
+                               (multiple-value-bind (,vval idx)
+                                     (deserialize-prim ,class ,vbuf ,vidx)
+                                   (let ((,vval (funcall #',(proto-deserializer msg) ,vval)))
+                                     (setq ,vidx idx)
+                                     ,(write-slot vobj field vval)))))))))))))
       (let* ((rslots  (delete-duplicates rslots :key #'first))
              (rfields (mapcar #'first  rslots))
              (rtemps  (mapcar #'second rslots)))
@@ -824,7 +914,8 @@
         (let* ((class  (if (eq (proto-class field) 'boolean) :bool (proto-class field)))
                (msg    (and class (not (keywordp class))
                             (or (find-message message class)
-                                (find-enum message class))))
+                                (find-enum message class)
+                                (find-type-alias message class))))
                (reader (cond ((proto-reader field)
                               `(,(proto-reader field) ,vobj))
                              ((proto-value field)
@@ -866,7 +957,14 @@
                                (if (proto-packed field)
                                  `(iincf ,vsize (packed-enum-size ,reader '(,@(proto-values msg)) ,tag))
                                  `(,iterator (,vval ,reader)
-                                    (iincf ,vsize (enum-size ,vval '(,@(proto-values msg)) ,tag))))))))))
+                                    (iincf ,vsize (enum-size ,vval '(,@(proto-values msg)) ,tag)))))))
+                           ((typep msg 'protobuf-type-alias)
+                            (collect-sizer
+                             (let* ((class (proto-proto-type msg))
+                                    (tag   (make-tag class index)))
+                               `(,iterator (,vval ,reader)
+                                  (let ((,vval (funcall #',(proto-serializer msg) ,vval)))
+                                    (iincf ,vsize (prim-size ,vval ,class ,tag))))))))))
                   (t
                    (cond ((keywordp class)
                           (let ((tag (make-tag class index)))
@@ -910,7 +1008,15 @@
                             (collect-sizer
                              `(let ((,vval ,reader))
                                 (when ,vval
-                                  (iincf ,vsize (enum-size ,vval '(,@(proto-values msg)) ,tag)))))))))))))
+                                  (iincf ,vsize (enum-size ,vval '(,@(proto-values msg)) ,tag)))))))
+                         ((typep msg 'protobuf-type-alias)
+                          (collect-sizer
+                           (let* ((class (proto-proto-type msg))
+                                  (tag   (make-tag class index)))
+                             `(let ((,vval ,reader))
+                                (when ,vval
+                                  (let ((,vval (funcall #',(proto-serializer msg) ,vval)))
+                                    (iincf ,vsize (prim-size ,vval ,class ,tag))))))))))))))
       `(defmethod object-size
            (,vobj (,vclass (eql ,message)) &optional visited)
          (declare #.$optimize-serialization)

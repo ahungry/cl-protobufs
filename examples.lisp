@@ -250,11 +250,16 @@
     (:package color-wheel
      ;; :optimize :speed
      :documentation "Color wheel example, with nested message")
+  (proto:define-type-alias date ()
+    :lisp-type integer
+    :proto-type string
+    :serializer integer-to-date
+    :deserializer date-to-integer)
   (proto:define-message color-wheel1 ()
     (proto:define-message metadata1 ()
       (author :type (or null string))
       (revision :type (or null string))
-      (date :type (or null string)))
+      (date :type (or null date)))
     (name :type string)
     (colors :type (proto:list-of color1))
     (metadata1 :type (or null metadata1)))
@@ -271,6 +276,11 @@
     (:package color-wheel
      ;; :optimize :speed
      :documentation "Color wheel example, with group")
+  (proto:define-type-alias date ()
+    :lisp-type integer
+    :proto-type string
+    :serializer integer-to-date
+    :deserializer date-to-integer)
   (proto:define-message color-wheel2 ()
     (name :type string)
     (colors :type (proto:list-of color2))
@@ -279,7 +289,7 @@
          :arity :optional)
       (author :type (or null string))
       (revision :type (or null string))
-      (date :type (or null string))))
+      (date :type (or null date))))
   (proto:define-message color2 ()
     (name :type (or null string))
     (r-value :type integer)
@@ -289,14 +299,21 @@
     (wheel :type color-wheel2)
     (color :type color2)))
 
+(defun integer-to-date (date)
+  (with-output-to-string (s)
+    (quux:write-local-date (quux:get-local-time date) s :format :dd-mth-yyyy)))
+
+(defun date-to-integer (string)
+  (quux:parse-local-date string))
+
 (proto:write-schema *color-wheel1*)
 (proto:write-schema *color-wheel2*)
 
-(let* ((meta1  (make-instance 'metadata1 :revision "1.0"))
+(let* ((meta1  (make-instance 'metadata1 :revision "1.0" :date (date-to-integer "12-FEB-1958")))
        (wheel1 (make-instance 'color-wheel1 :name "Colors" :metadata1 meta1))
        (color1 (make-instance 'color1 :r-value 100 :g-value 0 :b-value 100))
        (rqst1  (make-instance 'add-color1 :wheel wheel1 :color color1))
-       (meta2  (make-instance 'metadata2 :revision "1.0"))
+       (meta2  (make-instance 'metadata2 :revision "1.0" :date (date-to-integer "12-FEB-1958")))
        (wheel2 (make-instance 'color-wheel2 :name "Colors" :metadata2 meta2))
        (color2 (make-instance 'color2 :r-value 100 :g-value 0 :b-value 100))
        (rqst2  (make-instance 'add-color2 :wheel wheel2 :color color2)))

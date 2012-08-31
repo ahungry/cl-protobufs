@@ -10,8 +10,8 @@ Protobufs for Common Lisp
 
 
 :Description: Protobufs for Common Lisp
-:Author: Scott McKay <swm@google.com>
-:Date: $Date: 2012-05-07 14:58:00 -0500 (Mon, 7 May 2012) $
+:Author: Scott McKay <swmckay@gmail.com>
+:Date: $Date: 2012-08-31 11:13 -0500 (Fri, 31 Aug 2012) $
 
 .. contents::
 ..
@@ -32,6 +32,8 @@ Protobufs for Common Lisp
       4.1 Extensions functions
       4.2 Initialization functions
       4.3 Python compatibility functions
+    5  Lisp-only extensions
+      5.1 Type aliases
 
 
 Introduction
@@ -258,7 +260,7 @@ initform. It should transform the value into a scalar value suitable
 for Protobufs.
 
 If *alias-existing-classes* is true (the default), the generated
-code will include ``:alias-for`` so that there will be no clash
+Lisp code will include ``:alias-for`` so that there will be no clash
 with the existing Lisp class.
 
 ::
@@ -447,7 +449,7 @@ you can use ``option (lisp_name)`` to override the default name for the
 enum type in Lisp.
 
 If *alias-for* is given, no Lisp deftype is defined. Instead, the enum
-will be used as an alias for an enum type that already exists in Lisp.
+will be used as an alias for a ``member`` type that already exists in Lisp.
 You can use ``option (lisp_alias)`` in a .proto file to give the Lisp
 alias for an enum type.
 
@@ -931,3 +933,70 @@ class corresponds to a Protobufs message.
 Returns the number of bytes required to serialize *object* using the
 wire format. *object* is an object whose Lisp class corresponds to a
 Protobufs message.
+
+
+Lisp-only extensions
+====================
+
+CL-Protobufs includes some Lisp-only extensions that have no
+counterpart in Protobufs, but which "ground out" to compatible
+Protobufs code.
+
+Type aliases
+------------
+
+::
+
+  proto:define-type-alias (type (&key name alias-for            [Macro]
+                                      documentation)
+                           &key lisp-type proto-type
+                                serializer deserializer)
+
+Defines a Lisp type alias named *type* whose Lisp type is *lisp-type*
+and whose Protobufs type is *proto-type*.  *lisp-type* must be a valid
+Lisp type expression; *proto-type* myst be a Protobufs primitive type
+(e.g., ``int32``, ``string``).
+
+*serializer* is a function of one argument that takes an object of
+type *lisp-type* and returns an object having the Protobufs primitive
+type *proto-type*. *deserializer* is a function of one argument that
+takes an object of type *proto-type* and returns an object having the
+type *lisp-type*.
+
+If *name* is not supplied, the Protobufs name of the type alias is the
+camel-cased rendition of *type*; otherwise the Protobufs name is the
+string *name*.
+
+If *alias-for* is given, no Lisp deftype for ``type`` is
+defined. Instead, the type alias is assumed to refer to a
+previously-defined Lisp type.
+
+For example, this Lisp schema::
+
+  (proto:define-schema revision-history
+      (:package revision-history)
+    (proto:define-type-alias date ()
+      :lisp-type integer
+      :proto-type string
+      :serializer integer-to-date
+      :deserializer date-to-integer)
+    (proto:define-message revision ()
+      (proto:define-message metadata ()
+        (author :type (or null string))
+        (revision :type (or null string))
+        (date :type (or null date)))
+      (name :type string)
+      (description :type string)))
+
+will generate this Protobufs schema::
+
+  message Revision {
+    message Metadata {
+      optional string author = 1;
+      optional string revision = 2;
+      // alias maps Lisp integer to Protobufs string
+      optional string date = 3;
+    }
+    required string name = 1;
+    required string description = 2;
+  }

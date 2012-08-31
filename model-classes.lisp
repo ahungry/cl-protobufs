@@ -11,7 +11,7 @@
 (in-package "PROTO-IMPL")
 
 
-;;; Protol buffers model classes
+;;; Protocol buffers model classes
 
 (defvar *all-schemas* (make-hash-table :test #'equal)
   "A table mapping names to 'protobuf-schema' objects.")
@@ -165,7 +165,11 @@
    (services :type (list-of protobuf-service)
              :accessor proto-services
              :initarg :services
-             :initform ()))
+             :initform ())
+   (aliases :type (list-of protobuf-type-alias) ;type aliases, a Lisp extension
+            :accessor proto-type-aliases
+            :initarg :type-aliases
+            :initform ()))
   (:documentation
    "The model class that represents a Protobufs schema, i.e., one .proto file."))
 
@@ -446,7 +450,11 @@
    (message-type :type (member :message :group :extends)
                  :accessor proto-message-type
                  :initarg :message-type
-                 :initform :message))
+                 :initform :message)
+   (aliases :type (list-of protobuf-type-alias) ;type aliases, a Lisp extension
+            :accessor proto-type-aliases
+            :initarg :type-aliases
+            :initform ()))
   (:documentation
    "The model class that represents a Protobufs message."))
 
@@ -743,3 +751,45 @@
   (print-unreadable-object (m stream :type t :identity t)
     (format stream "~S (~S) => (~S)"
             (proto-class m) (proto-input-type m) (proto-output-type m))))
+
+
+;;; Lisp-only extensions
+
+;; A Protobufs message
+(defclass protobuf-type-alias (base-protobuf)
+  ((lisp-type :reader proto-lisp-type           ;a Lisp type specifier
+              :initarg :lisp-type)
+   (proto-type :reader proto-proto-type         ;a .proto type specifier
+               :initarg :proto-type)
+   (serializer :reader proto-serializer         ;Lisp -> Protobufs conversion function
+               :initarg :serializer)
+   (deserializer :reader proto-deserializer     ;Protobufs -> Lisp conversion function
+                 :initarg :deserializer))
+  (:documentation
+   "The model class that represents a Protobufs type alias."))
+
+(defmethod make-load-form ((m protobuf-type-alias) &optional environment)
+  (make-load-form-saving-slots m :environment environment))
+
+(defmethod print-object ((m protobuf-type-alias) stream)
+  (print-unreadable-object (m stream :type t :identity t)
+    (format stream "~S (maps ~S to ~S)"
+            (proto-class m)
+            (proto-lisp-type m) (proto-proto-type m))))
+
+(defgeneric find-type-alias (protobuf type)
+  (:documentation
+   "Given a Protobufs schema or message and the name of a type alias,
+    returns the Protobufs type alias corresponding to the name."))
+
+(defmethod find-type-alias ((schema protobuf-schema) (type symbol))
+  (labels ((find-it (schema)
+             (let ((alias (find type (proto-type-aliases schema) :key #'proto-class)))
+               (when alias
+                 (return-from find-type-alias alias))
+               (map () #'find-it (proto-imported-schemas schema)))))
+    (find-it schema)))
+
+(defmethod find-type-alias ((message protobuf-message) type)
+  (or (find type (proto-type-aliases message) :key #'proto-class)
+      (find-type-alias (proto-parent message) type)))

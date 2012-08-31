@@ -58,9 +58,11 @@
     (with-collectors ((forms collect-form))
       (dolist (msg messages)
         (assert (and (listp msg)
-                     (member (car msg) '(define-enum define-message define-extend define-service))) ()
+                     (member (car msg) '(define-enum define-message define-extend define-service
+                                         define-type-alias))) ()
                 "The body of ~S must be one of ~{~S~^ or ~}"
-                'define-schema '(define-enum define-message define-extend define-service))
+                'define-schema
+                '(define-enum define-message define-extend define-service define-type-alias))
         ;; The macro-expander will return a form that consists
         ;; of 'progn' followed by a symbol naming what we've expanded
         ;; (define-enum, define-message, define-extend, define-service),
@@ -74,6 +76,8 @@
           (ecase model-type
             ((define-enum)
              (setf (proto-enums schema) (nconc (proto-enums schema) (list model))))
+            ((define-type-alias)
+             (setf (proto-type-aliases schema) (nconc (proto-type-aliases schema) (list model))))
             ((define-message define-extend)
              (setf (proto-parent model) schema)
              (setf (proto-messages schema) (nconc (proto-messages schema) (list model)))
@@ -244,7 +248,8 @@
                       (forms collect-form))
       (dolist (field fields)
         (case (car field)
-          ((define-enum define-message define-extend define-extension define-group)
+          ((define-enum define-message define-extend define-extension define-group
+            define-type-alias)
            (destructuring-bind (&optional progn model-type model definers extra-field extra-slot)
                (macroexpand-1 field env)
              (assert (eq progn 'progn) ()
@@ -253,6 +258,8 @@
              (ecase model-type
                ((define-enum)
                 (setf (proto-enums message) (nconc (proto-enums message) (list model))))
+               ((define-type-alias)
+                (setf (proto-type-aliases message) (nconc (proto-type-aliases message) (list model))))
                ((define-message define-extend)
                 (setf (proto-parent model) message)
                 (setf (proto-messages message) (nconc (proto-messages message) (list model)))
@@ -350,7 +357,8 @@
                          :options  (remove-options
                                      (or options (copy-list (proto-options message))) "default" "packed")
                          :message-type :extends         ;this message is an extension
-                         :documentation documentation)))
+                         :documentation documentation
+                         :type-aliases  (copy-list (proto-type-aliases message)))))
          ;; Only now can we bind *protobuf* to the new extended message
          (*protobuf* extends)
          (index 0))
@@ -362,7 +370,8 @@
     (with-collectors ((forms collect-form))
       (dolist (field fields)
         (assert (not (member (car field)
-                             '(define-enum define-message define-extend define-extension))) ()
+                             '(define-enum define-message define-extend define-extension
+                               define-type-alias))) ()
                 "The body of ~S can only contain field and group definitions" 'define-extend)
         (case (car field)
           ((define-group)
@@ -563,7 +572,8 @@
                       (forms collect-form))
       (dolist (field fields)
         (case (car field)
-          ((define-enum define-message define-extend define-extension define-group)
+          ((define-enum define-message define-extend define-extension define-group
+            define-type-alias)
            (destructuring-bind (&optional progn model-type model definers extra-field extra-slot)
                (macroexpand-1 field env)
              (assert (eq progn 'progn) ()
@@ -572,6 +582,8 @@
              (ecase model-type
                ((define-enum)
                 (setf (proto-enums message) (nconc (proto-enums message) (list model))))
+               ((define-type-alias)
+                (setf (proto-type-aliases message) (nconc (proto-type-aliases message) (list model))))
                ((define-message define-extend)
                 (setf (proto-parent model) message)
                 (setf (proto-messages message) (nconc (proto-messages message) (list model)))
@@ -791,6 +803,49 @@
          define-service
          ,service
          ((with-proto-source-location (,type ,name protobuf-service ,@source-location)
+            ,@forms))))))
+
+
+;; Lisp-only type aliases
+(defmacro define-type-alias (type (&key name alias-for documentation source-location)
+                             &key lisp-type proto-type serializer deserializer)
+  "Define a Protobufs type alias Lisp 'deftype' named 'type'.
+   'lisp-type' is the name of the Lisp type.
+   'proto-type' is the name of a primitive Protobufs type, e.g., 'int32' or 'string'.
+   'serializer' is a function that takes a Lisp object and generates a Protobufs object.
+   'deserializer' is a function that takes a Protobufs object and generates a Lisp object.
+   If 'alias-for' is given, no Lisp 'deftype' will be defined."
+  (let* ((name  (or name (class-name->proto type)))
+         (proto (multiple-value-bind (typ cl)
+                    (lisp-type-to-protobuf-type proto-type)
+                  (declare (ignore typ))
+                  (assert (keywordp cl) ()
+                          "The alias ~S must resolve to a Protobufs primitive type"
+                          type)
+                  cl))
+         (alias (make-instance 'protobuf-type-alias
+                  :class  type
+                  :name   name
+                  :lisp-type  lisp-type
+                  :proto-type proto
+                  :serializer   serializer
+                  :deserializer deserializer
+                  :qualified-name (make-qualified-name *protobuf* name)
+                  :parent *protobuf*
+                  :documentation documentation
+                  :source-location source-location)))
+    (with-collectors ((forms collect-form))
+      (if alias-for
+        ;; If we've got an alias, define a a type that is the subtype of
+        ;; the Lisp enum so that typep and subtypep work
+        (unless (eq type alias-for)
+          (collect-form `(deftype ,type () ',alias-for)))
+        ;; If no alias, define the Lisp enum type now
+        (collect-form `(deftype ,type () ',lisp-type)))
+      `(progn
+         define-type-alias
+         ,alias
+         ((with-proto-source-location (,type ,name protobuf-type-alias ,@source-location)
             ,@forms))))))
 
 

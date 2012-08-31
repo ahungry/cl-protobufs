@@ -45,6 +45,7 @@
    "PROTOBUF-EXTENSION"
    "PROTOBUF-SERVICE"
    "PROTOBUF-METHOD"
+   "PROTOBUF-TYPE-ALIAS"        ;Lisp-only extension
 
    ;; Object lookup
    "FIND-MESSAGE"
@@ -65,6 +66,7 @@
    "DEFINE-EXTENSION"
    "DEFINE-GROUP"
    "DEFINE-SERVICE"
+   "DEFINE-TYPE-ALIAS"          ;Lisp-only extension
 
    ;; Upgradability and equality testing
    "SCHEMA-UPGRADABLE"
@@ -181,6 +183,14 @@
    "PROTO-VALUES"
    "PROTO-WRITER"
 
+   ;; Type aliases, a Lisp-only extension
+   "PROTO-TYPE-ALIASES"
+   "PROTO-LISP-TYPE"
+   "PROTO-PROTO-TYPE"
+   "PROTO-SERIALIZER"
+   "PROTO-DESERIALIZER"
+   "FIND-TYPE-ALIAS"
+
    ;; Controls
    "*PROTOBUF*"
    "*PROTOBUF-PACKAGE*"
@@ -209,6 +219,7 @@
    "*ALIAS-EXISTING-CLASSES*"
    "CLASS-TO-PROTOBUF-MESSAGE"
    "SLOT-TO-PROTOBUF-FIELD"
+   "LISP-TYPE-TO-PROTOBUF-TYPE"
    "CLOS-TYPE-TO-PROTOBUF-TYPE"
    "CLOS-TYPE-TO-PROTOBUF-REQUIRED"
    "CLOS-INIT-TO-PROTOBUF-DEFAULT"

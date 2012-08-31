@@ -243,37 +243,7 @@
         ;; Hideous, but useful, kludge for those of us at ITA-by-Google
         (quux-list-of (and (find-package :quux)
                            (intern "LIST-OF" (find-package :quux)))))
-    (flet ((type->protobuf-type (type)
-             (case type
-               ((int32)    (values "int32" :int32))
-               ((int64)    (values "int64" :int64))
-               ((uint32)   (values "uint32" :uint32))
-               ((uint64)   (values "uint64" :uint64))
-               ((sint32)   (values "sint32" :sint32))
-               ((sint64)   (values "sint64" :sint64))
-               ((fixed32)  (values "fixed32" :fixed32))
-               ((fixed64)  (values "fixed64" :fixed64))
-               ((sfixed32) (values "sfixed32" :sfixed32))
-               ((sfixed64) (values "sfixed64" :sfixed64))
-               ((integer)  (values "int64" :int64))
-               ((single-float float)
-                (values "float" :float))
-               ((double-float)
-                (values "double" :double))
-               ((boolean)
-                (values "bool" :bool))
-               ((symbol keyword)
-                (values "string" :symbol))
-               (otherwise
-                (cond ((ignore-errors
-                        (or (eql type 'symbol)
-                            (subtypep type '(or string character))))
-                       (values "string" :string))
-                      ((ignore-errors
-                        (subtypep type 'byte-vector))
-                       (values "bytes" :bytes))
-                      (t
-                       (values (class-name->proto type) type)))))))
+    (flet ()
       (if (listp type)
         (destructuring-bind (head &rest tail) type
           (case head
@@ -295,13 +265,13 @@
                                    (intern (subseq (string pred) #.(length "LIST-OF-")) (symbol-package pred))
                                    pred)))
                       (multiple-value-bind (type class)
-                          (type->protobuf-type type)
+                          (lisp-type-to-protobuf-type type)
                         (values type class (packed-type-p class)))))
                    (t
                     (let ((new-tail (remove-if #'(lambda (x) (and (listp x) (eq (car x) 'satisfies))) tail)))
                       (when (> (length new-tail) 1)
                         (protobufs-warn "The AND type ~S is too complicated, proceeding anyway" type))
-                      (type->protobuf-type (first tail))))))
+                      (lisp-type-to-protobuf-type (first tail))))))
             ((member)                           ;maybe generate an enum type
              (if (or (equal type '(member t nil))
                      (equal type '(member nil t)))
@@ -326,7 +296,7 @@
                         (error "The MEMBER type ~S is too complicated" type))))))
             ((list-of vector-of)
              (multiple-value-bind (type class)
-                 (type->protobuf-type (first tail))
+                 (lisp-type-to-protobuf-type (first tail))
                (values type class (packed-type-p class))))
             ((integer)
              (let ((lo (or (first tail) '*))
@@ -353,14 +323,46 @@
                  (values "uint32" :uint32)
                  (values "uint64" :uint64))))
             ((float single-float double-float)
-             (type->protobuf-type head))
+             (lisp-type-to-protobuf-type head))
             (otherwise
              (if (eq head quux-list-of)
                (multiple-value-bind (type class)
-                   (type->protobuf-type (first tail))
+                   (lisp-type-to-protobuf-type (first tail))
                  (values type class (packed-type-p class)))
-               (type->protobuf-type type)))))
-        (type->protobuf-type type)))))
+               (lisp-type-to-protobuf-type type)))))
+        (lisp-type-to-protobuf-type type)))))
+
+(defun lisp-type-to-protobuf-type (type)
+  (case type
+    ((int32)    (values "int32" :int32))
+    ((int64)    (values "int64" :int64))
+    ((uint32)   (values "uint32" :uint32))
+    ((uint64)   (values "uint64" :uint64))
+    ((sint32)   (values "sint32" :sint32))
+    ((sint64)   (values "sint64" :sint64))
+    ((fixed32)  (values "fixed32" :fixed32))
+    ((fixed64)  (values "fixed64" :fixed64))
+    ((sfixed32) (values "sfixed32" :sfixed32))
+    ((sfixed64) (values "sfixed64" :sfixed64))
+    ((integer)  (values "int64" :int64))
+    ((single-float float)
+     (values "float" :float))
+    ((double-float)
+     (values "double" :double))
+    ((boolean)
+     (values "bool" :bool))
+    ((symbol keyword)
+     (values "string" :symbol))
+    (otherwise
+     (cond ((ignore-errors
+             (or (eql type 'symbol)
+                 (subtypep type '(or string character))))
+            (values "string" :string))
+           ((ignore-errors
+             (subtypep type 'byte-vector))
+            (values "bytes" :bytes))
+           (t
+            (values (class-name->proto type) type))))))
 
 (defun packed-type-p (type)
   "Returns true if the given Protobufs type can use a packed field."

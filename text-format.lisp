@@ -51,7 +51,8 @@
                                                            (or suppress-line-breaks indent)))
                                            (read-slot object slot reader)))
                                   ((typep (setq msg (and type (or (find-message trace type)
-                                                                  (find-enum trace type))))
+                                                                  (find-enum trace type)
+                                                                  (find-type-alias trace type))))
                                           'protobuf-message)
                                    (let ((values (if slot (read-slot object slot reader) (list object))))
                                      (when values
@@ -69,7 +70,14 @@
                                    (map () #'(lambda (v)
                                                (print-enum v msg field stream
                                                            (or suppress-line-breaks indent)))
-                                           (read-slot object slot reader)))))
+                                           (read-slot object slot reader)))
+                                  ((typep msg 'protobuf-type-alias)
+                                   (let ((type (proto-proto-type msg)))
+                                     (map () #'(lambda (v)
+                                                 (let ((v (funcall (proto-serializer msg) v)))
+                                                   (print-prim v type field stream
+                                                               (or suppress-line-breaks indent))))
+                                             (read-slot object slot reader))))))
                            (t
                             (cond ((eq type :bool)
                                    (let ((v (cond ((or (eq (proto-required field) :required)
@@ -87,7 +95,8 @@
                                        (print-prim v type field stream
                                                    (or suppress-line-breaks indent)))))
                                   ((typep (setq msg (and type (or (find-message trace type)
-                                                                  (find-enum trace type))))
+                                                                  (find-enum trace type)
+                                                                  (find-type-alias trace type))))
                                           'protobuf-message)
                                    (let ((v (if slot (read-slot object slot reader) object)))
                                      (when v
@@ -104,7 +113,14 @@
                                    (let ((v (read-slot object slot reader)))
                                      (when v
                                        (print-enum v msg field stream
-                                                   (or suppress-line-breaks indent))))))))))))
+                                                   (or suppress-line-breaks indent)))))
+                                  ((typep msg 'protobuf-type-alias)
+                                   (let ((v (read-slot object slot reader)))
+                                     (when v
+                                       (let ((v    (funcall (proto-serializer msg) v))
+                                             (type (proto-proto-type msg)))
+                                         (print-prim v type field stream
+                                                     (or suppress-line-breaks indent)))))))))))))
         (declare (dynamic-extent #'do-field))
         (if suppress-line-breaks
           (format stream "~A { " (proto-name message))
@@ -205,7 +221,8 @@
                                        (pushnew slot rslots)
                                        (push val (slot-value object slot)))))
                                   ((typep (setq msg (and type (or (find-message trace type)
-                                                                  (find-enum trace type))))
+                                                                  (find-enum trace type)
+                                                                  (find-type-alias trace type))))
                                           'protobuf-message)
                                    (when (eql (peek-char nil stream nil) #\:)
                                      (read-char stream))
@@ -220,7 +237,19 @@
                                           (val  (and enum (proto-value enum))))
                                      (when slot
                                        (pushnew slot rslots)
-                                       (push val (slot-value object slot)))))))
+                                       (push val (slot-value object slot)))))
+                                  ((typep msg 'protobuf-type-alias)
+                                   (let ((type (proto-proto-type msg)))
+                                     (expect-char stream #\:)
+                                     (let ((val (case type
+                                                  ((:float :double) (parse-float stream))
+                                                  ((:string) (parse-string stream))
+                                                  ((:bool)   (if (boolean-true-p (parse-token stream)) t nil))
+                                                  (otherwise (parse-signed-int stream)))))
+                                       (when slot
+                                         (pushnew slot rslots)
+                                         (push (funcall (proto-deserializer msg) val)
+                                               (slot-value object slot))))))))
                            (t
                             (cond ((keywordp type)
                                    (expect-char stream #\:)
@@ -232,7 +261,8 @@
                                      (when slot
                                        (setf (slot-value object slot) val))))
                                   ((typep (setq msg (and type (or (find-message trace type)
-                                                                  (find-enum trace type))))
+                                                                  (find-enum trace type)
+                                                                  (find-type-alias trace type))))
                                           'protobuf-message)
                                    (when (eql (peek-char nil stream nil) #\:)
                                      (read-char stream))
@@ -245,7 +275,18 @@
                                           (enum (find name (proto-values msg) :key #'proto-name :test #'string=))
                                           (val  (and enum (proto-value enum))))
                                      (when slot
-                                       (setf (slot-value object slot) val))))))))))))
+                                       (setf (slot-value object slot) val))))
+                                  ((typep msg 'protobuf-type-alias)
+                                   (let ((type (proto-proto-type msg)))
+                                     (expect-char stream #\:)
+                                     (let ((val (case type
+                                                  ((:float :double) (parse-float stream))
+                                                  ((:string) (parse-string stream))
+                                                  ((:bool)   (if (boolean-true-p (parse-token stream)) t nil))
+                                                  (otherwise (parse-signed-int stream)))))
+                                       (when slot
+                                         (setf (slot-value object slot)
+                                               (funcall (proto-deserializer msg) val))))))))))))))
            (skip-field (stream)
              ;; Skip either a token or a balanced {}-pair
              (ecase (peek-char nil stream nil)
