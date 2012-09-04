@@ -36,8 +36,8 @@
     (wheel :type stable-color-wheel)
     (color :type stable-color))
   (proto:define-service stable-color-wheel ()
-    (get-stable-color (string stable-color))
-    (set-stable-color (stable-color stable-color)
+    (get-stable-color (string => stable-color))
+    (set-stable-color (stable-color => stable-color)
                       :options (:deadline 1.0))))
 
 (defvar *color-wheel-proto*

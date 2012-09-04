@@ -709,7 +709,7 @@
    'name' can be used to override the defaultly generated Protobufs service name.
    'options' is a set of keyword/value pairs, both of which are strings.
 
-   The body is a set of method specs of the form (name (input-type output-type) &key options).
+   The body is a set of method specs of the form (name (input-type [=>] output-type) &key options).
    'input-type' and 'output-type' may also be of the form (type &key name)."
   (let* ((name    (or name (class-name->proto type)))
          (options (loop for (key val) on options by #'cddr
@@ -727,14 +727,22 @@
          (index 0))
     (with-collectors ((forms collect-form))
       (dolist (method method-specs)
-        (destructuring-bind (function (input-type output-type)
+        (destructuring-bind (function (&rest types)
                              &key name options documentation source-location) method
-          (let* ((input-name (and (listp input-type)
+          (let* ((input-type   (first types))
+                 (output-type  (if (string= (string (second types)) "=>") (third types) (second types)))
+                 (streams-type (if (string= (string (second types)) "=>")
+                                 (getf (cdddr types) :streams)
+                                 (getf (cddr  types) :streams)))
+                 (input-name (and (listp input-type)
                                   (getf (cdr input-type) :name)))
                  (input-type (if (listp input-type) (car input-type) input-type))
                  (output-name (and (listp output-type)
                                    (getf (cdr output-type) :name)))
                  (output-type (if (listp output-type) (car output-type) output-type))
+                 (streams-name (and (listp streams-type)
+                                    (getf (cdr streams-type) :name)))
+                 (streams-type (if (listp streams-type) (car streams-type) streams-type))
                  (options (loop for (key val) on options by #'cddr
                                 collect (make-instance 'protobuf-option
                                           :name  (if (symbolp key) (slot-name->proto key) key)
@@ -753,6 +761,9 @@
                             :input-name  (or input-name (class-name->proto input-type))
                             :output-type output-type
                             :output-name (or output-name (class-name->proto output-type))
+                            :streams-type streams-type
+                            :streams-name (and streams-type
+                                               (or streams-name (class-name->proto streams-type)))
                             :index (iincf index)
                             :options options
                             :documentation documentation
@@ -898,7 +909,8 @@
 (defgeneric ensure-method (trace service method)
   (:method (trace service (method protobuf-method))
     (ensure-type trace service method (proto-input-type method))
-    (ensure-type trace service method (proto-output-type method))))
+    (ensure-type trace service method (proto-output-type method))
+    (ensure-type trace service method (proto-streams-type method))))
 
 ;; 'message' and 'field' can be a message and a field or a service and a method
 (defun ensure-type (trace message field type)

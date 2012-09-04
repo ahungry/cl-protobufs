@@ -437,7 +437,7 @@
   (proto:define-message buy-car-response ()
     (price :type (or null uint32)))
   (proto:define-service buy-car ()
-    (buy-car (buy-car-request buy-car-response)
+    (buy-car (buy-car-request => buy-car-response)
       :options (:deadline 1.0))))
 
 (define-test extension-serialization ()

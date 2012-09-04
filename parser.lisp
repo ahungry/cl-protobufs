@@ -701,10 +701,15 @@
          (in   (prog2 (expect-char stream #\( () "service")
                    (parse-token stream)
                  (expect-char stream #\) () "service")))
-         (ret  (parse-token stream))
+         (ret  (parse-token stream))            ;should be "=>"
          (out  (prog2 (expect-char stream #\( () "service")
                    (parse-token stream)
                  (expect-char stream #\) () "service")))
+         (strm (parse-token stream))            ;might be "streams"
+         (strm (and strm (string= strm "streams")
+                    (prog2 (expect-char stream #\( () "service")
+                        (parse-token stream)
+                      (expect-char stream #\) () "service"))))
          (opts (let ((opts (parse-proto-method-options stream)))
                  (when (or (null opts) (eql (peek-char nil stream nil) #\;))
                    (expect-char stream #\; () "service"))
@@ -720,17 +725,19 @@
                    :input-name  in
                    :output-type (proto->class-name out *protobuf-package*)
                    :output-name out
+                   :streams-type (and strm (proto->class-name strm *protobuf-package*))
+                   :streams-name strm
                    :index index
                    :options opts
                    :source-location (make-source-location stream loc (i+ loc (length name))))))
+    (assert (string= ret "returns") ()
+            "Syntax error in 'message' at position ~D" (file-position stream))
     (let* ((name (find-option method "lisp_name"))
            (stub (or (and name (make-lisp-symbol name))
                      stub)))
       (setf (proto-class method) stub
             (proto-client-stub method) stub
             (proto-server-stub method) (intern (format nil "~A-~A" 'do stub) *protobuf-package*)))
-    (assert (string= ret "returns") ()
-            "Syntax error in 'message' at position ~D" (file-position stream))
     (setf (proto-methods service) (nconc (proto-methods service) (list method)))
     method))
 

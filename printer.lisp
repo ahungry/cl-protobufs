@@ -91,6 +91,7 @@
                          ("deprecated"            symbol)
                          ("optimize_for"          symbol)
                          ("packed"               boolean)
+                         ("protocol"              symbol)
                          ("stream_type"           string)
                          ;; Keep the rest of these in alphabetical order
                          ("cc_api_version"       integer)
@@ -152,7 +153,7 @@
                            ((boolean) "~A~@[ = ~(~A~)~]")
                            (otherwise "~A~@[ = ~S~]"))))))
              (format stream fmt-control (proto-name option) (proto-value option))))
-          (atsign-p                             ;~@/protobuf-option/ -- .lisp format
+          (atsign-p                             ;~@/protobuf-option/ -- string/value format
            (let ((fmt-control (if (eq type 'symbol) "~(~S~) ~A" "~(~S~) ~S")))
              (format stream fmt-control (proto-name option) (proto-value option))))
           (t                                    ;~/protobuf-option/  -- keyword/value format
@@ -377,16 +378,18 @@
                             &key (indentation 0) more)
   (declare (ignore more))
   (with-prefixed-accessors
-      (name documentation input-name output-name options) (proto- method)
+      (name documentation input-name output-name streams-name options) (proto- method)
     (let* ((imsg (find-message *protobuf* input-name))
            (omsg (find-message *protobuf* output-name))
+           (smsg (find-message *protobuf* streams-name))
            (iname (maybe-qualified-name imsg))
-           (oname (maybe-qualified-name omsg)))
+           (oname (maybe-qualified-name omsg))
+           (sname (maybe-qualified-name smsg)))
       (when documentation
         (write-schema-documentation type documentation stream :indentation indentation))
-      (format stream "~&~@[~VT~]rpc ~A (~@[~A~])~@[ returns (~A)~]"
+      (format stream "~&~@[~VT~]rpc ~A (~@[~A~])~@[ streams (~A)~]~@[ returns (~A)~]"
               (and (not (zerop indentation)) indentation)
-              name iname oname)
+              name iname sname oname)
       (cond (options
              (format stream " {~%")
              (dolist (option options)
@@ -459,7 +462,7 @@
             (terpri stream))
           (setq spaces "     "))
         (when options
-          (format stream "~A:options (~{~@/protobuf-option/~^ ~})" spaces options)
+          (format stream "~A:options (~{~/protobuf-option/~^ ~})" spaces options)
           (when documentation
             (terpri stream))
           (setq spaces "     "))
@@ -705,12 +708,12 @@
                                 ;; Keyword class means a primitive type, print default with ~S
                                 "~&~@[~VT~](~A :type ~(~S~)~:[~*~; :default ~S~]~
                                  ~@[ :reader ~(~S~)~]~@[ :writer ~(~S~)~]~@[ :packed ~(~S~)~]~
-                                 ~@[ :options (~{~@/protobuf-option/~^ ~})~])~
+                                 ~@[ :options (~{~/protobuf-option/~^ ~})~])~
                                  ~:[~*~*~;~VT; ~A~]"
                                 ;; Non-keyword class means an enum type, print default with ~(~S~)
                                 "~&~@[~VT~](~A :type ~(~S~)~:[~*~; :default ~(~S~)~]~
                                  ~@[ :reader ~(~S~)~]~@[ :writer ~(~S~)~]~@[ :packed ~(~S~)~]~
-                                 ~@[ :options (~{~@/protobuf-option/~^ ~})~])~
+                                 ~@[ :options (~{~/protobuf-option/~^ ~})~])~
                                  ~:[~*~*~;~VT; ~A~]")
                        (and (not (zerop indentation)) indentation)
                        slot-name type defaultp default reader writer packed options
@@ -750,15 +753,15 @@
 (defmethod write-schema-as ((type (eql :lisp)) (method protobuf-method) stream
                             &key (indentation 0) more)
   (declare (ignore more))
-  (with-prefixed-accessors (class input-type output-type options
+  (with-prefixed-accessors (class input-type output-type streams-type options
                             documentation source-location) (proto- method)
     (when documentation
       (write-schema-documentation type documentation stream :indentation indentation))
-    (format stream "~&~@[~VT~](~(~S~) (~(~S~) ~(~S~))"
+    (format stream "~&~@[~VT~](~(~S~) (~(~S~) => ~(~S~)~@[ :streams ~(~S~)~])"
             (and (not (zerop indentation)) indentation)
-            class input-type output-type)
+            class input-type output-type streams-type)
     (when options
-      (format stream "~%~VT:options (~{~@/protobuf-option/~^ ~})"
+      (format stream "~%~VT:options (~{~/protobuf-option/~^ ~})"
               (+ indentation 2) options))
     (format stream ")")))
 

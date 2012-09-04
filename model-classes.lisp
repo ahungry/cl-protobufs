@@ -298,7 +298,7 @@
           :initarg :value
           :initform nil)
    (type :type (or null symbol)                 ;(optional) Lisp type,
-         :reader proto-type                     ;  one of string, integer, sybol (for now)
+         :reader proto-type                     ;  one of string, integer, float, symbol (for now)
          :initarg :type
          :initform 'string))
   (:documentation
@@ -737,6 +737,14 @@
    (oname :type (or null string)                ;the Protobufs name of the output
           :accessor proto-output-name
           :initarg :output-name
+          :initform nil)
+   (stype :type (or symbol null)                ;the Lisp type name of the "streams" type
+          :accessor proto-streams-type
+          :initarg :streams-type
+          :initform nil)
+   (sname :type (or null string)                ;the Protobufs name of the "streams" type
+          :accessor proto-streams-name
+          :initarg :streams-name
           :initform nil)
    (index :type (unsigned-byte 32)              ;an identifying index for this method
           :accessor proto-index                 ; (used by the RPC implementation)

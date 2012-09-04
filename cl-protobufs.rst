@@ -330,9 +330,9 @@ following macros. For example::
       (color :type color))
     (proto:define-service color-wheel ()
       (get-color (get-color-request color)
-        :options ("deadline" "1.0"))
+        :options (:deadline 1.0))
       (add-color (add-color-request color)
-        :options ("deadline" "1.0"))))
+        :options (:deadline 1.0))))
 
 This will create the Protobufs model objects, Lisp classes and enum
 types that correspond to the model. The .proto file of the same schema
@@ -373,10 +373,10 @@ looks something like this::
 
   service ColorWheel {
     rpc GetColor (GetColorRequest) returns (Color) {
-      option deadline = "1.0";
+      option deadline = 1.0;
     }
     rpc AddColor (AddColorRequest) returns (Color) {
-      option deadline = "1.0";
+      option deadline = 1.0;
     }
   }
 
@@ -610,9 +610,16 @@ the Protobufs name is the string *name*.
 in the .proto file.
 
 The body is a set of method specs of the form
-``(name (input-type output-type) &key options documentation)``.
-*name* is a symbol naming the RPC method. *input-type* and
-*output-type* may either be symbols or a list of the form ``(type &key name)``.
+``(name (input-type [=>] output-type &key streams) &key options documentation)``.
+
+For each method spec, *name* is a symbol naming the RPC method.
+*input-type* and *output-type* give the input and output types of the method;
+they may either be symbols or a list of the form ``(type &key name)``.
+You can optionally include the symbol ``=>`` between the input and
+output types; this seems to improve readability.
+
+*streams* is also the name of a type, and provides a hook to RPC
+implementations that implement "streaming".
 
 ``proto:define-service`` can only be used within ``proto:define-schema``.
 
