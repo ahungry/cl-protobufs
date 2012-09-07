@@ -156,7 +156,11 @@
         collect ch into string
         finally (progn
                   (skip-whitespace stream)
-                  (return (coerce string 'string)))))
+                  (if (eql (peek-char nil stream nil) ch0)
+                    ;; If the next character is a quote character, that means
+                    ;; we should go parse another string and concatenate it
+                    (return (strcat (coerce string 'string) (parse-string stream)))
+                    (return (coerce string 'string))))))
 
 (defun unescape-char (stream)
   "Parse the next \"escaped\" character from the stream."
@@ -375,6 +379,14 @@
                               (parse-string stream))
                              ((or (digit-char-p ch) (member ch '(#\- #\+ #\.)))
                               (parse-number stream))
+                             ((eql ch #\{)
+                              (let ((message (find-message (or protobuf *protobuf*) key)))
+                                (if message
+                                  ;; We've got a complex message as a value to an option
+                                  ;; This only shows up in custom optionss
+                                  (parse-text-format message :stream stream :parse-name nil)
+                                  ;; Who knows what to do? Skip the value
+                                  (skip-field stream))))
                              (t (kintern (parse-token stream)))))
                 (setq terminator (expect-char stream terminators () "option"))
                 (maybe-skip-comments stream)))

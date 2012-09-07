@@ -138,27 +138,46 @@
       nil)))
 
 (defun cl-user::protobuf-option (stream option colon-p atsign-p)
-  (let ((type (or (second (find (proto-name option) *option-types* :key #'first :test #'string=))
-                  (proto-type option))))
+  (let* ((type (or (second (find (proto-name option) *option-types* :key #'first :test #'string=))
+                   (proto-type option)))
+         (value (proto-value option)))
     (cond (colon-p                              ;~:/protobuf-option/ -- .proto format
            (let ((fmt-control
                   (cond ((find (proto-name option) *lisp-options* :key #'first :test #'string=)
                          (case type
                            ((symbol) "(~A)~@[ = ~A~]")
                            ((boolean) "(~A)~@[ = ~(~A~)~]")
-                           (otherwise "(~A)~@[ = ~S~]")))
+                           (otherwise
+                            (cond ((typep value 'standard-object)
+                                   ;; If the value is an instance of some class,
+                                   ;; then it must be some sort of complex option,
+                                   ;; so print the value using the text format
+                                   (setq value
+                                         (with-output-to-string (s)
+                                           (print-text-format value nil
+                                                              :stream s :print-name nil :suppress-line-breaks t)))
+                                   "(~A)~@[ = ~A~]")
+                                  (t
+                                   "(~A)~@[ = ~S~]")))))
                         (t
                          (case type
                            ((symbol) "~A~@[ = ~A~]")
                            ((boolean) "~A~@[ = ~(~A~)~]")
-                           (otherwise "~A~@[ = ~S~]"))))))
-             (format stream fmt-control (proto-name option) (proto-value option))))
+                           (otherwise
+                            (cond ((typep value 'standard-object)
+                                   (setq value
+                                         (with-output-to-string (s)
+                                           (print-text-format value nil
+                                                              :stream s :print-name nil :suppress-line-breaks t)))
+                                   "~A~@[ = ~A~]")
+                                  (t "~A~@[ = ~S~]"))))))))
+             (format stream fmt-control (proto-name option) value)))
           (atsign-p                             ;~@/protobuf-option/ -- string/value format
            (let ((fmt-control (if (eq type 'symbol) "~(~S~) ~A" "~(~S~) ~S")))
-             (format stream fmt-control (proto-name option) (proto-value option))))
+             (format stream fmt-control (proto-name option) value)))
           (t                                    ;~/protobuf-option/  -- keyword/value format
            (let ((fmt-control (if (eq type 'symbol) "~(:~A~) ~A" "~(:~A~) ~S")))
-             (format stream fmt-control (proto-name option) (proto-value option)))))))
+             (format stream fmt-control (proto-name option) value))))))
 
 (defun cl-user::source-location (stream location colon-p atsign-p)
   (declare (ignore colon-p atsign-p))

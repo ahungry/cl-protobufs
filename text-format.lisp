@@ -16,7 +16,7 @@
 (defvar *suppress-line-breaks* nil
   "When true, don't generate line breaks in the text format")
 
-(defgeneric print-text-format (object &optional type &key stream suppress-line-breaks)
+(defgeneric print-text-format (object &optional type &key stream suppress-line-breaks print-name)
   (:documentation
    "Prints the object 'object' of type 'type' onto the stream 'stream' using the
     textual format.
@@ -24,7 +24,7 @@
 
 (defmethod print-text-format (object &optional type
                               &key (stream *standard-output*)
-                                   (suppress-line-breaks *suppress-line-breaks*))
+                                   (suppress-line-breaks *suppress-line-breaks*) (print-name t))
   (let* ((type    (or type (type-of object)))
          (message (find-message-for-class type)))
     (assert message ()
@@ -122,9 +122,11 @@
                                          (print-prim v type field stream
                                                      (or suppress-line-breaks indent)))))))))))))
         (declare (dynamic-extent #'do-field))
-        (if suppress-line-breaks
-          (format stream "~A { " (proto-name message))
-          (format stream "~&~A {~%" (proto-name message)))
+        (if print-name
+          (if suppress-line-breaks
+            (format stream "~A { " (proto-name message))
+            (format stream "~&~A {~%" (proto-name message)))
+          (format stream "{"))
         (map () (curry #'do-field object message 0) (proto-fields message))
         (if suppress-line-breaks
           (format stream "}")
@@ -175,20 +177,23 @@
 
 ;;; Parse objects that were serialized using the text format
 
-(defgeneric parse-text-format (type &key stream)
+(defgeneric parse-text-format (type &key stream parse-name)
   (:documentation
    "Parses an object of type 'type' from the stream 'stream' using the textual format."))
 
-(defmethod parse-text-format ((type symbol) &key (stream *standard-input*))
+(defmethod parse-text-format ((type symbol)
+                              &key (stream *standard-input*) (parse-name t))
   (let ((message (find-message-for-class type)))
     (assert message ()
             "There is no Protobuf message having the type ~S" type)
-    (parse-text-format message :stream stream)))
+    (parse-text-format message :stream stream :parse-name parse-name)))
 
-(defmethod parse-text-format ((message protobuf-message) &key (stream *standard-input*))
-  (let ((name (parse-token stream)))
-    (assert (string= name (proto-name message)) ()
-            "The message is not of the expected type ~A" (proto-name message)))
+(defmethod parse-text-format ((message protobuf-message)
+                              &key (stream *standard-input*) (parse-name t))
+  (when parse-name
+    (let ((name (parse-token stream)))
+      (assert (string= name (proto-name message)) ()
+              "The message is not of the expected type ~A" (proto-name message))))
   (labels ((deserialize (type trace)
              (let* ((message (find-message trace type))
                     (object  (and message
@@ -286,24 +291,25 @@
                                                   (otherwise (parse-signed-int stream)))))
                                        (when slot
                                          (setf (slot-value object slot)
-                                               (funcall (proto-deserializer msg) val))))))))))))))
-           (skip-field (stream)
-             ;; Skip either a token or a balanced {}-pair
-             (ecase (peek-char nil stream nil)
-               ((#\:)
-                (read-char stream)
-                (skip-whitespace stream)
-                (parse-token-or-string stream))
-               ((#\{)
-                (let ((depth 0))
-                  (loop for ch = (read-char stream)
-                        do (cond ((eql ch #\")
-                                  (loop for ch0 = (read-char stream)
-                                        until (eql ch0 #\")))
-                                 ((eql ch #\{)
-                                  (iincf depth))
-                                 ((eql ch #\})
-                                  (idecf depth)))
-                        until (i= depth 0)))))))
-    (declare (dynamic-extent #'deserialize #'skip-field))
+                                               (funcall (proto-deserializer msg) val)))))))))))))))
+    (declare (dynamic-extent #'deserialize))
     (deserialize (proto-class message) message)))
+
+(defun skip-field (stream)
+  "Skip either a token or a balanced {}-pair."
+  (ecase (peek-char nil stream nil)
+    ((#\:)
+     (read-char stream)
+     (skip-whitespace stream)
+     (parse-token-or-string stream))
+    ((#\{)
+     (let ((depth 0))
+       (loop for ch = (read-char stream)
+             do (cond ((eql ch #\")
+                       (loop for ch0 = (read-char stream)
+                             until (eql ch0 #\")))
+                      ((eql ch #\{)
+                       (iincf depth))
+                      ((eql ch #\})
+                       (idecf depth)))
+             until (i= depth 0))))))
