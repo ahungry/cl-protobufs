@@ -175,7 +175,10 @@
     (with-collectors ((vals  collect-val)
                       (forms collect-form))
       (dolist (val values)
-        (let* ((idx  (if (listp val) (second val) (incf index)))
+        ;; Allow old (name index) and new (name :index index)
+        (let* ((idx  (if (listp val)
+                       (if (eq (second val) :index) (third val) (second val))
+                       (incf index)))
                (name (if (listp val) (first val)  val))
                (val-name  (kintern (if conc-name (format nil "~A~A" conc-name name) (symbol-name name))))
                (enum-name (if conc-name (format nil "~A~A" conc-name name) (symbol-name name)))
@@ -630,8 +633,12 @@
     (setq index 19999))
   (destructuring-bind (slot &rest other-options 
                        &key type reader writer name (default nil default-p) packed
-                            options documentation &allow-other-keys) field
-    (let* ((idx  (if (listp slot) (second slot) (iincf index)))
+                            ((:index idx)) options documentation &allow-other-keys) field
+    ;; Allow old ((slot index) ...) or new (slot :index ...),
+    ;; but only allow one of those two to be used simultaneously
+    (assert (if idx (not (listp slot)) t) ()
+            "Use either ((slot index) ...)  or (slot :index index ...), but not both")
+    (let* ((idx  (or idx (if (listp slot) (second slot) (iincf index))))
            (slot (if (listp slot) (first slot) slot))
            (reader (or reader
                        (and conc-name

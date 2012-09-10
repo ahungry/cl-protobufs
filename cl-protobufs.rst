@@ -459,10 +459,11 @@ alias for an enum type.
 in the .proto file.
 
 *body* consists of the enum values, each of which is either a symbol
-or a list of the form ``(name index)``. By default, the indexes start
-at 0 and are incremented by 1 for each new enum value. For schema
-forward and backward compatibility, you should always use the
-``(name index)`` form.
+or a list either of the form ``(name index)`` or ``(name &key index)``.
+By default, and if you have not explicitly given an index, the indexes
+start at 0 and are incremented by 1 for each new enum value. For
+schema forward and backward compatibility, you should always use the
+explicit form, either ``(name index)`` or ``(name &key index)``.
 
 ``proto:define-enum`` can be used only within ``proto:define-schema``
 or ``proto:define-message``.
@@ -499,12 +500,12 @@ in the .proto file.
 The body *fields* consists of fields, ``proto:define-enum``,
 ``proto:define-message`` or ``proto:define-extension`` forms.
 
-Fields take the form ``(slot &key type name default reader writer)``.
+Fields take the form ``(slot &key index type name default reader writer)``.
 *slot* can be either a symbol giving the slot name or a list of the
 form ``(slot index)``. By default, the field indexes start at 1 and
 are incremented by 1 for each new field value. *type* is the type of
 the slot. For schema forward and backward compatibility, you should
-always use the ``(slot index)`` form.
+always use either the ``(slot index)`` form or supply ``:index``.
 
 *name* can be used to override the defaultly generated Protobufs field
 name (for example, a Lisp field called ``color-name``, by default,
