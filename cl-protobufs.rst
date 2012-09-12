@@ -22,6 +22,7 @@ Protobufs for Common Lisp
       2.1  .proto file to Lisp conversion
       2.2  CLOS classes to .proto conversion
       2.3  Using .proto files directly
+        2.3.1  A note on Lisp packages
       2.4  Using the Protobufs macros
         2.4.1  Protobufs types
         2.4.2  Protobufs service stubs
@@ -298,6 +299,25 @@ will create both the Protobufs model and the Lisp classes that
 correspond to the Protobufs messages. (Note that it will also leave a
 .lisp file having the same name as the .proto file in the file
 system.)
+
+
+A note on Lisp packages
+~~~~~~~~~~~~~~~~~~~~~~~
+
+When using an existing .proto file directly, it will likely contain a
+``package`` line, but not a ``lisp_package`` line. CL-Protobufs needs
+to choose some package to use. Here is what it does:
+
+ - The package name from the ``package`` line is converted to a more
+   Lisp-like name, e.g., ``fortune_teller`` becomes ``fortune-teller``.
+ - If the Lisp package exists (i.e., you have previously used
+   ``defpackage`` to define the packaged), then CL-Protobufs just
+   uses it.
+ - If the Lisp package does not exist, CL-Protobufs creates a new
+   package of the given name that uses no other packages, not even
+   the ``common-lisp`` package. In addition, the symbols naming all
+   of the enum types, message types, field name and service method
+   names are exported from the new package.
 
 
 Using the Protobufs macros
@@ -626,7 +646,7 @@ implementations that implement "streaming".
 
 
 Protobufs types
----------------
+~~~~~~~~~~~~~~~
 
 The following types are defined in the ``protobufs`` package:
 
@@ -656,7 +676,7 @@ Note that ``(or <T> null)`` corresponds to an optional field.
 
 
 Protobufs service stubs
------------------------
+~~~~~~~~~~~~~~~~~~~~~~~
 
 When you use the ``proto:define-service`` macro to define a service
 with some methods, the macro defines "stubs" (CLOS generic functions)
@@ -949,6 +969,7 @@ Lisp-only extensions
 CL-Protobufs includes some Lisp-only extensions that have no
 counterpart in Protobufs, but which "ground out" to compatible
 Protobufs code.
+
 
 Type aliases
 ------------
