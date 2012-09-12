@@ -422,13 +422,15 @@
 
 ;;; Pretty print a schema as a .lisp file
 
-(defvar *show-lisp-enum-indexes* t)
+(defvar *show-lisp-enum-indexes*  t)
 (defvar *show-lisp-field-indexes* t)
+(defvar *use-common-lisp-package* nil)
 
 (defmethod write-schema-as ((type (eql :lisp)) (schema protobuf-schema) stream
                             &key (indentation 0)
                                  (show-field-indexes *show-lisp-field-indexes*)
-                                 (show-enum-indexes *show-lisp-enum-indexes*))
+                                 (show-enum-indexes *show-lisp-enum-indexes*)
+                                 (use-common-lisp *use-common-lisp-package*))
   (with-prefixed-accessors (name class documentation package lisp-package imports) (proto- schema)
     (let* ((optimize (let ((opt (find-option schema "optimize_for")))
                        (and opt (cond ((string= opt "SPEED") :speed)
@@ -438,18 +440,20 @@
                                 (proto-options schema)))
            (pkg      (and package (if (stringp package) package (string package))))
            (lisp-pkg (and lisp-package (if (stringp lisp-package) lisp-package (string lisp-package))))
-           (*show-lisp-enum-indexes* show-enum-indexes)
+           (*show-lisp-enum-indexes*  show-enum-indexes)
            (*show-lisp-field-indexes* show-field-indexes)
+           (*use-common-lisp-package* use-common-lisp)
            (*protobuf-package* (or (find-proto-package lisp-pkg) *package*))
            (*package* *protobuf-package*))
       (when (or lisp-pkg pkg)
         (let ((pkg (string-upcase (or lisp-pkg pkg))))
           (format stream "~&(cl:eval-when (:execute :compile-toplevel :load-toplevel) ~
                           ~%  (unless (cl:find-package \"~A\") ~
-                          ~%    (cl:defpackage ~A (:use :COMMON-LISP)))) ~
+                          ~%    (cl:defpackage ~A (:use~@[ ~(~S~)~])))) ~
                           ~%(cl:in-package \"~A\") ~
                           ~%(cl:export '(~{~A~^~%             ~}))~%~%"
-                  pkg pkg pkg (collect-exports schema))))
+                  pkg pkg (and *use-common-lisp-package* :common-lisp) pkg
+                  (collect-exports schema))))
       (when documentation
         (write-schema-documentation type documentation stream :indentation indentation))
       (format stream "~&(proto:define-schema ~(~A~)" (or class name))

@@ -82,7 +82,7 @@
     (declare (type fixnum index))
     (macrolet ((read-slot (object slot reader)
                  ;; Don't do a boundp check, we assume the object is fully populated
-                 ;; Unpopulated slots should be "nullable" and should contain nil
+                 ;; Unpopulated slots should be "nullable" and will contain nil when empty
                  `(if ,reader
                     (funcall ,reader ,object)
                     (slot-value ,object ,slot))))
@@ -465,7 +465,7 @@
     (declare (type fixnum size))
     (macrolet ((read-slot (object slot reader)
                  ;; Don't do a boundp check, we assume the object is fully populated
-                 ;; Unpopulated slots should be "nullable" and should contain nil
+                 ;; Unpopulated slots should be "nullable" and will contain nil when empty
                  `(if ,reader
                     (funcall ,reader ,object)
                     (slot-value ,object ,slot))))
@@ -658,7 +658,7 @@
                            (let ((tag (make-tag class index)))
                              (if (eq class :bool)
                                (if (or (eq (proto-required field) :required)
-                                       reader)
+                                       (null (proto-value field)))
                                  `(let ((,vval ,reader))
                                     (setq ,vidx (serialize-prim ,vval ,class ,tag ,vbuf ,vidx)))
                                  `(let ((,vval (cond ((slot-boundp ,vobj ',(proto-value field))
@@ -971,7 +971,7 @@
                             (collect-sizer
                              (if (eq class :bool)
                                (if (or (eq (proto-required field) :required)
-                                       reader)
+                                       (null (proto-value field)))
                                  `(let ((,vval ,reader))
                                     (declare (ignorable ,vval))
                                     (iincf ,vsize (prim-size ,vval ,class ,tag)))

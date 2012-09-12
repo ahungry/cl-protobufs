@@ -319,7 +319,10 @@
                                (name   (and option (proto-name option)))
                                (value  (and option (proto-value option))))
                           (when (and option (option-name= name "lisp_package"))
-                            (let ((package (or (find-proto-package value) *protobuf-package*)))
+                            (let ((package (or (find-proto-package value)
+                                               ;; Try to put symbols into the right package
+                                               (make-package (string-upcase value) :use ())
+                                               *protobuf-package*)))
                               (setf (proto-lisp-package schema) value)
                               (setq *protobuf-package* package)))))
                        ((string= token "enum")
