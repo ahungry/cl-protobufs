@@ -814,7 +814,8 @@
 
 ;; Export just the slot accessor name
 (defmethod collect-exports ((field protobuf-field))
-  (list (proto-slot field)))
+  (list (or (proto-reader field)
+            (proto-slot field))))
 
 ;; Export the names of all the methods
 (defmethod collect-exports ((service protobuf-service))

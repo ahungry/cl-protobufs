@@ -303,8 +303,8 @@
 (defun conc-name-for-type (type conc-name)
   (and conc-name
        (typecase conc-name
-         ((member t) (format nil "~A-" type))
-         ((or string symbol) (string conc-name))
+         ((member t) (format nil "~:@(~A~)-" type))
+         ((or string symbol) (string-upcase (string conc-name)))
          (t nil))))
 
 (defmacro define-extension (from to)
