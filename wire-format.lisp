@@ -235,12 +235,13 @@
              `(encode-double ,val ,buffer idx)))))
     form))
 
-(defun serialize-packed (values type tag buffer index)
+(defun serialize-packed (values type tag buffer index &optional vectorp)
   "Serializes a set of packed values into the buffer at the given index.
    The values are given by 'values', the primitive type by 'type'.
    Modifies the buffer in place, and returns the new index into the buffer.
    Watch out, this function turns off most type checking and all array bounds checking."
-  (declare (type (simple-array (unsigned-byte 8)) buffer)
+  (declare (ignore vectorp)
+           (type (simple-array (unsigned-byte 8)) buffer)
            (type (unsigned-byte 32) tag)
            (type fixnum index))
   (locally (declare #.$optimize-serialization)
@@ -275,12 +276,15 @@
          (map () #'(lambda (val) (setq idx (encode-double val buffer idx))) values)))
       idx)))
 
-(define-compiler-macro serialize-packed (&whole form values type tag buffer index)
+;; The optimized serializers supply 'vectorp' so we can generate better code
+(define-compiler-macro serialize-packed (&whole form values type tag buffer index
+                                         &optional (vectorp nil vectorp-p))
   (setq type (fold-symbol type)
         tag  (fold-symbol tag))
-  (if (member type '(:int32 :uint32 :int64 :uint64 :sint32 :sint64
-                     :fixed32 :sfixed32 :fixed64 :sfixed64
-                     :bool :float :double))
+  (if (and vectorp-p
+           `(member type '(:int32 :uint32 :int64 :uint64 :sint32 :sint64
+                           :fixed32 :sfixed32 :fixed64 :sfixed64
+                           :bool :float :double)))
     `(locally (declare #.$optimize-serialization
                        (type (simple-array (unsigned-byte 8)) ,buffer)
                        ;; 'tag' is a constant, no need to declare its type
@@ -291,34 +295,34 @@
              (packed-size ,values ,type ,tag)
            (declare (type fixnum len) (ignore full-len))
            (setq idx (encode-uint32 len ,buffer idx)))
-         (map () #'(lambda (val)
-                     ,(ecase type
-                        ((:int32)
-                         `(setq idx (encode-uint32 (ldb (byte 32 0) val) ,buffer idx)))
-                        ((:int64)
-                         `(setq idx (encode-uint64 (ldb (byte 64 0) val) ,buffer idx)))
-                        ((:uint32)
-                         `(setq idx (encode-uint32 val ,buffer idx)))
-                        ((:uint64)
-                         `(setq idx (encode-uint64 val ,buffer idx)))
-                        ((:sint32)
-                         `(setq idx (encode-uint32 (zig-zag-encode32 val) ,buffer idx)))
-                        ((:sint64)
-                         `(setq idx (encode-uint64 (zig-zag-encode64 val) ,buffer idx)))
-                        ((:fixed32)
-                         `(setq idx (encode-fixed32 val ,buffer idx)))
-                        ((:sfixed32)
-                         `(setq idx (encode-sfixed32 val ,buffer idx)))
-                        ((:fixed64)
-                         `(setq idx (encode-fixed64 val ,buffer idx)))
-                        ((:sfixed64)
-                         `(setq idx (encode-sfixed64 val ,buffer idx)))
-                        ((:bool)
-                         `(setq idx (encode-uint32 (if val 1 0) ,buffer idx)))
-                        ((:float)
-                         `(setq idx (encode-single val ,buffer idx)))
-                        ((:double)
-                         `(setq idx (encode-double val ,buffer idx))))) ,values)
+         (,(if vectorp 'dovector 'dolist) (val ,values)
+            ,(ecase type
+               ((:int32)
+                `(setq idx (encode-uint32 (ldb (byte 32 0) val) ,buffer idx)))
+               ((:int64)
+                `(setq idx (encode-uint64 (ldb (byte 64 0) val) ,buffer idx)))
+               ((:uint32)
+                `(setq idx (encode-uint32 val ,buffer idx)))
+               ((:uint64)
+                `(setq idx (encode-uint64 val ,buffer idx)))
+               ((:sint32)
+                `(setq idx (encode-uint32 (zig-zag-encode32 val) ,buffer idx)))
+               ((:sint64)
+                `(setq idx (encode-uint64 (zig-zag-encode64 val) ,buffer idx)))
+               ((:fixed32)
+                `(setq idx (encode-fixed32 val ,buffer idx)))
+               ((:sfixed32)
+                `(setq idx (encode-sfixed32 val ,buffer idx)))
+               ((:fixed64)
+                `(setq idx (encode-fixed64 val ,buffer idx)))
+               ((:sfixed64)
+                `(setq idx (encode-sfixed64 val ,buffer idx)))
+               ((:bool)
+                `(setq idx (encode-uint32 (if val 1 0) ,buffer idx)))
+               ((:float)
+                `(setq idx (encode-single val ,buffer idx)))
+               ((:double)
+                `(setq idx (encode-double val ,buffer idx)))))
          idx))
     form))
 
@@ -700,10 +704,11 @@
            `(i+ (length32 ,tag) 8))))
     form))
 
-(defun packed-size (values type tag)
+(defun packed-size (values type tag &optional vectorp)
   "Returns the size in bytes that the packed object will take when serialized.
    Watch out, this function turns off most type checking."
-  (declare (type (unsigned-byte 32) tag))
+  (declare (ignore vectorp)
+           (type (unsigned-byte 32) tag))
   (locally (declare #.$optimize-serialization)
     (let ((len (let ((len 0))
                  (declare (type fixnum len))
@@ -724,28 +729,31 @@
       ;; of just the payload
       (values (i+ (length32 tag) (length32 len) len) len))))
 
-(define-compiler-macro packed-size (&whole form values type tag)
+;; The optimized serializers supply 'vectorp' so we can generate better code
+(define-compiler-macro packed-size (&whole form values type tag
+                                    &optional (vectorp nil vectorp-p))
   (setq type (fold-symbol type)
         tag  (fold-symbol tag))
-  (if (member type '(:int32 :uint32 :int64 :uint64 :sint32 :sint64
-                     :fixed32 :sfixed32 :fixed64 :sfixed64
-                     :bool :float :double))
+  (if (and vectorp-p
+           (member type '(:int32 :uint32 :int64 :uint64 :sint32 :sint64
+                          :fixed32 :sfixed32 :fixed64 :sfixed64
+                          :bool :float :double)))
     `(locally (declare #.$optimize-serialization)
        (let ((len (let ((len 0))
                     (declare (type fixnum len))
-                    (map () #'(lambda (val)
-                                (iincf len ,(ecase type
-                                              ((:int32) `(length32 (ldb (byte 32 0) val)))
-                                              ((:int64) `(length64 (ldb (byte 64 0) val)))
-                                              ((:uint32) `(length32 val))
-                                              ((:uint64) `(length64 val))
-                                              ((:sint32) `(length32 (zig-zag-encode32 val)))
-                                              ((:sint64) `(length64 (zig-zag-encode64 val)))
-                                              ((:fixed32 :sfixed32) `4)
-                                              ((:fixed64 :sfixed64) `8)
-                                              ((:bool)   `1)
-                                              ((:float)  `4)
-                                              ((:double) `8)))) ,values)
+                    (,(if vectorp 'dovector 'dolist) (val ,values)
+                       (iincf len ,(ecase type
+                                     ((:int32) `(length32 (ldb (byte 32 0) val)))
+                                     ((:int64) `(length64 (ldb (byte 64 0) val)))
+                                     ((:uint32) `(length32 val))
+                                     ((:uint64) `(length64 val))
+                                     ((:sint32) `(length32 (zig-zag-encode32 val)))
+                                     ((:sint64) `(length64 (zig-zag-encode64 val)))
+                                     ((:fixed32 :sfixed32) `4)
+                                     ((:fixed64 :sfixed64) `8)
+                                     ((:bool)   `1)
+                                     ((:float)  `4)
+                                     ((:double) `8))))
                     len)))
          (declare (type (unsigned-byte 32) len))
          (values (i+ (length32 (the (unsigned-byte 32) ,tag)) (length32 len) len) len)))

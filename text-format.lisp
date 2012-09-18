@@ -46,10 +46,9 @@
                    (when (or slot reader)
                      (cond ((eq (proto-required field) :repeated)
                             (cond ((keywordp type)
-                                   (map () #'(lambda (v)
-                                               (print-prim v type field stream
-                                                           (or suppress-line-breaks indent)))
-                                           (read-slot object slot reader)))
+                                   (doseq (v (read-slot object slot reader))
+                                     (print-prim v type field stream
+                                                 (or suppress-line-breaks indent))))
                                   ((typep (setq msg (and type (or (find-message trace type)
                                                                   (find-enum trace type)
                                                                   (find-type-alias trace type))))
@@ -61,23 +60,21 @@
                                            (if suppress-line-breaks
                                              (format stream "~A { " (proto-name field))
                                              (format stream "~&~VT~A {~%" indent (proto-name field)))
-                                           (map () (curry #'do-field v msg indent)
-                                                   (proto-fields msg))
+                                           (dolist (f (proto-fields msg))
+                                            (do-field v msg indent f))
                                            (if suppress-line-breaks
                                              (format stream "} ")
                                              (format stream "~&~VT}~%" indent)))))))
                                   ((typep msg 'protobuf-enum)
-                                   (map () #'(lambda (v)
-                                               (print-enum v msg field stream
-                                                           (or suppress-line-breaks indent)))
-                                           (read-slot object slot reader)))
+                                   (doseq (v (read-slot object slot reader))
+                                     (print-enum v msg field stream
+                                                 (or suppress-line-breaks indent))))
                                   ((typep msg 'protobuf-type-alias)
                                    (let ((type (proto-proto-type msg)))
-                                     (map () #'(lambda (v)
-                                                 (let ((v (funcall (proto-serializer msg) v)))
-                                                   (print-prim v type field stream
-                                                               (or suppress-line-breaks indent))))
-                                             (read-slot object slot reader))))))
+                                     (doseq (v (read-slot object slot reader))
+                                       (let ((v (funcall (proto-serializer msg) v)))
+                                         (print-prim v type field stream
+                                                     (or suppress-line-breaks indent))))))))
                            (t
                             (cond ((eq type :bool)
                                    (let ((v (cond ((or (eq (proto-required field) :required)
@@ -104,8 +101,8 @@
                                          (if suppress-line-breaks
                                              (format stream "~A { " (proto-name field))
                                              (format stream "~&~VT~A {~%" indent (proto-name field)))
-                                         (map () (curry #'do-field v msg indent)
-                                                 (proto-fields msg))
+                                         (dolist (f (proto-fields msg))
+                                           (do-field v msg indent f))
                                          (if suppress-line-breaks
                                              (format stream "} ")
                                              (format stream "~&~VT}~%" indent))))))
@@ -127,7 +124,8 @@
             (format stream "~A { " (proto-name message))
             (format stream "~&~A {~%" (proto-name message)))
           (format stream "{"))
-        (map () (curry #'do-field object message 0) (proto-fields message))
+        (dolist (f (proto-fields message))
+          (do-field object message 0 f))
         (if suppress-line-breaks
           (format stream "}")
           (format stream "~&}~%"))

@@ -95,11 +95,13 @@
 
 ;; (camel-case "camel-case") => "CamelCase"
 (defun camel-case (string &optional (separators '(#\-)))
+  "Take a hyphen-separated string and turn it into a camel-case string."
   (let ((words (split-string string :separators separators)))
     (format nil "~{~@(~A~)~}" words)))
 
 ;; (camel-case-but-one "camel-case") => "camelCase"
 (defun camel-case-but-one (string &optional (separators '(#\-)))
+  "Take a hyphen-separated string and turn its tail into a camel-case string."
   (let ((words (split-string string :separators separators)))
     (format nil "~(~A~)~{~@(~A~)~}" (car words) (cdr words))))
 
@@ -111,6 +113,7 @@
 ;; (uncamel-case "RPC_LispServiceRequest_get_request") => "RPC-LISP-SERVICE-REQUEST-GET-REQUEST"
 ;; (uncamel-case "TCP2Name3") => "TCP2-NAME3"
 (defun uncamel-case (name)
+  "Take a camel-case string and turn it into a hyphen-separated string."
   ;; We need a whole state machine to get this right
   (labels ((uncamel (chars state result)
              (let ((ch (first chars)))
@@ -197,6 +200,9 @@
 ;;; Collectors, etc
 
 (defmacro with-collectors ((&rest collection-descriptions) &body body)
+  "'collection-descriptions' is a list of clauses of the form (coll function).
+   The body can call each 'function' to add a value to 'coll'. 'function'
+   runs in constant time, regardless of the length of the list."
   (let ((let-bindings  ())
         (flet-bindings ())
         (dynamic-extents ())
@@ -229,6 +235,7 @@
      ,@body))
 
 (defmacro dovector ((var vector &optional value) &body body)
+  "Like 'dolist', but iterates over the vector 'vector'."
   (with-gensyms (vidx vlen vvec)
     `(let* ((,vvec ,vector)
             (,vlen (length ,vvec)))
@@ -237,10 +244,25 @@
              do (progn ,@body)
              finally (return ,value)))))
 
+(defmacro doseq ((var sequence &optional value) &body body)
+  "Iterates over a sequence, using 'dolist' or 'dovector' depending on
+   the type of the sequence. In optimized code, this turns out to be
+   faster than (map () #'f sequence).
+   Note that the body gets expanded twice!"
+  (with-gensyms (vseq)
+    `(let ((,vseq ,sequence))
+       (if (vectorp ,vseq)
+         (dovector (,var ,vseq ,value)
+           ,@body)
+         (dolist (,var ,vseq ,value)
+           ,@body)))))
+
 
 ;;; Functional programming, please
 
 (defun curry (function &rest args)
+  "Returns a function that applies 'function' to 'args', plus any
+   additional arguments given at the call site."
   (if (and args (null (cdr args)))                      ;fast test for length = 1
     (let ((arg (car args)))
       #'(lambda (&rest more-args)
