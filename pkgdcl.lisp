@@ -15,6 +15,7 @@
 
 (defpackage protobufs
   (:nicknames :proto)
+  (:use)
 
   ;; Some types useful for defining messages
   (:export
