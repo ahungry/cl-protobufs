@@ -31,14 +31,14 @@
 #||
 ;; How long does it take to load (deserialize) the data, unoptimized?
 ;; On my 2011-ish Linux desktop,
-;;  - about 10-11 Mb/sec using SBCL
-;;  - about  3- 4 Mb/sec using CCL
+;;  - about 10-11 Mbyte/sec using SBCL
+;;  - about  3- 4 Mbyte/sec using CCL
 (time (setq *geo* (deserialize-geo-file)))
 
 ;; How long does it take to serialize, unoptimized?
 ;; On my 2011-ish Linux desktop,
-;;  - about 7-8 Mb/sec using SBCL
-;;  - about 5-6 Mb/sec using CCL
+;;  - about 7-8 Mbyte/sec using SBCL
+;;  - about 5-6 Mbyte/sec using CCL
 (time (progn (serialize-geo-data *geo*) nil))
 
 ;; Optimize the (de)serializers
@@ -60,13 +60,13 @@
 
 ;; Now how long does it take to load (deserialize) the data, optimized?
 ;; On my 2011-ish Linux desktop,
-;;  - about 20-25 Mb/sec using SBCL
-;;  - about  5- 6 Mb/sec using CCL
+;;  - about 20-25 Mbyte/sec using SBCL
+;;  - about  5- 6 Mbyte/sec using CCL
 (time (setq *geo* (deserialize-geo-file)))
 
 ;; How long does it take to serialize, optimized?
 ;; On my 2011-ish Linux desktop,
-;;  - about 20-25 Mb/sec using SBCL
-;;  - about  7- 8 Mb/sec using CCL
+;;  - about 20-25 Mbyte/sec using SBCL
+;;  - about  7- 8 Mbyte/sec using CCL
 (time (progn (serialize-geo-data *geo*) nil))
 ||#
