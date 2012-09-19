@@ -26,7 +26,7 @@
   (proto:serialize-object-to-bytes geodata 'geodata::geodata))
 
 (defun deserialize-geo-data (bytes)
-  (proto:deserialize-object 'geodata bytes))
+  (proto:deserialize-object 'geodata::geodata bytes))
 
 #||
 ;; How long does it take to load (deserialize) the data, unoptimized?
