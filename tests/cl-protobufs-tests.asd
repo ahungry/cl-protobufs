@@ -50,6 +50,21 @@
               ((:file "serialization-tests")
                (:file "stability-tests")))
 
+     ;; Geodata hack
+     (:module "geodata-proto"
+              :pathname #p""
+	      :components
+                ((:protobuf-file "geodata")))
+     (:module "geodata-data"
+              :pathname #p""
+	      :components
+                ((:static-file "geodata.data")))
+     (:module "geodata"
+              :pathname #p""
+	      :depends-on ("geodata-proto" "geodata-data")
+	      :components
+                ((:file "geodata")))
+     
      ;; Bob Brown's protocol buffers tests
      (:module "brown-tests-proto"
               :serial t

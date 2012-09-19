@@ -1,0 +1,113 @@
+// Free Software published under an MIT-like license. See LICENSE
+//
+// Copyright (c) 2012 Google, Inc.  All rights reserved.
+//
+// Original author: Scott McKay
+
+syntax = "proto2";
+
+package geodata;
+
+message Country {
+  required string code = 1;
+  optional string code3 = 2;
+  required string name = 3;
+  required string full_name = 4;
+  optional int64 start_utc = 5;
+  optional int64 end_utc = 6;
+}
+
+message Region {
+  required RegionKey key = 1;
+  required string name = 2;
+}
+
+message RegionKey {
+  required string country_code = 1;
+  required string region_code = 2;
+}
+
+message City {
+  required string code = 1;
+  required string name = 2;
+  optional string region = 3;
+  optional string region_name = 4;
+  required string country_code = 5;
+  required string timezone_code = 6;
+  optional int64 start_utc = 7;
+  optional int64 end_utc = 8;
+}
+
+message Airport {
+  required string code = 1;
+  required string name = 2;
+  optional string city_code = 3;
+  optional float latitude = 4;
+  optional float longitude = 5;
+  required string timezone_code = 6;
+  optional int64 start_utc = 7;
+  optional int64 end_utc = 8;
+  required string coterminal_token = 9;
+}
+
+message Timezone {
+  required string code = 1;
+  required int64 offset = 2;
+  repeated TzVariation variations = 3;
+}
+
+message TzVariation {
+  required int64 start_utc = 1 [default = 0];
+  required int64 end_utc = 2 [default = 0];
+  required int64 offset = 3 [default = 0];
+}
+
+message Currency {
+  required string code = 1;
+  required string name = 2;
+  required int64 places = 3;
+  optional int64 start_utc = 4;
+  optional int64 end_utc = 5;
+}
+
+message CountryCurrencies {
+  required string code = 1;
+  required string local_currency = 2;
+  optional string sales_currency = 3;
+  repeated string domestic_fare_currencies = 4;
+  repeated string international_fare_currencies = 5;
+  optional string domestic_in_intl_trip_currency = 6;
+  repeated string override_joc_currencies = 7;
+  optional string use_intls_for_outside_sales = 8;
+  optional int64 effective_date_utc = 9;
+  optional int64 discontinue_date_utc = 10;
+}
+
+message Carrier {
+  required string code = 1;
+  optional string code3 = 2;
+  optional string account = 3;
+  optional string prefix = 4;
+  optional string name = 5;
+  required string full_name = 6;
+  optional int64 start_utc = 7;
+  optional int64 end_utc = 8;
+  required int64 operations_code = 9;
+  required bool dup_flag = 10;
+  optional string merged_into_carrier = 11;
+  optional int64 merged_data_cutover_utc = 12;
+}
+
+message Geodata {
+  repeated Country countries = 1;
+  repeated Region regions = 2;
+  repeated City cities = 3;
+  repeated Airport airports = 4;
+}
+
+message GeodataV {
+  repeated Country countries = 1;
+  repeated Region regions = 2;
+  repeated City cities = 3;
+  repeated Airport airports = 4;
+}

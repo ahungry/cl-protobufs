@@ -35,3 +35,7 @@
 (defpackage protobuf-unittest-import
   (:use :common-lisp :protobufs)
   (:nicknames :pbtestimp))
+
+(defpackage protobuf-geodata
+  (:use :common-lisp :protobufs)
+  (:nicknames :geodata))
