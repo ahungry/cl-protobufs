@@ -34,7 +34,7 @@
 
 (defvar *all-registered-tests* ())
 (defmacro register-test (test-name)
-  `(pushnew ',test-name *all-registered-tests*))
+  `(pushnew ,test-name *all-registered-tests*))
 
 (defmacro run-test (test-name)
   `(progn
