@@ -458,7 +458,7 @@
 
 ;;; Portable floating point utilities
 
-#+(or abcl allegro cmu sbcl lispworks)
+#+(or abcl allegro ccl cmu sbcl lispworks)
 (defun single-float-bits (x)
   (declare (type single-float x))
   #+abcl    (system:single-float-bits x)
@@ -466,11 +466,12 @@
                 (excl:single-float-to-shorts x)
               (declare (type (unsigned-byte 16) high low))
               (logior (ash high 16) low))
+  #+ccl (ccl::single-float-bits x)
   #+cmu  (kernel:single-float-bits x)
   #+sbcl (sb-kernel:single-float-bits x)
   #+lispworks (lispworks-float:single-float-bits x))
 
-#-(or abcl allegro cmu sbcl lispworks)
+#-(or abcl allegro ccl cmu sbcl lispworks)
 (defun single-float-bits (x)
   (declare (type single-float x))
   (assert (= (float-radix x) 2))
@@ -515,7 +516,7 @@
           ((-1) (logior unsigned-result (- (expt 2 31)))))))))
 
 
-#+(or abcl allegro cmu sbcl lispworks)
+#+(or abcl allegro ccl cmu sbcl lispworks)
 (defun double-float-bits (x)
   (declare (type double-float x))
   #+abcl    (values (system:double-float-low-bits x)
@@ -524,6 +525,7 @@
                 (excl:double-float-to-shorts x)
               (logior (ash us1 16) us0)
               (logior (ash us3 16) us2))
+  #+ccl  (ccl::double-float-bits x)
   #+cmu  (values (kernel:double-float-low-bits x)
                  (kernel:double-float-high-bits x))
   #+sbcl (values (sb-kernel:double-float-low-bits x)
@@ -532,7 +534,7 @@
                 (values (logand #xffffffff bits)
                         (ash bits -32))))
 
-#-(or abcl allegro cmu sbcl lispworks)
+#-(or abcl allegro ccl cmu sbcl lispworks)
 (defun double-float-bits (x)
   (declare (type double-float x))
   (assert (= (float-radix x) 2))
@@ -580,17 +582,18 @@
           (values (logand #xffffffff result) (ash result -32)))))))
 
 
-#+(or abcl allegro cmu sbcl lispworks)
+#+(or abcl allegro ccl cmu sbcl lispworks)
 (defun make-single-float (bits)
   (declare (type (signed-byte 32) bits))
   #+abcl    (system:make-single-float bits)
   #+allegro (excl:shorts-to-single-float (ldb (byte 16 16) bits)
                                          (ldb (byte 16 0) bits))
+  #+ccl  (ccl::host-single-float-from-unsigned-byte-32 bits)
   #+cmu  (kernel:make-single-float bits)
   #+sbcl (sb-kernel:make-single-float bits)
   #+lispworks (lispworks-float:make-single-float bits))
 
-#-(or abcl allegro cmu sbcl lispworks)
+#-(or abcl allegro ccl cmu sbcl lispworks)
 (defun make-single-float (bits)
   (declare (type (signed-byte 32) bits))
   (cond
@@ -611,7 +614,7 @@
        (* sign (expt 2.0 exponent) mantissa)))))
 
 
-#+(or abcl allegro cmu sbcl lispworks)
+#+(or abcl allegro ccl cmu sbcl lispworks)
 (defun make-double-float (low high)
   (declare (type (unsigned-byte 32) low)
            (type (signed-byte   32) high))
@@ -620,11 +623,12 @@
                                          (ldb (byte 16 0) high)
                                          (ldb (byte 16 16) low)
                                          (ldb (byte 16 0) low))
+  #+ccl  (ccl::double-float-from-bits high low)
   #+cmu  (kernel:make-double-float high low)
   #+sbcl (sb-kernel:make-double-float high low)
   #+lispworks (lispworks-float:make-double-float high low))
 
-#-(or abcl allegro cmu sbcl lispworks)
+#-(or abcl allegro ccl cmu sbcl lispworks)
 (defun make-double-float (low high)
   (declare (type (unsigned-byte 32) low)
            (type (signed-byte   32) high))
