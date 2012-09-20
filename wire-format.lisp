@@ -77,7 +77,7 @@
         (t form)))
 
 (defun fold-symbol (x)
-  "Given an expression 'x', constant-fold it until it can be foleded no more."
+  "Given an expression 'x', constant-fold it until it can be folded no more."
   (let ((last '#:last))
     (loop
       (cond ((eq x last) (return x))
