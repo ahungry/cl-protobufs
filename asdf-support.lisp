@@ -186,7 +186,7 @@
                 (nconc (proto-imported-schemas schema) (list imported)))
           (return-from import-one))
         (dolist (path search-path (error "Could not import ~S" import))
-          (let* ((base-path  (asdf:merge-pathnames* import path))
+          (let* ((base-path  (asdf::merge-pathnames* import path))
                  (proto-file (make-pathname :name import-name :type "proto"
                                             :defaults base-path))
                  (lisp-file  (if output-path
