@@ -286,14 +286,14 @@
 ;; A parameterized list type for repeated fields
 ;; The elements aren't type-checked
 (deftype list-of (type)
-  (if (eq type 'null)
+  (if (eq type 'nil) ; a list that cannot have any element (element-type nil) is null.
     'null
     'list))
 
 ;; The same, but use a (stretchy) vector
 (deftype vector-of (type)
-  (if (eq type 'null)
-    'null
+  (if (eq type 'nil); an array that cannot have any element (element-type nil) is of size 0.
+    '(array * (0))
     '(array * (*))))            ;an 1-dimensional array of any type
 
 ;; This corresponds to the :bytes Protobufs type

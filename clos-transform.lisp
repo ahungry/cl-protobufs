@@ -205,6 +205,10 @@
                             :packed  packed)))
             (values field nil enum)))))))
 
+(defun list-of-list-of ()
+  (let ((list-of-package (find-package 'list-of)))
+    (and list-of-package (find-symbol (string 'list-of) list-of-package))))
+
 (defun find-slot-definition-type (class slotd)
   "Given a class and a slot descriptor, find the \"best\" type definition for the slot."
   (let* ((slot-name    (slot-definition-name slotd))
@@ -214,10 +218,11 @@
     (if direct-slotd
       ;; The direct slotd will have an unexpanded definition
       ;; Prefer it for 'list-of' so we can get the base type
-      (let ((type (slot-definition-type direct-slotd))
-            (quux-list-of (and (find-package :quux)
-                               (intern "LIST-OF" (find-package :quux)))))
-        (values (if (and (listp type) (member (car type) `(list-of vector-of ,quux-list-of)))
+      (let ((type (slot-definition-type direct-slotd)))
+        (values (if (and (listp type)
+                         (or (member (car type) '(list-of vector-of))
+                             (let ((list-of-list-of (list-of-list-of)))
+                               (and list-of-list-of (eq (car type) list-of-list-of)))))
                   type
                   (slot-definition-type slotd))
                 (if (symbolp type)
@@ -236,13 +241,30 @@
                              (class-precedence-list class))))
     (and direct-slotd (first (slot-definition-readers direct-slotd)))))
 
+(defun satisfies-list-of-p (type)
+  (and (consp type)
+       (eq (car type) 'satisfies)
+       (consp (cdr type))
+       (null (cddr type))
+       (let ((function (cadr type)))
+         (and (symbolp function)
+              (string= "LIST-OF" (package-name (symbol-package function)))
+              (let ((name (symbol-name function)))
+                (and (<= #.(length "LIST-OF-_-P") (length name))
+                     (starts-with name "LIST-OF-")
+                     (ends-with name "-P")
+                     (let* ((typestring (subseq name #.(length "LIST-OF-") (- (length name) 2)))
+                            (type (ignore-errors
+                                    (with-standard-io-syntax
+                                        (let ((*package* (find-package :cl)))
+                                          (read-from-string typestring))))))
+                         (and (typep type 'symbol) type))))))))
+
 (defun clos-type-to-protobuf-type (type &optional type-filter enum-filter)
   "Given a Lisp type, returns a Protobuf type, a class or primitive type,
    whether or not to pack the field, and (optionally) a set of enum values."
   (let ((type (if type-filter (funcall type-filter type) type))
-        ;; Hideous, but useful, kludge for those of us at ITA-by-Google
-        (quux-list-of (and (find-package :quux)
-                           (intern "LIST-OF" (find-package :quux)))))
+        (list-of-list-of (list-of-list-of)))
     (flet ()
       (if (listp type)
         (destructuring-bind (head &rest tail) type
@@ -255,23 +277,18 @@
                (clos-type-to-protobuf-type (second tail))
                (clos-type-to-protobuf-type (first tail))))
             ((and)
-             (cond ((and quux-list-of
-                         (ignore-errors
-                          (subtypep type `(,quux-list-of t))))
-                    ;; Special knowledge of 'quux:list-of', which uses (and list (satisfies <t>))
-                    (let* ((satisfies (find 'satisfies tail :key #'car))
-                           (pred (second satisfies))
-                           (type (if (starts-with (string pred) "LIST-OF-")
-                                   (intern (subseq (string pred) #.(length "LIST-OF-")) (symbol-package pred))
-                                   pred)))
-                      (multiple-value-bind (type class)
-                          (lisp-type-to-protobuf-type type)
-                        (values type class (packed-type-p class)))))
-                   (t
-                    (let ((new-tail (remove-if #'(lambda (x) (and (listp x) (eq (car x) 'satisfies))) tail)))
-                      (when (> (length new-tail) 1)
-                        (protobufs-warn "The AND type ~S is too complicated, proceeding anyway" type))
-                      (lisp-type-to-protobuf-type (first tail))))))
+             ;; Special knowledge of 'list-of:list-of', which uses (and list (satisfies list-of::FOO-p))
+             (let ((satisfies-list-of
+                    (and list-of-list-of (find-if #'satisfies-list-of-p tail))))
+               (if satisfies-list-of
+                 (multiple-value-bind (type class)
+                     (lisp-type-to-protobuf-type satisfies-list-of)
+                   (values type class (packed-type-p class)))
+                 (let ((new-tail
+                        (remove-if #'(lambda (x) (and (listp x) (eq (car x) 'satisfies))) tail)))
+                   (when (> (length new-tail) 1)
+                     (protobufs-warn "The AND type ~S is too complicated, proceeding anyway" type))
+                   (lisp-type-to-protobuf-type (first tail))))))
             ((member)                           ;maybe generate an enum type
              (if (or (equal type '(member t nil))
                      (equal type '(member nil t)))
@@ -325,7 +342,7 @@
             ((float single-float double-float)
              (lisp-type-to-protobuf-type head))
             (otherwise
-             (if (eq head quux-list-of)
+             (if (eq head list-of-list-of)
                (multiple-value-bind (type class)
                    (lisp-type-to-protobuf-type (first tail))
                  (values type class (packed-type-p class)))
@@ -374,8 +391,7 @@
   "Given a Lisp type, returns a \"cardinality\": :required, :optional or :repeated.
    If the sceond returned value is true, it's a repeated field that should use a vector."
   (let ((type (if type-filter (funcall type-filter type) type))
-        (quux-list-of (and (find-package :quux)
-                           (intern "LIST-OF" (find-package :quux)))))
+        (list-of-list-of (list-of-list-of)))
     (if (listp type)
       (destructuring-bind (head &rest tail) type
         (case head
@@ -387,8 +403,8 @@
                (clos-type-to-protobuf-required repeated)
                (values (if optional :optional :required) nil))))
           ((and)
-           (cond ((or (subtypep type '(list-of t))
-                      (and quux-list-of (subtypep type `(,quux-list-of t))))
+           (cond ((and (subtypep type 'list)
+                       (not (subtypep type 'null)))
                   (values :repeated nil))
                  ((subtypep type '(vector-of t))
                   (values :repeated t))
@@ -404,7 +420,7 @@
           ((vector-of)
            (values :repeated t))
           (otherwise
-           (if (eq head quux-list-of)
+           (if (eq head list-of-list-of)
              (values :repeated nil)
              (values :required nil)))))
       (values :required nil))))
