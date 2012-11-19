@@ -1011,8 +1011,9 @@
                                   (tag   (make-tag class index)))
                              `(let ((,vval ,reader))
                                 (when ,vval
-                                  (let ((,vval (funcall #',(proto-serializer msg) ,vval)))
-                                    (iincf ,vsize (prim-size ,vval ,class ,tag))))))))))))))
+                                  (iincf ,vsize (prim-size
+                                                 (funcall #',(proto-serializer msg) ,vval)
+                                                 ,class ,tag)))))))))))))
       `(defmethod object-size
            (,vobj (,vclass (eql ,message)) &optional visited)
          (declare #.$optimize-serialization)
