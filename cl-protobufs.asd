@@ -33,7 +33,8 @@
               :depends-on ("packages")
               :components
                 ((:file "utilities")
-                 (:file "model-classes")))
+                 (:file "model-classes")
+                 (:file "conditions")))
      (:module "parsing"
               :serial t
               :pathname #p""

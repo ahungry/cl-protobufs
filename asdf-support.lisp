@@ -224,7 +224,7 @@
                        (let ((*compile-file-pathname* nil)
                              (*load-pathname* fasl-file))
                          (load fasl-file)))))
-              (let* ((imported (find-schema base-path)))
+              (let* ((imported (find-schema (class-name->proto import-name))))
                 (when imported
                   (setf (proto-imported-schemas schema)
                         (nconc (proto-imported-schemas schema) (list imported))))

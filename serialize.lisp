@@ -143,7 +143,13 @@
                                           (tag  (make-tag type (proto-index field))))
                                      (doseq (v (read-slot object slot reader))
                                        (let ((v (funcall (proto-serializer msg) v)))
-                                         (setq index (serialize-prim v type tag buffer index))))))))
+                                         (setq index (serialize-prim v type tag buffer index))))))
+                                  (t
+                                   (error 'undefined-field-type
+                                          :format-control "While serializing ~s to protobuf,"
+                                          :format-arguments (list object)
+                                          :type-name (prin1-to-string type)
+                                          :field field))))
                            (t
                             (cond ((eq type :bool)
                                    ;; We have to handle optional boolean fields specially
@@ -192,7 +198,13 @@
                                        (let* ((v    (funcall (proto-serializer msg) v))
                                               (type (proto-proto-type msg))
                                               (tag  (make-tag type (proto-index field))))
-                                         (setq index (serialize-prim v type tag buffer index)))))))))))))
+                                         (setq index (serialize-prim v type tag buffer index))))))
+                                  (t
+                                   (error 'undefined-field-type
+                                          :format-control "While serializing ~s to protobuf,"
+                                          :format-arguments (list object)
+                                          :type-name (prin1-to-string type)
+                                          :field field)))))))))
         (declare (dynamic-extent #'do-field))
         (dolist (field (proto-fields message))
           (do-field object message field))))
@@ -512,7 +524,13 @@
                                           (tag  (make-tag type (proto-index field))))
                                      (doseq (v (read-slot object slot reader))
                                        (let ((v (funcall (proto-serializer msg) v)))
-                                         (iincf size (prim-size v type tag))))))))
+                                         (iincf size (prim-size v type tag))))))
+                                  (t
+                                   (error 'undefined-field-type
+                                          :format-control "While computing the size of ~s in bytes,"
+                                          :format-arguments (list object)
+                                          :type-name (prin1-to-string type)
+                                          :field field))))
                            (t
                             (cond ((eq type :bool)
                                    (let ((v (cond ((or (eq (proto-required field) :required)
@@ -559,7 +577,13 @@
                                        (let* ((v    (funcall (proto-serializer msg) v))
                                               (type (proto-proto-type msg))
                                               (tag  (make-tag type (proto-index field))))
-                                         (iincf size (prim-size v type tag)))))))))))))
+                                         (iincf size (prim-size v type tag))))))
+                                  (t
+                                   (error 'undefined-field-type
+                                          :format-control "While computing the size of ~s in bytes,"
+                                          :format-arguments (list object)
+                                          :type-name (prin1-to-string type)
+                                          :field field)))))))))
         (declare (dynamic-extent #'do-field))
         (dolist (field (proto-fields message))
           (do-field object message field))
@@ -646,7 +670,14 @@
                                     (tag   (make-tag class (proto-index field))))
                                `(,iterator (,vval ,reader)
                                   (let ((,vval (funcall #',(proto-serializer msg) ,vval)))
-                                    (setq ,vidx (serialize-prim ,vval ,class ,tag ,vbuf ,vidx))))))))))
+                                    (setq ,vidx (serialize-prim ,vval ,class ,tag ,vbuf ,vidx)))))))
+                           (t
+                            (error 'undefined-field-type
+                                   :format-control "While generating the serialize-object method ~
+                                                    for ~s,"
+                                   :format-arguments (list message)
+                                   :type-name (prin1-to-string class)
+                                   :field field)))))
                   (t
                    (cond ((keywordp class)
                           (collect-serializer
@@ -699,7 +730,14 @@
                              `(let ((,vval ,reader))
                                 (when ,vval
                                   (let ((,vval (funcall #',(proto-serializer msg) ,vval)))
-                                    (setq ,vidx (serialize-prim ,vval ,class ,tag ,vbuf ,vidx))))))))))))))
+                                    (setq ,vidx (serialize-prim ,vval ,class ,tag ,vbuf ,vidx))))))))
+                         (t
+                          (error 'undefined-field-type
+                                 :format-control "While generating the serialize-object method ~
+                                                  for ~s,"
+                                 :format-arguments (list message)
+                                 :type-name (prin1-to-string class)
+                                 :field field))))))))
       `(defmethod serialize-object
            (,vobj (,vclass (eql ,message)) ,vbuf &optional (,vidx 0) visited)
          (declare #.$optimize-serialization)
@@ -809,7 +847,14 @@
                                (multiple-value-bind (,vval idx)
                                    (deserialize-prim ,class ,vbuf ,vidx)
                                  (setq ,vidx idx)
-                                 (push (funcall #',(proto-deserializer msg) ,vval) ,temp))))))))
+                                 (push (funcall #',(proto-deserializer msg) ,vval) ,temp))))))
+                         (t
+                          (error 'undefined-field-type
+                                 :format-control "While generating the deserialize-object method ~
+                                                  for ~s,"
+                                 :format-arguments (list message)
+                                 :type-name (prin1-to-string class)
+                                 :field field))))
                   (t
                    (cond ((keywordp class)
                           (collect-deserializer
@@ -850,7 +895,14 @@
                                      (deserialize-prim ,class ,vbuf ,vidx)
                                    (let ((,vval (funcall #',(proto-deserializer msg) ,vval)))
                                      (setq ,vidx idx)
-                                     ,(write-slot vobj field vval)))))))))))))
+                                     ,(write-slot vobj field vval)))))))
+                         (t
+                          (error 'undefined-field-type
+                                 :format-control "While generating the deserialize-object method ~
+                                                  for ~s,"
+                                 :format-arguments (list message)
+                                 :type-name (prin1-to-string class)
+                                 :field field))))))))
       (let* ((rslots  (delete-duplicates rslots :key #'first))
              (rfields (mapcar #'first  rslots))
              (rtemps  (mapcar #'second rslots)))
@@ -960,7 +1012,13 @@
                                     (tag   (make-tag class index)))
                                `(,iterator (,vval ,reader)
                                   (let ((,vval (funcall #',(proto-serializer msg) ,vval)))
-                                    (iincf ,vsize (prim-size ,vval ,class ,tag))))))))))
+                                    (iincf ,vsize (prim-size ,vval ,class ,tag)))))))
+                           (t
+                            (error 'undefined-field-type
+                                   :format-control "While generating the object-size method for ~s,"
+                                   :format-arguments (list message)
+                                   :type-name (prin1-to-string class)
+                                   :field field)))))
                   (t
                    (cond ((keywordp class)
                           (let ((tag (make-tag class index)))
@@ -1013,7 +1071,13 @@
                                 (when ,vval
                                   (iincf ,vsize (prim-size
                                                  (funcall #',(proto-serializer msg) ,vval)
-                                                 ,class ,tag)))))))))))))
+                                                 ,class ,tag)))))))
+                         (t
+                          (error 'undefined-field-type
+                                 :format-control "While generating the object-size method for ~s,"
+                                 :format-arguments (list message)
+                                 :type-name (prin1-to-string class)
+                                 :field field))))))))
       `(defmethod object-size
            (,vobj (,vclass (eql ,message)) &optional visited)
          (declare #.$optimize-serialization)

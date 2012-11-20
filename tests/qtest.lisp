@@ -46,7 +46,7 @@
     (format t "~&Running test ~A" test)
     (funcall test)))
 
-(defmacro assert-equal (actual expected &key (test 'eql))
+(defmacro assert-equal (actual expected &key (test 'equal))
   `(unless (,test ,actual ,expected)
      (warn "The value ~S is not equal to the expected value ~S"
            ',actual ',expected)))
@@ -60,3 +60,14 @@
   `(when ,form
      (warn "The value ~S does not evaluate to 'false'"
            ',form)))
+
+(defmacro assert-error (condition &body body)
+  "Checks if BODY signals a condition of class CONDITION. If it does not, a failure is
+   reported. If it is, the condition is caught and the condition object returned so that the test
+   can perform further checks on the condition object."
+  (let ((c (gensym "C")))
+    `(handler-case (progn ,@body)
+       (,condition (,c)
+         ,c)
+       (:no-error ()
+         (warn "Expected condition ~a while evaluating~{ ~s~}" ',condition ',body)))))

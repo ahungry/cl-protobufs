@@ -1,0 +1,22 @@
+// Free Software published under an MIT-like license. See LICENSE
+//
+// Copyright (c) 2012 Google, Inc.  All rights reserved.
+//
+// Original author: Ben Wagner
+
+syntax = "proto2";
+
+package protobuf_package_unittest2;
+
+message MessageInOtherPackage {
+  required int32 foo = 1;
+  extensions 1000 to max;
+}
+
+enum EnumInOtherPackage {
+  BAR = 1;
+}
+
+message MessageDefinedInBothPackages {
+  required string bang = 1;
+}

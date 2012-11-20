@@ -1,0 +1,29 @@
+// Free Software published under an MIT-like license. See LICENSE
+//
+// Copyright (c) 2012 Google, Inc.  All rights reserved.
+//
+// Original author: Ben Wagner
+
+syntax = "proto2";
+
+package protobuf_forward_reference_unittest;
+
+message MessageWithForwardReference {
+  required MessageWithOverriddenLispClass foo = 1;
+  required EnumWithOverriddenLispClass bar = 2;
+}
+
+service ServiceWithForwardReference {
+  rpc Bloop(MessageWithOverriddenLispClass) returns (MessageWithForwardReference);
+  rpc Beep(MessageWithForwardReference) returns (MessageWithOverriddenLispClass);
+}
+
+message MessageWithOverriddenLispClass {
+  option (lisp_name) = "PROTOBUF-FORWARD-REFERENCE-UNITTEST:MSG-W-OVERRIDDEN-LISP-CLASS";
+  required int32 baz = 1;
+}
+
+enum EnumWithOverriddenLispClass {
+  option (lisp_name) = "PROTOBUF-FORWARD-REFERENCE-UNITTEST:ENUM-W-OVERRIDDEN-LISP-CLASS";
+  BAA = 1;
+}

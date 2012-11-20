@@ -26,7 +26,8 @@
    "RUN-TEST"
    "ASSERT-EQUAL"
    "ASSERT-TRUE"
-   "ASSERT-FALSE"))
+   "ASSERT-FALSE"
+   "ASSERT-ERROR"))
 
 (defpackage protobuf-unittest
   (:use :common-lisp :protobufs)
@@ -39,3 +40,6 @@
 (defpackage protobuf-geodata
   (:use :common-lisp :protobufs)
   (:nicknames :geodata))
+
+(defpackage protobuf-forward-reference-unittest
+  (:use :common-lisp :protobufs))
