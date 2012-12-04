@@ -69,8 +69,8 @@
                  (proto-relative-pathname component)
                  :type "proto")
     ;; No ':proto-pathname', the path of the protobuf file
-    ;; defaults to that of the Lisp file with a ".proto" suffix
-    (make-pathname :type "proto" :defaults (component-pathname component))))
+    ;; defaults to the component-pathname, with its automatic type "proto"
+    (component-pathname component)))
 
 (defun resolve-search-path (component)
   (check-type component protobuf-file)
@@ -88,23 +88,29 @@
 
 (defmethod input-files ((op proto-to-lisp) (component protobuf-file))
   "The input file is just the .proto file."
+  (declare (ignorable op))
   (list (protobuf-input-file component)))
 
 (defmethod output-files ((op proto-to-lisp) (component protobuf-file))
-  "The output file gets stored where .fasl files are stored."
-  (values (list (component-pathname component))
-          nil))
+  "The output file is a lisp file, stored where .fasl files are stored."
+  (declare (ignorable op))
+  (values (list (lispize-pathname (component-pathname component))) nil))
+
+(defmethod input-files ((op compile-op) (component protobuf-file))
+  "The input file is just the .proto file."
+  (declare (ignorable op))
+  (output-files (make-instance 'proto-to-lisp) component))
 
 (defmethod perform ((op proto-to-lisp) (component protobuf-file))
   (let* ((input  (protobuf-input-file component))
-         (output (first (output-files op component)))
+         (output (output-file op component))
          (paths  (cons (directory-namestring input) (resolve-search-path component)))
          (proto-impl:*protobuf-search-path* paths)
          (proto-impl:*protobuf-output-path* output))
     (dolist (path paths (error 'compile-failed
                           :component component :operation op))
       (let ((proto (make-pathname :type "proto" :defaults (merge-pathnames* path (pathname input))))
-            (lisp  (make-pathname :type "lisp"  :defaults output)))
+            (lisp  (output-file op component)))
         (when (probe-file proto)
           (return-from perform
             (proto-impl:parse-protobuf-file proto lisp
@@ -112,14 +118,12 @@
 
 (defmethod operation-description ((op proto-to-lisp) (component protobuf-file))
   (format nil (compatfmt "~@<proto-compiling ~3i~_~A~@:>")
-          (make-pathname :name (pathname-name (component-pathname component))
-                         :type "proto"
-                         :defaults (first (output-files op component)))))
+          (first (input-files op component))))
 
 (defmethod perform ((op compile-op) (component protobuf-file))
   (let* ((input  (protobuf-input-file component))
-         (output (first (output-files op component)))
-         (lisp   (make-pathname :type "lisp" :defaults output))
+         (output (output-file op component))
+         (lisp   (first (input-files op component)))
          (fasl   output)
          (paths  (cons (directory-namestring input) (resolve-search-path component)))
          (proto-impl:*protobuf-search-path* paths)
@@ -148,9 +152,7 @@
 
 (defmethod operation-description ((op compile-op) (component protobuf-file))
   (format nil (compatfmt "~@<compiling ~3i~_~A~@:>")
-          (make-pathname :name (pathname-name (component-pathname component))
-                         :type "lisp"
-                         :defaults (first (output-files op component)))))
+          (first (input-files op component))))
 
 
 ;;; Processing of imports
@@ -189,10 +191,11 @@
           (let* ((base-path  (asdf::merge-pathnames* import path))
                  (proto-file (make-pathname :name import-name :type "proto"
                                             :defaults base-path))
-                 (lisp-file  (if output-path
-                               (make-pathname :name import-name :type "lisp"
-                                              :directory (pathname-directory output-path))
-                               (make-pathname :type "lisp" :defaults base-path)))
+                 (lisp-file  (asdf::lispize-pathname
+                              (if output-path
+                                (make-pathname :name import-name
+                                               :directory (pathname-directory output-path))
+                                base-path)))
                  (fasl-file  (compile-file-pathname lisp-file))
                  (asdf:*asdf-verbose* nil)      ;for safe-file-write-date
                  (proto-date (asdf::safe-file-write-date proto-file))
