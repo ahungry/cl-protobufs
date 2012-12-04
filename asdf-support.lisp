@@ -92,9 +92,14 @@
   (list (protobuf-input-file component)))
 
 (defmethod output-files ((op proto-to-lisp) (component protobuf-file))
-  "The output file is a lisp file, stored where .fasl files are stored."
+  "The output file is a .lisp file and a .proto-imports file with dependency data,
+   stored where .fasl files are stored"
   (declare (ignorable op))
-  (values (list (lispize-pathname (component-pathname component))) nil))
+  (let ((lisp-file (lispize-pathname (component-pathname component))))
+    (values (list lisp-file
+                  (make-pathname :type "proto-imports"
+                                 :defaults lisp-file))
+            nil)))
 
 (defmethod input-files ((op compile-op) (component protobuf-file))
   "The input files are the .lisp and .proto-imports files."
@@ -103,18 +108,19 @@
 
 (defmethod perform ((op proto-to-lisp) (component protobuf-file))
   (let* ((input  (protobuf-input-file component))
-         (output (output-file op component))
+         (output (first (output-files op component)))
          (paths  (cons (directory-namestring input) (resolve-search-path component)))
          (proto-impl:*protobuf-search-path* paths)
          (proto-impl:*protobuf-output-path* output))
     (dolist (path paths (error 'compile-failed
                           :component component :operation op))
-      (let ((proto (make-pathname :type "proto" :defaults (merge-pathnames* path (pathname input))))
-            (lisp  (output-file op component)))
-        (when (probe-file proto)
-          (return-from perform
-            (proto-impl:parse-protobuf-file proto lisp
-                                            :conc-name (proto-conc-name component))))))))
+      (let ((proto (make-pathname :type "proto" :defaults (merge-pathnames* path (pathname input)))))
+        (destructuring-bind (lisp imports)
+            (output-files op component)
+          (when (probe-file proto)
+            (return-from perform
+              (proto-impl:parse-protobuf-file proto lisp imports
+                                              :conc-name (proto-conc-name component)))))))))
 
 (defmethod operation-description ((op proto-to-lisp) (component protobuf-file))
   (format nil (compatfmt "~@<proto-compiling ~3i~_~A~@:>")
@@ -159,14 +165,21 @@
 
 (in-package "PROTO-IMPL")
 
-(defun parse-protobuf-file (protobuf-file lisp-file &key (conc-name ""))
+(defun parse-protobuf-file (protobuf-file lisp-file imports-file &key (conc-name ""))
   (let ((schema (parse-schema-from-file protobuf-file :conc-name conc-name)))
     (with-open-file (stream lisp-file
                      :direction :output
                      :if-exists :supersede
                      :external-format :utf-8
                      :element-type 'character)
-      (write-schema schema :stream stream :type :lisp)))
+      (write-schema schema :stream stream :type :lisp))
+    (with-open-file (stream imports-file
+                     :direction :output
+                     :if-exists :supersede
+                     :external-format :utf-8
+                     :element-type 'character)
+      (with-standard-io-syntax
+        (format stream "~W~%" (proto-imports schema)))))
   lisp-file)
 
 ;; Process 'import' lines
@@ -196,6 +209,8 @@
                                 (make-pathname :name import-name
                                                :directory (pathname-directory output-path))
                                 base-path)))
+                 (imports-file (make-pathname :type "proto-imports"
+                                              :defaults lisp-file))
                  (fasl-file  (compile-file-pathname lisp-file))
                  (asdf:*asdf-verbose* nil)      ;for safe-file-write-date
                  (proto-date (asdf::safe-file-write-date proto-file))
@@ -209,8 +224,8 @@
                   (cond ((not proto-date)
                          (warn "Could not find the .proto file to be imported: ~A" proto-file))
                         ((or (not lisp-date)
-                             (< lisp-date proto-date))
-                         (parse-protobuf-file proto-file lisp-file)
+                            (< lisp-date proto-date))
+                         (parse-protobuf-file proto-file lisp-file imports-file)
                          (setq lisp-date (file-write-date lisp-file)))))
                 ;; Compile the .lisp file, if necessary
                 (cond ((not lisp-date)
