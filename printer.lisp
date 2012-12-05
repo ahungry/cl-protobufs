@@ -16,7 +16,7 @@
 (defun write-schema (protobuf &rest keys
                      &key (stream *standard-output*) (type :proto) &allow-other-keys)
   "Writes the object 'protobuf' (schema, message, enum, etc) onto the
-   stream 'stream'in the format given by 'type' (:proto, :text, etc)."
+   stream 'stream' in the format given by 'type' (:proto, :text, etc)."
    (let ((*protobuf* protobuf))
      (apply #'write-schema-as type protobuf stream keys)))
 
