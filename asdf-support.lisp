@@ -97,7 +97,7 @@
   (values (list (lispize-pathname (component-pathname component))) nil))
 
 (defmethod input-files ((op compile-op) (component protobuf-file))
-  "The input file is just the .proto file."
+  "The input files are the .lisp and .proto-imports files."
   (declare (ignorable op))
   (output-files (make-instance 'proto-to-lisp) component))
 
