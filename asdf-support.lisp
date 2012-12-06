@@ -101,11 +101,6 @@
                                  :defaults lisp-file))
             nil)))
 
-(defmethod input-files ((op compile-op) (component protobuf-file))
-  "The input files are the .lisp and .proto-imports files."
-  (declare (ignorable op))
-  (output-files (make-instance 'proto-to-lisp) component))
-
 (defmethod perform ((op proto-to-lisp) (component protobuf-file))
   (let* ((input  (protobuf-input-file component))
          (output (first (output-files op component)))
@@ -126,11 +121,10 @@
   (format nil (compatfmt "~@<proto-compiling ~3i~_~A~@:>")
           (first (input-files op component))))
 
-(defmethod input-files ((op load-op) (component protobuf-file))
-  "The input files are the .fasl and .proto-imports files."
+(defmethod input-files ((op compile-op) (component protobuf-file))
+  "The input files are the .lisp and .proto-imports files."
   (declare (ignorable op))
-  (append (output-files (make-instance 'compile-op) component) ; fasl
-          (cdr (output-files (make-instance 'proto-to-lisp) component)))) ; proto-imports
+  (output-files (make-instance 'proto-to-lisp) component))
 
 (defmethod perform ((op compile-op) (component protobuf-file))
   (let* ((input  (protobuf-input-file component))
@@ -164,6 +158,12 @@
       (unless output
         (error 'compile-error
                :component component :operation op)))))
+
+(defmethod input-files ((op load-op) (component protobuf-file))
+  "The input files are the .fasl and .proto-imports files."
+  (declare (ignorable op))
+  (append (output-files (make-instance 'compile-op) component) ; fasl
+          (cdr (output-files (make-instance 'proto-to-lisp) component)))) ; proto-imports
 
 (defmethod perform ((op load-op) (component protobuf-file))
   (let* ((input  (protobuf-input-file component))
