@@ -170,10 +170,10 @@
          (paths  (cons (directory-namestring input) (resolve-search-path component)))
          (proto-impl:*protobuf-search-path* paths)
          (proto-impl:*protobuf-output-path* (first (input-files op component))))
-    (proto-impl:process-imports-from-file
-     (make-pathname :type "proto-imports"
-                    :defaults (first (input-files op component)))))
-  (call-next-method))
+    (destructuring-bind (fasl proto-imports)
+        (input-files op component)
+      (proto-impl:process-imports-from-file proto-imports)
+      (load fasl))))
 
 (defmethod operation-description ((op compile-op) (component protobuf-file))
   (format nil (compatfmt "~@<compiling ~3i~_~A~@:>")
