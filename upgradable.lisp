@@ -13,17 +13,14 @@
 
 ;;; Can a version of a Protobufs schema be upgraded to a new version
 
-(defgeneric schema-upgradable (old new &optional old-parent new-parent)
-  (:documentation
-   "Returns true if and only if the old Protobufs schema can be upgraded to
-    the new schema.
-    'old' is the old object (schema, enum, message, etc), 'new' is the new one.
-    'old-parent' is the \"parent\" of 'old', 'new-parent' is the parent of 'new'.
-    If the schema is not upgradable, the second value is a list of warnings."))
-
 (defvar *upgrade-warnings*)
-(defmacro upgrade-warn ((predicate old new) format-string &optional name)
-  "Collect an upgrade warning into *upgrade-warnings*."
+(defun upgrade-warn (format-string &rest format-args)
+  "Collect an upgrade warning into *upgrade-warnings*.
+   Returns the list of warnings."
+  (push (apply #'format nil format-string format-args) *upgrade-warnings*))
+
+(defmacro upgrade-assert ((predicate old new) format-string &optional name)
+  "Assert that the condition is true, otherwise issue an upgrade warning."
   (with-gensyms (vold vnew)
     `(let* ((,vold ,old)
             (,vnew ,new))
@@ -32,9 +29,16 @@
              (t
               ;; Note that this returns the non-NIL value of *upgrade-warnings*,
               ;; so the upgradable check will continue to collect warnings
-              (push (format nil ,format-string
-                            ,@(if name (list name vold vnew) (list vold vnew)))
-                    *upgrade-warnings*))))))
+              (upgrade-warn ,format-string ,@(if name (list name vold vnew) (list vold vnew))))))))
+
+
+(defgeneric schema-upgradable (old new &optional old-parent new-parent)
+  (:documentation
+   "Returns true if and only if the old Protobufs schema can be upgraded to
+    the new schema.
+    'old' is the old object (schema, enum, message, etc), 'new' is the new one.
+    'old-parent' is the \"parent\" of 'old', 'new-parent' is the parent of 'new'.
+    If the schema is not upgradable, the second value is a list of warnings."))
 
 (defmethod schema-upgradable ((old protobuf-schema) (new protobuf-schema)
                               &optional old-parent new-parent)
@@ -42,10 +46,10 @@
   (let ((*upgrade-warnings* ()))
     (and
      ;; Are they named the same?
-     (upgrade-warn (string= (proto-name old) (proto-name new))
-                   "Protobuf schema name changed from '~A' to '~A'")
-     (upgrade-warn (string= (proto-package old) (proto-package new))
-                   "Protobuf schema package changed from '~A' to '~A'")
+     (upgrade-assert (string= (proto-name old) (proto-name new))
+                     "Protobuf schema name changed from '~A' to '~A'")
+     (upgrade-assert (string= (proto-package old) (proto-package new))
+                     "Protobuf schema package changed from '~A' to '~A'")
      ;; Is every enum in 'old' upgradable to an enum in 'new'?
      (loop for old-enum in (proto-enums old)
            as new-enum = (find (proto-name old-enum) (proto-enums new)
@@ -78,9 +82,9 @@
   (declare (ignore new-enum))
   ;; No need to check that the names are equal, our caller did that already
   ;; Do they have the same index?
-  (upgrade-warn (= (proto-index old) (proto-index new))
-                "Enum index for '~A' changed from ~D to ~D"
-                (format nil "~A.~A" (proto-name old-enum) (proto-name old))))
+  (upgrade-assert (= (proto-index old) (proto-index new))
+                  "Enum index for '~A' changed from ~D to ~D"
+                  (format nil "~A.~A" (proto-name old-enum) (proto-name old))))
 
 
 (defmethod schema-upgradable ((old protobuf-message) (new protobuf-message)
@@ -107,14 +111,14 @@
                   (schema-upgradable old-fld new-fld old new)
                   ;; If there's no new field, the old one must not be required
                   (or (member (proto-required old-fld) '(:optional :repeated))
-                      (push (format nil "Old field '~A.~A' was required, and is now missing"
-                                    (proto-name old) (proto-name old-fld))
-                            *upgrade-warnings*))))))
+                      (upgrade-warn "Old field '~A.~A' was required, and is now missing"
+                                    (proto-name old) (proto-name old-fld)))))))
 
 (defmethod schema-upgradable ((old protobuf-field) (new protobuf-field)
                               &optional old-message new-message)
   (flet ((arity-upgradable (old-arity new-arity)
            (or (eq old-arity new-arity)
+               ;; Don't add new required fields
                (not (eq new-arity :required))
                ;; Optional fields and extensions are compatible
                (and (eq old-arity :optional)
@@ -142,16 +146,20 @@
     ;; No need to check that the names are equal, our caller did that already
     (and
      ;; Do they have the same index?
-     (upgrade-warn (= (proto-index old) (proto-index new))
-                   "Field index for '~A' changed from ~D to ~D"
-                   (format nil "~A.~A" (proto-name old-message) (proto-name old)))
+     (upgrade-assert (= (proto-index old) (proto-index new))
+                     "Field index for '~A' changed from ~D to ~D"
+                     (format nil "~A.~A" (proto-name old-message) (proto-name old)))
      ;; Are the arity and type upgradable?
-     (upgrade-warn (arity-upgradable (proto-required old) (proto-required new))
-                   "Arity of ~A, ~S, is not upgradable to ~S"
-                   (format nil  "~A.~A" (proto-name old-message) (proto-name old)))
-     (upgrade-warn (type-upgradable (proto-type old) (proto-type new))
-                   "Type of '~A', ~A, is not upgradable to ~A"
-                   (format nil  "~A.~A" (proto-name old-message) (proto-name old))))))
+     (upgrade-assert (arity-upgradable (proto-required old) (proto-required new))
+                     "Arity of ~A, ~S, is not upgradable to ~S"
+                     (format nil  "~A.~A" (proto-name old-message) (proto-name old)))
+     (upgrade-assert (type-upgradable (proto-type old) (proto-type new))
+                     "Type of '~A', ~A, is not upgradable to ~A"
+                     (format nil  "~A.~A" (proto-name old-message) (proto-name old)))
+     ;; Is the default the same?
+     (upgrade-assert (equal (proto-default old) (proto-default new))
+                     "Old default for ~A, ~S, is not equal to new default ~S"
+                     (format nil  "~A.~A" (proto-name old-message) (proto-name old))))))
 
 
 (defmethod schema-upgradable ((old protobuf-service) (new protobuf-service)
@@ -170,12 +178,12 @@
   ;; No need to check that the names are equal, our caller did that already
   (and
    ;; Are their inputs and outputs the same?
-   (upgrade-warn (string= (proto-input-name old) (proto-input-name new))
-                 "Input type for ~A, ~A, is not upgradable to ~A"
-                 (format nil  "~A.~A" (proto-name old-service) (proto-name old)))
-   (upgrade-warn (string= (proto-output-name old) (proto-output-name new))
-                 "Output type for ~A, ~A, is not upgradable to ~A"
-                 (format nil  "~A.~A" (proto-name old-service) (proto-name old)))))
+   (upgrade-assert (string= (proto-input-name old) (proto-input-name new))
+                   "Input type for ~A, ~A, is not upgradable to ~A"
+                   (format nil  "~A.~A" (proto-name old-service) (proto-name old)))
+   (upgrade-assert (string= (proto-output-name old) (proto-output-name new))
+                   "Output type for ~A, ~A, is not upgradable to ~A"
+                   (format nil  "~A.~A" (proto-name old-service) (proto-name old)))))
 
 
 ;;; Are two protobuf schemas equal?
@@ -192,11 +200,11 @@
    (or (null (proto-class schema1)) (null (proto-class schema2))
        (eql (proto-class schema1) (proto-class schema2)))
    (or (null (proto-name schema1)) (null (proto-name schema2))
-        (equalp (proto-name schema1) (proto-name schema2)))
-   (equalp (proto-syntax schema1) (proto-syntax schema2))
-   (equalp (proto-package schema1) (proto-package schema2))
-   (equalp (proto-lisp-package schema1) (proto-lisp-package schema2))
-   (equalp (proto-imports schema1) (proto-imports schema2))
+       (equal (proto-name schema1) (proto-name schema2)))
+   (equal (proto-syntax schema1) (proto-syntax schema2))
+   (equal (proto-package schema1) (proto-package schema2))
+   (equal (proto-lisp-package schema1) (proto-lisp-package schema2))
+   (equal (proto-imports schema1) (proto-imports schema2))
    (= (length (proto-options schema1)) (length (proto-options schema2)))
    (loop for option1 in (proto-options schema1)
          as option2 = (find (proto-name option1) (proto-options schema2)
@@ -223,14 +231,14 @@
 (defmethod schemas-equal ((option1 protobuf-option) (option2 protobuf-option))
   (and
    (string= (proto-name option1) (proto-name option2))
-   (equalp  (proto-value option1) (proto-value option2))
-   (equalp  (proto-type option1) (proto-type option2))))
+   (equal   (proto-value option1) (proto-value option2))
+   (equal   (proto-type option1) (proto-type option2))))
 
 (defmethod schemas-equal ((enum1 protobuf-enum) (enum2 protobuf-enum))
   (and
-   (eql    (proto-class enum1) (proto-class enum2))
-   (equalp (proto-name enum1) (proto-name enum2))
-   (equalp (proto-alias-for enum1) (proto-alias-for enum2))
+   (eql   (proto-class enum1) (proto-class enum2))
+   (equal (proto-name enum1) (proto-name enum2))
+   (equal (proto-alias-for enum1) (proto-alias-for enum2))
    (= (length (proto-options enum1)) (length (proto-options enum2)))
    (loop for option1 in (proto-options enum1)
          as option2 = (find (proto-name option1) (proto-options enum2)
@@ -244,17 +252,17 @@
 
 (defmethod schemas-equal ((value1 protobuf-enum-value) (value2 protobuf-enum-value))
   (and 
-   (eql    (proto-class value1) (proto-class value2))
-   (equalp (proto-name value1) (proto-name value2))
-   (eql    (proto-index value1) (proto-index value2))
-   (equalp (proto-value value1) (proto-value value2))))
+   (eql   (proto-class value1) (proto-class value2))
+   (equal (proto-name value1) (proto-name value2))
+   (eql   (proto-index value1) (proto-index value2))
+   (equal (proto-value value1) (proto-value value2))))
 
 (defmethod schemas-equal ((message1 protobuf-message) (message2 protobuf-message))
   (and
-   (eql    (proto-class message1) (proto-class message2))
-   (equalp (proto-name message1) (proto-name message2))
-   (equalp (proto-alias-for message1) (proto-alias-for message2))
-   (eql    (proto-message-type message1) (proto-message-type message2))
+   (eql   (proto-class message1) (proto-class message2))
+   (equal (proto-name message1) (proto-name message2))
+   (equal (proto-alias-for message1) (proto-alias-for message2))
+   (eql   (proto-message-type message1) (proto-message-type message2))
    (= (length (proto-options message1)) (length (proto-options message2)))
    (loop for option1 in (proto-options message1)
          as option2 = (find (proto-name option1) (proto-options message2)
@@ -284,17 +292,17 @@
 
 (defmethod schemas-equal ((field1 protobuf-field) (field2 protobuf-field))
   (and
-   (eql    (proto-class field1) (proto-class field2))
-   (equalp (proto-name field1) (proto-name field2))
-   (equalp (proto-type field1) (proto-type field2))
-   (eql    (proto-required field1) (proto-required field2))
-   (eql    (proto-value field1) (proto-value field2))
-   (eql    (proto-index field1) (proto-index field2))
-   (eql    (proto-reader field1) (proto-reader field2))
-   (eql    (proto-writer field1) (proto-writer field2))
-   (equalp (proto-default field1) (proto-default field2))
-   (eql    (proto-packed field1) (proto-packed field2))
-   (eql    (proto-message-type field1) (proto-message-type field2))
+   (eql   (proto-class field1) (proto-class field2))
+   (equal (proto-name field1) (proto-name field2))
+   (equal (proto-type field1) (proto-type field2))
+   (eql   (proto-required field1) (proto-required field2))
+   (eql   (proto-value field1) (proto-value field2))
+   (eql   (proto-index field1) (proto-index field2))
+   (eql   (proto-reader field1) (proto-reader field2))
+   (eql   (proto-writer field1) (proto-writer field2))
+   (equal (proto-default field1) (proto-default field2))
+   (eql   (proto-packed field1) (proto-packed field2))
+   (eql   (proto-message-type field1) (proto-message-type field2))
    (= (length (proto-options field1)) (length (proto-options field2)))
    (loop for option1 in (proto-options field1)
          as option2 = (find (proto-name option1) (proto-options field2)
@@ -308,8 +316,8 @@
 
 (defmethod schemas-equal ((service1 protobuf-service) (service2 protobuf-service))
   (and
-   (eql    (proto-class service1) (proto-class service2))
-   (equalp (proto-name service1) (proto-name service2))
+   (eql   (proto-class service1) (proto-class service2))
+   (equal (proto-name service1) (proto-name service2))
    (= (length (proto-options service1)) (length (proto-options service2)))
    (loop for option1 in (proto-options service1)
          as option2 = (find (proto-name option1) (proto-options service2)
@@ -323,13 +331,13 @@
 
 (defmethod schemas-equal ((method1 protobuf-method) (method2 protobuf-method))
   (and
-   (eql    (proto-class method1) (proto-class method2))
-   (equalp (proto-name method1) (proto-name method2))
-   (eql    (proto-input-type method1) (proto-input-type method2))
-   (eql    (proto-output-type method1) (proto-output-type method2))
-   (equalp (proto-input-name method1) (proto-input-name method2))
-   (equalp (proto-output-name method1) (proto-output-name method2))
-   (eql    (proto-index method1) (proto-index method2))
+   (eql   (proto-class method1) (proto-class method2))
+   (equal (proto-name method1) (proto-name method2))
+   (eql   (proto-input-type method1) (proto-input-type method2))
+   (eql   (proto-output-type method1) (proto-output-type method2))
+   (equal (proto-input-name method1) (proto-input-name method2))
+   (equal (proto-output-name method1) (proto-output-name method2))
+   (eql   (proto-index method1) (proto-index method2))
    (= (length (proto-options method1)) (length (proto-options method2)))
    (loop for option1 in (proto-options method1)
          as option2 = (find (proto-name option1) (proto-options method2)

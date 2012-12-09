@@ -88,7 +88,7 @@
                                                    (or suppress-line-breaks indent)))))
                                   ((keywordp type)
                                    (let ((v (read-slot object slot reader)))
-                                     (when v
+                                     (when (and v (not (equal v (proto-default field))))
                                        (print-prim v type field stream
                                                    (or suppress-line-breaks indent)))))
                                   ((typep (setq msg (and type (or (find-message trace type)
@@ -108,7 +108,7 @@
                                              (format stream "~&~VT}~%" indent))))))
                                   ((typep msg 'protobuf-enum)
                                    (let ((v (read-slot object slot reader)))
-                                     (when v
+                                     (when (and v (not (eql v (proto-default field))))
                                        (print-enum v msg field stream
                                                    (or suppress-line-breaks indent)))))
                                   ((typep msg 'protobuf-type-alias)

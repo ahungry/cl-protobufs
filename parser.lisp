@@ -362,10 +362,10 @@
 
 (defun parse-proto-import (stream schema &optional (terminator #\;))
   "Parse a Protobufs import line from 'stream'.
-   Updates the 'protobuf-schema' object to use the package."
+   Updates the 'protobuf-schema' object to use the import."
   (check-type schema protobuf-schema)
   (let ((import (prog1 (parse-string stream)
-                  (expect-char stream terminator () "package")
+                  (expect-char stream terminator () "import")
                   (maybe-skip-comments stream))))
     (process-imports schema (list import))
     (setf (proto-imports schema) (nconc (proto-imports schema) (list import)))))
