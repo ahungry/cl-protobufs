@@ -74,7 +74,10 @@
                                      (doseq (v (read-slot object slot reader))
                                        (let ((v (funcall (proto-serializer msg) v)))
                                          (print-prim v type field stream
-                                                     (or suppress-line-breaks indent))))))))
+                                                     (or suppress-line-breaks indent))))))
+                                  (t
+                                   (undefined-field-type "While printing ~S to text format,"
+                                                         object type field))))
                            (t
                             (cond ((eq type :bool)
                                    (let ((v (cond ((or (eq (proto-required field) :required)
@@ -117,7 +120,10 @@
                                        (let ((v    (funcall (proto-serializer msg) v))
                                              (type (proto-proto-type msg)))
                                          (print-prim v type field stream
-                                                     (or suppress-line-breaks indent)))))))))))))
+                                                     (or suppress-line-breaks indent))))))
+                                  (t
+                                   (undefined-field-type "While printing ~S to text format,"
+                                                         object type field)))))))))
         (declare (dynamic-extent #'do-field))
         (if print-name
           (if suppress-line-breaks
@@ -252,7 +258,10 @@
                                        (when slot
                                          (pushnew slot rslots)
                                          (push (funcall (proto-deserializer msg) val)
-                                               (slot-value object slot))))))))
+                                               (slot-value object slot))))))
+                                  (t
+                                   (undefined-field-type "While parsing ~S from text format,"
+                                                         message type field))))
                            (t
                             (cond ((keywordp type)
                                    (expect-char stream #\:)
@@ -289,7 +298,10 @@
                                                   (otherwise (parse-signed-int stream)))))
                                        (when slot
                                          (setf (slot-value object slot)
-                                               (funcall (proto-deserializer msg) val)))))))))))))))
+                                               (funcall (proto-deserializer msg) val))))))
+                                  (t
+                                   (undefined-field-type "While parsing ~S from text format,"
+                                                         message type field)))))))))))
     (declare (dynamic-extent #'deserialize))
     (deserialize (proto-class message) message)))
 

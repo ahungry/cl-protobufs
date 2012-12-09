@@ -35,8 +35,10 @@
   (proto:define-message stable-add-color ()
     (wheel :type stable-color-wheel)
     (color :type stable-color))
+  (proto:define-message string-primitive ()
+    (string :type string))
   (proto:define-service stable-color-wheel ()
-    (get-stable-color (string => stable-color))
+    (get-stable-color (string-primitive => stable-color))
     (set-stable-color (stable-color => stable-color)
                       :options (:deadline 1.0))))
 
@@ -73,8 +75,12 @@ message StableAddColor {
   required StableColor color = 2;
 }
 
+message StringPrimitive {
+  required string string = 1;
+}
+
 service StableColorWheel {
-  rpc GetStableColor (String) returns (StableColor);
+  rpc GetStableColor (StringPrimitive) returns (StableColor);
   rpc SetStableColor (StableColor) returns (StableColor) {
     option deadline = 1.0;
   }

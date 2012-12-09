@@ -143,7 +143,10 @@
                                           (tag  (make-tag type (proto-index field))))
                                      (doseq (v (read-slot object slot reader))
                                        (let ((v (funcall (proto-serializer msg) v)))
-                                         (setq index (serialize-prim v type tag buffer index))))))))
+                                         (setq index (serialize-prim v type tag buffer index))))))
+                                  (t
+                                   (undefined-field-type "While serializing ~S,"
+                                                         object type field))))
                            (t
                             (cond ((eq type :bool)
                                    ;; We have to handle optional boolean fields specially
@@ -192,7 +195,10 @@
                                        (let* ((v    (funcall (proto-serializer msg) v))
                                               (type (proto-proto-type msg))
                                               (tag  (make-tag type (proto-index field))))
-                                         (setq index (serialize-prim v type tag buffer index)))))))))))))
+                                         (setq index (serialize-prim v type tag buffer index))))))
+                                  (t
+                                   (undefined-field-type "While serializing ~S,"
+                                                         object type field)))))))))
         (declare (dynamic-extent #'do-field))
         (dolist (field (proto-fields message))
           (do-field object message field))))
@@ -512,7 +518,10 @@
                                           (tag  (make-tag type (proto-index field))))
                                      (doseq (v (read-slot object slot reader))
                                        (let ((v (funcall (proto-serializer msg) v)))
-                                         (iincf size (prim-size v type tag))))))))
+                                         (iincf size (prim-size v type tag))))))
+                                  (t
+                                   (undefined-field-type "While computing the size of ~S,"
+                                                         object type field))))
                            (t
                             (cond ((eq type :bool)
                                    (let ((v (cond ((or (eq (proto-required field) :required)
@@ -559,7 +568,10 @@
                                        (let* ((v    (funcall (proto-serializer msg) v))
                                               (type (proto-proto-type msg))
                                               (tag  (make-tag type (proto-index field))))
-                                         (iincf size (prim-size v type tag)))))))))))))
+                                         (iincf size (prim-size v type tag))))))
+                                  (t
+                                   (undefined-field-type "While computing the size of ~S,"
+                                                         object type field)))))))))
         (declare (dynamic-extent #'do-field))
         (dolist (field (proto-fields message))
           (do-field object message field))
@@ -646,7 +658,10 @@
                                     (tag   (make-tag class (proto-index field))))
                                `(,iterator (,vval ,reader)
                                   (let ((,vval (funcall #',(proto-serializer msg) ,vval)))
-                                    (setq ,vidx (serialize-prim ,vval ,class ,tag ,vbuf ,vidx))))))))))
+                                    (setq ,vidx (serialize-prim ,vval ,class ,tag ,vbuf ,vidx)))))))
+                           (t
+                            (undefined-field-type "While generating 'serialize-object' for ~S,"
+                                                  message class field)))))
                   (t
                    (cond ((keywordp class)
                           (collect-serializer
@@ -707,7 +722,10 @@
                              `(let ((,vval ,reader))
                                 (when ,vval
                                   (let ((,vval (funcall #',(proto-serializer msg) ,vval)))
-                                    (setq ,vidx (serialize-prim ,vval ,class ,tag ,vbuf ,vidx))))))))))))))
+                                    (setq ,vidx (serialize-prim ,vval ,class ,tag ,vbuf ,vidx))))))))
+                         (t
+                          (undefined-field-type "While generating 'serialize-object' for ~S,"
+                                                message class field))))))))
       `(defmethod serialize-object
            (,vobj (,vclass (eql ,message)) ,vbuf &optional (,vidx 0) visited)
          (declare #.$optimize-serialization)
@@ -817,7 +835,10 @@
                                (multiple-value-bind (,vval idx)
                                    (deserialize-prim ,class ,vbuf ,vidx)
                                  (setq ,vidx idx)
-                                 (push (funcall #',(proto-deserializer msg) ,vval) ,temp))))))))
+                                 (push (funcall #',(proto-deserializer msg) ,vval) ,temp))))))
+                         (t
+                          (undefined-field-type "While generating 'deserialize-object' for ~S,"
+                                                message class field))))
                   (t
                    (cond ((keywordp class)
                           (collect-deserializer
@@ -858,7 +879,10 @@
                                      (deserialize-prim ,class ,vbuf ,vidx)
                                    (let ((,vval (funcall #',(proto-deserializer msg) ,vval)))
                                      (setq ,vidx idx)
-                                     ,(write-slot vobj field vval)))))))))))))
+                                     ,(write-slot vobj field vval)))))))
+                         (t
+                          (undefined-field-type "While generating 'deserialize-object' for ~S,"
+                                                message class field))))))))
       (let* ((rslots  (delete-duplicates rslots :key #'first))
              (rfields (mapcar #'first  rslots))
              (rtemps  (mapcar #'second rslots)))
@@ -968,7 +992,10 @@
                                     (tag   (make-tag class index)))
                                `(,iterator (,vval ,reader)
                                   (let ((,vval (funcall #',(proto-serializer msg) ,vval)))
-                                    (iincf ,vsize (prim-size ,vval ,class ,tag))))))))))
+                                    (iincf ,vsize (prim-size ,vval ,class ,tag)))))))
+                           (t
+                            (undefined-field-type "While generating 'object-size' for ~S,"
+                                                  message class field)))))
                   (t
                    (cond ((keywordp class)
                           (let ((tag (make-tag class index)))
@@ -1028,7 +1055,10 @@
                              `(let ((,vval ,reader))
                                 (when ,vval
                                   (iincf ,vsize (prim-size (funcall #',(proto-serializer msg) ,vval)
-                                                           ,class ,tag)))))))))))))
+                                                           ,class ,tag)))))))
+                         (t
+                          (undefined-field-type "While generating 'object-size' for ~S,"
+                                                message class field))))))))
       `(defmethod object-size
            (,vobj (,vclass (eql ,message)) &optional visited)
          (declare #.$optimize-serialization)

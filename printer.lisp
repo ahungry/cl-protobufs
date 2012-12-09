@@ -16,7 +16,7 @@
 (defun write-schema (protobuf &rest keys
                      &key (stream *standard-output*) (type :proto) &allow-other-keys)
   "Writes the object 'protobuf' (schema, message, enum, etc) onto the
-   stream 'stream'in the format given by 'type' (:proto, :text, etc)."
+   stream 'stream' in the format given by 'type' (:proto, :text, etc)."
    (let ((*protobuf* protobuf))
      (apply #'write-schema-as type protobuf stream keys)))
 
@@ -443,8 +443,17 @@
            (*show-lisp-enum-indexes*  show-enum-indexes)
            (*show-lisp-field-indexes* show-field-indexes)
            (*use-common-lisp-package* use-common-lisp)
-           (*protobuf-package* (or (find-proto-package lisp-pkg) *package*))
-           (*package* *protobuf-package*))
+           (*protobuf-package* (find-proto-package lisp-pkg))
+           ;; If *protobuf-package* has not been defined, print symbols
+           ;; from :common-lisp if *use-common-lisp-package* is true; or
+           ;; :keyword otherwise.  This ensures that all symbols will be
+           ;; read back correctly.
+           ;; (The :keyword package does not use any other packages, so
+           ;; all symbols will be printed with package prefixes.
+           ;; Keywords are always printed as :keyword.)
+           (*package* (or *protobuf-package*
+                          (when *use-common-lisp-package* (find-package :common-lisp))
+                          (find-package :keyword))))
       (when (or lisp-pkg pkg)
         (let ((pkg (string-upcase (or lisp-pkg pkg))))
           (format stream "~&(cl:eval-when (:execute :compile-toplevel :load-toplevel) ~

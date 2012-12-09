@@ -287,6 +287,11 @@
        (%make-source-location :pathname *protobuf-pathname*
                               :start-pos start :end-pos end)))
 
+(defgeneric resolve-lisp-names (protobuf)
+  (:documentation "Second pass of schema parsing which recursively resolves protobuf type names to
+                   lisp type names in all messages and services contained within 'protobuf'.  No
+                   return value."))
+
 ;; The syntax for Protocol Buffers is so simple that it doesn't seem worth
 ;; writing a sophisticated parser
 ;; Note that we don't put the result into *all-schemas*; that's done in 'define-schema'
@@ -305,6 +310,7 @@
       (let ((char (peek-char nil stream nil)))
         (cond ((null char)
                (remove-options schema "lisp_package")
+               (resolve-lisp-names schema)
                (return-from parse-schema-from-stream schema))
               ((proto-token-char-p char)
                (let ((token (parse-token stream)))
@@ -319,12 +325,7 @@
                                (name   (and option (proto-name option)))
                                (value  (and option (proto-value option))))
                           (when (and option (option-name= name "lisp_package"))
-                            (let ((package (or (find-proto-package value)
-                                               ;; Try to put symbols into the right package
-                                               (make-package (string-upcase value) :use ())
-                                               *protobuf-package*)))
-                              (setf (proto-lisp-package schema) value)
-                              (setq *protobuf-package* package)))))
+                            (set-lisp-package schema value))))
                        ((string= token "enum")
                         (parse-proto-enum stream schema))
                        ((string= token "extend")
@@ -335,6 +336,22 @@
                         (parse-proto-service stream schema)))))
               (t
                (error "Syntax error at position ~D" (file-position stream))))))))
+
+(defun set-lisp-package (schema lisp-package-name)
+  "Set the package for generated lisp names of 'schema'."
+  (check-type schema protobuf-schema)
+  (check-type lisp-package-name string)
+  (let ((package (or (find-proto-package lisp-package-name)
+                     ;; Try to put symbols into the right package
+                     (make-package (string-upcase lisp-package-name) :use ())
+                     *protobuf-package*)))
+    (setf (proto-lisp-package schema) lisp-package-name)
+    (setq *protobuf-package* package)))
+
+(defmethod resolve-lisp-names ((schema protobuf-schema))
+  "Recursively resolves Protobuf type names to Lisp type names in the messages and services in 'schema'."
+  (map () #'resolve-lisp-names (proto-messages schema))
+  (map () #'resolve-lisp-names (proto-services schema)))
 
 (defun parse-proto-syntax (stream schema &optional (terminator #\;))
   "Parse a Protobufs syntax line from 'stream'.
@@ -356,9 +373,7 @@
                        (substitute #\- #\_ package))))
     (setf (proto-package schema) package)
     (unless (proto-lisp-package schema)
-      (setf (proto-lisp-package schema) lisp-pkg))
-    (let ((package (or (find-proto-package lisp-pkg) *protobuf-package*)))
-      (setq *protobuf-package* package))))
+      (set-lisp-package schema lisp-pkg))))
 
 (defun parse-proto-import (stream schema &optional (terminator #\;))
   "Parse a Protobufs import line from 'stream'.
@@ -383,10 +398,14 @@
                              ((or (digit-char-p ch) (member ch '(#\- #\+ #\.)))
                               (parse-number stream))
                              ((eql ch #\{)
+                              ;;---bwagner: This is incorrect
+                              ;;   We need to find the field name in the locally-extended version of
+                              ;;   google.protobuf.[File,Message,Field,Enum,EnumValue,Service,Method]Options
+                              ;;   and get its type
                               (let ((message (find-message (or protobuf *protobuf*) key)))
                                 (if message
                                   ;; We've got a complex message as a value to an option
-                                  ;; This only shows up in custom optionss
+                                  ;; This only shows up in custom options
                                   (parse-text-format message :stream stream :parse-name nil)
                                   ;; Who knows what to do? Skip the value
                                   (skip-field stream))))
@@ -501,6 +520,12 @@
                (error "Unrecognized token ~A at position ~D"
                       token (file-position stream))))))))
 
+(defmethod resolve-lisp-names ((message protobuf-message))
+  "Recursively resolves protobuf type names to lisp type names in nested messages and fields of
+   'message'."
+  (map () #'resolve-lisp-names (proto-messages message))
+  (map () #'resolve-lisp-names (proto-fields message)))
+
 (defun parse-proto-extend (stream protobuf)
   "Parse a Protobufs 'extend' from 'stream'.
    Updates the 'protobuf-schema' or 'protobuf-message' object to have the message."
@@ -509,6 +534,7 @@
          (name (prog1 (parse-token stream)
                  (expect-char stream #\{ () "extend")
                  (maybe-skip-comments stream)))
+         ;;---bwagner: Is 'extend' allowed to use a forward reference to a message?
          (message (find-message protobuf name))
          (extends (and message
                        (make-instance 'protobuf-message
@@ -564,18 +590,11 @@
                      (expect-char stream #\; () "message")
                      (maybe-skip-comments stream)))
              (packed (find-option opts "packed"))
-             (ptype  (if (member type '("int32" "int64" "uint32" "uint64" "sint32" "sint64"
-                                        "fixed32" "fixed64" "sfixed32" "sfixed64"
-                                        "string" "bytes" "bool" "float" "double") :test #'string=)
-                       (kintern type)
-                       type))
-             (class  (if (keywordp ptype) ptype (proto->class-name type *protobuf-package*)))
              (slot   (proto->slot-name name *protobuf-package*))
              (reqd   (kintern required))
              (field  (make-instance 'protobuf-field
                        :name  name
                        :type  type
-                       :class class
                        :qualified-name (make-qualified-name message name)
                        :parent message
                        ;; One of :required, :optional or :repeated
@@ -605,6 +624,23 @@
         (setf (proto-fields message) (nconc (proto-fields message) (list field)))
         field))))
 
+(defmethod resolve-lisp-names ((field protobuf-field))
+  "Resolves the field's protobuf type to a lisp type and sets `proto-class' for 'field'."
+  (let* ((type  (proto-type field))
+         (ptype (when (member type '("int32" "int64" "uint32" "uint64" "sint32" "sint64"
+                                     "fixed32" "fixed64" "sfixed32" "sfixed64"
+                                     "string" "bytes" "bool" "float" "double") :test #'string=)
+                  (kintern type)))
+         (message (unless ptype
+                    (or (find-message (proto-parent field) type)
+                        (find-enum (proto-parent field) type)))))
+    (unless (or ptype message)
+      (error 'undefined-field-type
+        :type-name type
+        :field field))
+    (setf (proto-class field) (or ptype (proto-class message))))
+  nil)
+
 (defun parse-proto-group (stream message required &optional extended-from)
   "Parse a (deprecated) Protobufs group from 'stream'.
    Updates the 'protobuf-message' object to have the group type and field."
@@ -614,12 +650,10 @@
          (name (slot-name->proto (proto->slot-name type)))
          (idx  (parse-unsigned-int stream))
          (msg  (parse-proto-message stream message type))
-         (class (proto->class-name type *protobuf-package*))
          (slot  (proto->slot-name name *protobuf-package*))
          (field (make-instance 'protobuf-field
                   :name  name
                   :type  type
-                  :class class
                   :qualified-name (make-qualified-name message name)
                   :parent message
                   :required (kintern required)
@@ -707,6 +741,10 @@
                (error "Unrecognized token ~A at position ~D"
                       token (file-position stream))))))))
 
+(defmethod resolve-lisp-names ((service protobuf-service))
+  "Recursively resolves protobuf type names to lisp type names for all methods of 'service'."
+  (map () #'resolve-lisp-names (proto-methods service)))
+
 (defun parse-proto-method (stream service index)
   "Parse a Protobufs method from 'stream'.
    Updates the 'protobuf-service' object to have the method."
@@ -720,11 +758,6 @@
          (out  (prog2 (expect-char stream #\( () "service")
                    (parse-token stream)
                  (expect-char stream #\) () "service")))
-         (strm (parse-token stream))            ;might be "streams"
-         (strm (and strm (string= strm "streams")
-                    (prog2 (expect-char stream #\( () "service")
-                        (parse-token stream)
-                      (expect-char stream #\) () "service"))))
          (opts (let ((opts (parse-proto-method-options stream)))
                  (when (or (null opts) (eql (peek-char nil stream nil) #\;))
                    (expect-char stream #\; () "service"))
@@ -736,12 +769,8 @@
                    :name  name
                    :qualified-name (make-qualified-name *protobuf* name)
                    :parent service
-                   :input-type  (proto->class-name in *protobuf-package*)
                    :input-name  in
-                   :output-type (proto->class-name out *protobuf-package*)
                    :output-name out
-                   :streams-type (and strm (proto->class-name strm *protobuf-package*))
-                   :streams-name strm
                    :index index
                    :options opts
                    :source-location (make-source-location stream loc (i+ loc (length name))))))
@@ -753,8 +782,44 @@
       (setf (proto-class method) stub
             (proto-client-stub method) stub
             (proto-server-stub method) (intern (format nil "~A-~A" 'do stub) *protobuf-package*)))
+    (let ((strm (find-option method "stream_type")))
+      (when strm
+        (setf (proto-streams-name method) strm)))
     (setf (proto-methods service) (nconc (proto-methods service) (list method)))
     method))
+
+(defmethod resolve-lisp-names ((method protobuf-method))
+  "Resolves input, output, and streams protobuf type names to lisp type names and sets
+   `proto-input-type', `proto-output-type', and, if `proto-streams-name' is set,
+   `proto-streams-type' on 'method'."
+  (let* ((input-name   (proto-input-name method))
+         (output-name  (proto-output-name method))
+         (streams-name (proto-streams-name method))
+         (service (proto-parent method))
+         (schema  (proto-parent service))
+         (input-message   (find-message schema input-name))
+         (output-message  (find-message schema output-name))
+         (streams-message (and streams-name
+                               ;; This is supposed to be the fully-qualified name,
+                               ;; but we don't require that
+                               (find-message schema streams-name))))
+    (unless input-message
+      (error 'undefined-input-type
+        :type-name input-name
+        :method method))
+    (unless output-message
+      (error 'undefined-output-type
+        :type-name output-name
+        :method method))
+    (setf (proto-input-type method) (proto-class input-message))
+    (setf (proto-output-type method) (proto-class output-message))
+    (when streams-name
+      (unless streams-message
+        (error 'undefined-stream-type
+          :type-name streams-name
+          :method method))
+      (setf (proto-streams-type method) (proto-class streams-message))))
+  nil)
 
 (defun parse-proto-method-options (stream)
   "Parse any options in a Protobufs method from 'stream'.

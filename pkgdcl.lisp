@@ -48,6 +48,15 @@
    "PROTOBUF-METHOD"
    "PROTOBUF-TYPE-ALIAS"        ;Lisp-only extension
 
+   ;; Conditions
+   "UNDEFINED-FIELD-TYPE"
+   "UNDEFINED-INPUT-TYPE"
+   "UNDEFINED-OUTPUT-TYPE"
+   "UNDEFINED-STREAM-TYPE"
+   "ERROR-TYPE-NAME"
+   "ERROR-FIELD"
+   "ERROR-METHOD"
+
    ;; Object lookup
    "FIND-MESSAGE"
    "FIND-MESSAGE-FOR-CLASS"
@@ -297,6 +306,7 @@
    ;; Stuff for ASDF
    "PARSE-PROTOBUF-FILE"
    "PROCESS-IMPORTS"
+   "PROCESS-IMPORTS-FROM-FILE"
 
    ;; Stuff for RPC stubs
    "*RPC-PACKAGE*"

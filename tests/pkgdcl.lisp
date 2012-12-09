@@ -26,7 +26,21 @@
    "RUN-TEST"
    "ASSERT-EQUAL"
    "ASSERT-TRUE"
-   "ASSERT-FALSE"))
+   "ASSERT-FALSE"
+   "ASSERT-ERROR")
+  (:export
+   "DEFINE-TEST"
+   "DEFINE-TEST-SUITE"
+   "REGISTER-TEST"
+   "RUN-TEST"
+   "RUN-ALL-TESTS"
+   "ASSERT-EQUAL"
+   "ASSERT-TRUE"
+   "ASSERT-FALSE"
+   "ASSERT-ERROR"))
+
+
+;;; Packages used by .oroto files
 
 (defpackage protobuf-unittest
   (:use :common-lisp :protobufs)
@@ -39,3 +53,6 @@
 (defpackage protobuf-geodata
   (:use :common-lisp :protobufs)
   (:nicknames :geodata))
+
+(defpackage protobuf-forward-reference-unittest
+  (:use :common-lisp :protobufs))

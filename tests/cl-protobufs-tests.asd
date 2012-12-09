@@ -80,6 +80,14 @@
                 ((:file "quick-tests")
                  (:static-file "golden.data")))
 
+     (:module "lisp-reference-tests"
+              :serial t
+              :pathname #p""
+              :components
+                ((:protobuf-file "package_test1") ; automatically includes package_test2
+                 (:protobuf-file "forward_reference")
+                 (:file "lisp-reference-tests")))
+
      ;; Google's own protocol buffers and protobuf definitions tests
      #+++notyet
      (:module "google-tests-proto"

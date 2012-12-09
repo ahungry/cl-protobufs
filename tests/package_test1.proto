@@ -1,0 +1,34 @@
+// Free Software published under an MIT-like license. See LICENSE
+//
+// Copyright (c) 2012 Google, Inc.  All rights reserved.
+//
+// Original author: Ben Wagner
+
+syntax = "proto2";
+
+import "package_test2.proto";
+
+package protobuf_package_unittest1;
+
+message MessageDefinedInBothPackages {
+  required string boom = 1;
+}
+
+message MessageWithCrossPackageReference {
+  required MessageInOtherPackage baz = 1;
+  required EnumInOtherPackage bonk = 2;
+  required MessageDefinedInBothPackages bam = 3;
+  required protobuf_package_unittest2.MessageDefinedInBothPackages bing = 5;
+}
+
+message MessageWithCrossPackageExtension {
+  extend MessageInOtherPackage {
+    required int32 baa = 1000;
+  }
+  required MessageInOtherPackage boo = 1;
+}
+
+service ServiceWithCrossPackageInputOutput {
+  rpc Bloop(MessageInOtherPackage) returns (MessageWithCrossPackageReference);
+  rpc Beep(MessageWithCrossPackageReference) returns (MessageInOtherPackage);
+}

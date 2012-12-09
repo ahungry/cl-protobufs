@@ -108,25 +108,13 @@
 
 (defun find-qualified-name (name protos
                             &key (proto-key #'proto-name) (full-key #'proto-qualified-name)
-                                 (lisp-key #'proto-class)
                                  relative-to)
   "Find something by its string name, first doing a simple name match,
    and, if that fails, exhaustively searching qualified names."
   (declare (ignore relative-to))
   (or (find name protos :key proto-key :test #'string=)
       ;;--- This needs more sophisticated search, e.g., relative to current namespace
-      (find name protos :key full-key  :test #'string=)
-      ;; Maybe we can find the symbol in Lisp land?
-      (multiple-value-bind (name package path other)
-          (proto->class-name name)
-        (declare (ignore path))
-        (let* ((name   (string name))
-               (symbol (or (and package (find-symbol name package))
-                           (and other
-                                (find-proto-package other)
-                                (find-symbol name (find-proto-package other))))))
-          (when symbol
-            (find symbol protos :key lisp-key))))))
+      (find name protos :key full-key  :test #'string=)))
 
 
 ;; A Protobufs schema, corresponds to one .proto file
@@ -201,7 +189,7 @@
 (defmethod print-object ((s protobuf-schema) stream)
   (print-unreadable-object (s stream :type t :identity t)
     (format stream "~@[~S~]~@[ (package ~A)~]"
-            (proto-class s) (proto-package s))))
+            (when (slot-boundp s 'class) (proto-class s)) (proto-package s))))
 
 (defgeneric make-qualified-name (proto name)
   (:documentation
@@ -377,7 +365,7 @@
 (defmethod print-object ((e protobuf-enum) stream)
   (print-unreadable-object (e stream :type t :identity t)
     (format stream "~S~@[ (alias for ~S)~]"
-            (proto-class e) (proto-alias-for e))))
+            (when (slot-boundp e 'class) (proto-class e)) (proto-alias-for e))))
 
 (defmethod make-qualified-name ((enum protobuf-enum) name)
   ;; The qualified name is the enum name "dot" the name
@@ -483,7 +471,8 @@
 (defmethod print-object ((m protobuf-message) stream)
   (print-unreadable-object (m stream :type t :identity t)
     (format stream "~S~@[ (alias for ~S)~]~@[ (group~*)~]~@[ (extended~*)~]"
-            (proto-class m) (proto-alias-for m)
+            (when (slot-boundp m 'class) (proto-class m))
+            (proto-alias-for m)
             (eq (proto-message-type m) :group)
             (eq (proto-message-type m) :extends))))
 
@@ -542,7 +531,7 @@
   (find name (proto-fields message) :key #'proto-value))
 
 (defmethod find-field ((message protobuf-message) (name string) &optional relative-to)
-  (find-qualified-name name (proto-fields message) :lisp-key #'proto-value
+  (find-qualified-name name (proto-fields message)
                        :relative-to (or relative-to message)))
 
 (defmethod find-field ((message protobuf-message) (index integer) &optional relative-to)
@@ -630,7 +619,9 @@
 (defmethod print-object ((f protobuf-field) stream)
   (print-unreadable-object (f stream :type t :identity t)
     (format stream "~S :: ~S = ~D~@[ (group~*)~]~@[ (extended~*)~]"
-            (proto-value f) (proto-class f) (proto-index f)
+            (proto-value f)
+            (when (slot-boundp f 'class) (proto-class f))
+            (proto-index f)
             (eq (proto-message-type f) :group)
             (eq (proto-message-type f) :extends))))
 
@@ -758,7 +749,9 @@
 (defmethod print-object ((m protobuf-method) stream)
   (print-unreadable-object (m stream :type t :identity t)
     (format stream "~S (~S) => (~S)"
-            (proto-class m) (proto-input-type m) (proto-output-type m))))
+            (proto-class m)
+            (when (slot-boundp m 'itype) (proto-input-type m))
+            (when (slot-boundp m 'otype) (proto-output-type m)))))
 
 
 ;;; Lisp-only extensions
