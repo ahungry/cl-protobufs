@@ -314,6 +314,15 @@
 (deftype sfixed32 () '(signed-byte 32))
 (deftype sfixed64 () '(signed-byte 64))
 
+;; Type expansion
+(defun type-expand (type)
+  #+allegro (excl:normalize-type type :default type)
+  #+ccl (ccl::type-expand type)
+  #+clisp (ext:type-expand type)
+  #+cmu (kernel:type-expand type)
+  #+lispworks (type:expand-user-type type)
+  #+sbcl (sb-ext:typexpand type)
+  #-(or allegro ccl clisp cmu lispworks sbcl) type)
 
 ;;; Code generation utilities
 
