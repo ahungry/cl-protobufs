@@ -572,6 +572,31 @@
                                 (proto:deserialize-object 'add-color2 ser2) nil :stream s)))))))
 
 
+;; Type aliases
+(proto:define-schema type-alias-test
+    (:package proto_test)
+  (proto:define-type-alias lisp-integer-as-string ()
+    :lisp-type integer
+    :proto-type string
+    :serializer princ-to-string
+    :deserializer parse-integer)
+  (proto:define-message type-alias-test-message ()
+    (test-field :type (or null lisp-integer-as-string))))
+
+(define-test type-aliases ()
+  (assert-equal
+   (proto-impl:proto-type
+    (first (proto-impl:proto-fields
+            (proto:find-message (proto:find-schema 'type-alias-test)
+                                'proto-test::type-alias-test-message))))
+   "string")
+  (let* ((msg1 (make-instance 'type-alias-test-message :test-field 5))
+         (ser1 (proto:serialize-object-to-bytes msg1 'type-alias-test-message))
+         (dser1 (deserialize-object 'type-alias-test-message ser1)))
+    (assert-equal ser1 #(10 1 53) :test equalp)
+    (assert-equal (slot-value msg1 'test-field)
+                  (slot-value dser1 'test-field))))
+
 (define-test-suite serialization-tests ()
   (basic-serialization
    basic-optimized-serialization
@@ -580,6 +605,7 @@
    #+qres geodata-serialization
    #+qres geodata-optimized-serialization
    extension-serialization
-   group-serialization))
+   group-serialization
+   type-aliases))
 
 (register-test 'serialization-tests)
