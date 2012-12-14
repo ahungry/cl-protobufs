@@ -1,0 +1,43 @@
+// Free Software published under an MIT-like license. See LICENSE
+//
+// Copyright (c) 2012 Google, Inc.  All rights reserved.
+//
+// Original author: Alejandro Sedeño
+
+syntax = "proto2";
+
+import "extend-test-base.proto";
+
+package protobuf_extend_unittest;
+
+message Foo {
+  extensions 200 to 299;
+}
+
+message Bar {
+  // Extend file-local Foo with this Bar.
+  extend Foo {
+    optional Bar foo_227 = 227;
+  }
+  // Extend file-local Foo with imported Bar.
+  extend Foo {
+    optional protobuf_extend_base_unittest.Bar foo_228 = 228;
+  }
+  // Extend imported Foo with this Bar.
+  extend protobuf_extend_base_unittest.Foo {
+    optional Bar foo_127 = 127;
+  }
+  // Extend imported Foo with imported Bar.
+  extend protobuf_extend_base_unittest.Foo {
+    optional protobuf_extend_base_unittest.Bar foo_128 = 128;
+  }
+}
+
+// NB: Unlike Foo and Bar, no Quux is defined in our import.
+//     Unlike Foo and Bar, no Baz is defined in this proto file.
+message Quux {
+  // Extend imported Baz with self.
+  extend protobuf_extend_base_unittest.Baz {
+    optional Quux ext = 327;
+  }
+}
