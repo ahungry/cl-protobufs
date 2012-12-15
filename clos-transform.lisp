@@ -265,6 +265,8 @@
    whether or not to pack the field, and (optionally) a set of enum values."
   (let* ((type (if type-filter (funcall type-filter type) type))
          (list-of-list-of (list-of-list-of))
+         (type-enum (when (and *protobuf* (symbolp type))
+                      (find-enum *protobuf* type)))
          (expanded-type (type-expand type)))
     (cond
       ((listp type)
@@ -348,7 +350,7 @@
                    (lisp-type-to-protobuf-type (first tail))
                  (values type class (packed-type-p class)))
                (lisp-type-to-protobuf-type type))))))
-      ((not (equal type expanded-type))
+      ((not (or type-enum (equal type expanded-type)))
        (clos-type-to-protobuf-type expanded-type))
       (t
        (lisp-type-to-protobuf-type type)))))
