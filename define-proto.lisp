@@ -341,7 +341,7 @@
                         collect (make-instance 'protobuf-option
                                   :name  (if (symbolp key) (slot-name->proto key) key)
                                   :value val)))
-         (message   (find-message *protobuf* name))
+         (message   (find-message *protobuf* type))
          (conc-name (or (conc-name-for-type type conc-name)
                         (and message (proto-conc-name message))))
          (alias-for (and message (proto-alias-for message)))
