@@ -672,7 +672,7 @@
 (defmethod print-object ((e protobuf-extension) stream)
   (print-unreadable-object (e stream :type t :identity t)
     (format stream "~D - ~D"
-            (proto-extension-from e) (proto-extension-from e))))
+            (proto-extension-from e) (proto-extension-to e))))
 
 
 ;; A Protobufs service
