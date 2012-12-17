@@ -593,7 +593,7 @@
   (let* ((msg1 (make-instance 'type-alias-test-message :test-field 5))
          (ser1 (proto:serialize-object-to-bytes msg1 'type-alias-test-message))
          (dser1 (deserialize-object 'type-alias-test-message ser1)))
-    (assert-equal ser1 #(10 1 53) :test equalp)
+    (assert-equal ser1 #(10 1 53) :test #'equalp)
     (assert-equal (slot-value msg1 'test-field)
                   (slot-value dser1 'test-field))))
 
