@@ -91,53 +91,36 @@
             (t (return x))))))
 
 
-(defun zig-zag-encode32 (val)
-  (declare #.$optimize-serialization)
-  (declare (type (signed-byte 32) val))
-  (logxor (ash val 1) (ash val -31)))
+(defmacro gen-zig-zag (bits)
+  "Generate 32- or 64-bit versions of zig-zag encoder/decoder."
+  (assert (and (plusp bits) (zerop (mod bits 8))))
+  (let* ((zig-zag-encode (fintern "~A~A" 'zig-zag-encode bits))
+         (zig-zag-decode (fintern "~A~A" 'zig-zag-decode bits))
+         (zig-zag-shift (1+ (- bits))))
+    `(progn
+       (defun ,zig-zag-encode (val)
+         (declare #.$optimize-serialization)
+         (declare (type (signed-byte ,bits) val))
+         (logxor (ash val 1) (ash val ,zig-zag-shift)))
+       (define-compiler-macro ,zig-zag-encode (&whole form val)
+         (if (atom val)
+           `(locally (declare #.$optimize-serialization
+                              (type (signed-byte ,',bits) ,val))
+              (logxor (ash ,val 1) (ash ,val ,',zig-zag-shift)))
+           form))
+       (defun ,zig-zag-decode (val)
+         (declare #.$optimize-serialization)
+         (declare (type (unsigned-byte ,bits) val))
+         (logxor (ash val -1) (- (logand val 1))))
+       (define-compiler-macro ,zig-zag-decode (&whole form val)
+         (if (atom val)
+           `(locally (declare #.$optimize-serialization
+                              (type (unsigned-byte ,',bits) ,val))
+              (logxor (ash ,val -1) (- (logand ,val 1))))
+           form)))))
 
-(defun zig-zag-encode64 (val)
-  (declare #.$optimize-serialization)
-  (declare (type (signed-byte 64) val))
-  (logxor (ash val 1) (ash val -63)))
-
-(define-compiler-macro zig-zag-encode32 (&whole form val)
-  (if (atom val)
-    `(locally (declare #.$optimize-serialization
-                       (type (signed-byte 32) ,val))
-       (logxor (ash ,val 1) (ash ,val -31)))
-    form))
-
-(define-compiler-macro zig-zag-encode64 (&whole form val)
-  (if (atom val)
-    `(locally (declare #.$optimize-serialization
-                       (type (signed-byte 64) ,val))
-       (logxor (ash ,val 1) (ash ,val -63)))
-    form))
-
-(defun zig-zag-decode32 (val)
-  (declare #.$optimize-serialization)
-  (declare (type (unsigned-byte 32) val))
-  (logxor (ash val -1) (- (logand val 1))))
-
-(defun zig-zag-decode64 (val)
-  (declare #.$optimize-serialization)
-  (declare (type (unsigned-byte 64) val))
-  (logxor (ash val -1) (- (logand val 1))))
-
-(define-compiler-macro zig-zag-decode32 (&whole form val)
-  (if (atom val)
-    `(locally (declare #.$optimize-serialization
-                       (type (unsigned-byte 32) ,val))
-       (logxor (ash ,val -1) (- (logand ,val 1))))
-    form))
-
-(define-compiler-macro zig-zag-decode64 (&whole form val)
-  (if (atom val)
-    `(locally (declare #.$optimize-serialization
-                       (type (unsigned-byte 64) ,val))
-       (logxor (ash ,val -1) (- (logand ,val 1))))
-    form))
+(gen-zig-zag 32)
+(gen-zig-zag 64)
 
 
 ;;; Serializers
@@ -789,108 +772,72 @@
 ;;; Wire-level encoders
 ;;; These are called at the lowest level, so arg types are assumed to be correct
 
-(defun encode-uint32 (val buffer index)
-  "Encodes the unsigned 32-bit integer 'val' as a varint into the buffer
-   at the given index.
-   Modifies the buffer, and returns the new index into the buffer.
-   Watch out, this function turns off all type checking and array bounds checking."
-  (declare #.$optimize-serialization)
-  (declare (type (unsigned-byte 32) val)
-           (type (simple-array (unsigned-byte 8)) buffer)
-           (type fixnum index))
-  ;; Seven bits at a time, least significant bits first
-  (loop do (let ((bits (ildb (byte 7 0) val)))
-             (declare (type (unsigned-byte 8) bits))
-             (setq val (iash val -7))
-             (setf (aref buffer index) (ilogior bits (if (i= val 0) 0 128)))
-             (iincf index))
-        until (i= val 0))
-  (values index buffer))                        ;return the buffer to improve 'trace'
+(defmacro generate-integer-encoders (bits)
+  "Generate 32- or 64-bit versions of integer encoders."
+  (assert (and (plusp bits) (zerop (mod bits 8))))
+  (let* ((encode-uint   (fintern "~A~A" 'encode-uint bits))
+         (encode-fixed  (fintern "~A~A" 'encode-fixed bits))
+         (encode-sfixed (fintern "~A~A" 'encode-sfixed bits))
+         (bytes (/ bits 8))
+         ;; Given bits, can we use fixnums safely?
+         (fixnump (<= bits (integer-length most-negative-fixnum)))
+         (ldb (if fixnump 'ildb 'ldb))
+         (ash (if fixnump 'iash 'ash))
+         (zerop-val (if fixnump '(i= val 0) '(zerop val))))
+    `(progn
+       (defun ,encode-uint (val buffer index)
+         ,(format nil
+                  "Encodes the unsigned ~A-bit integer 'val' as a varint into the buffer at the given index.~
+                   ~&    Modifies the buffer, and returns the new index into the buffer.~
+                   ~&    Watch out, this function turns off all type checking and array bounds checking." bits)
+         (declare #.$optimize-serialization)
+         (declare (type (unsigned-byte ,bits) val)
+                  (type (simple-array (unsigned-byte 8)) buffer)
+                  (type fixnum index))
+         ;; Seven bits at a time, least significant bits first
+         (loop do (let ((bits (,ldb (byte 7 0) val)))
+                    (declare (type (unsigned-byte 8) bits))
+                    (setq val (,ash val -7))
+                    (setf (aref buffer index)
+                          (ilogior bits (if ,zerop-val 0 128)))
+                    (iincf index))
+               until ,zerop-val)
+         (values index buffer))                 ;return the buffer to improve 'trace'
+       (defun ,encode-fixed (val buffer index)
+         ,(format nil
+                  "Encodes the unsigned ~A-bit integer 'val' as a fixed int into the buffer at the given index.~
+                   ~&    Modifies the buffer, and returns the new index into the buffer.~
+                   ~&    Watch out, this function turns off all type checking and array bounds checking." bits)
+         (declare #.$optimize-serialization)
+         (declare (type (unsigned-byte ,bits) val)
+                  (type (simple-array (unsigned-byte 8)) buffer)
+                  (type fixnum index))
+         (loop repeat ,bytes doing
+           (let ((byte (,ldb (byte 8 0) val)))
+             (declare (type (unsigned-byte 8) byte))
+             (setq val (,ash val -8))
+             (setf (aref buffer index) byte)
+             (iincf index)))
+         (values index buffer))
+       (defun ,encode-sfixed (val buffer index)
+         ,(format nil
+                  "Encodes the signed ~A-bit integer 'val' as a fixed int into the buffer at the given index.~
+                   ~&    Modifies the buffer, and returns the new index into the buffer.~
+                   ~&    Watch out, this function turns off all type checking and array bounds checking." bits)
+         (declare #.$optimize-serialization)
+         (declare (type (signed-byte ,bits) val)
+                  (type (simple-array (unsigned-byte 8)) buffer)
+                  (type fixnum index))
+         (loop repeat ,bytes doing
+           (let ((byte (,ldb (byte 8 0) val)))
+             (declare (type (unsigned-byte 8) byte))
+             (setq val (,ash val -8))
+             (setf (aref buffer index) byte)
+             (iincf index)))
+         (values index buffer)))))
 
-(defun encode-uint64 (val buffer index)
-  "Encodes the unsigned 64-bit integer 'val' as a varint into the buffer
-   at the given index.
-   Modifies the buffer, and returns the new index into the buffer.
-   Watch out, this function turns off all type checking and array bounds checking."
-  (declare #.$optimize-serialization)
-  (declare (type (unsigned-byte 64) val)
-           (type (simple-array (unsigned-byte 8)) buffer)
-           (type fixnum index))
-  (loop do (let ((bits (ldb (byte 7 0) val)))
-             (declare (type (unsigned-byte 8) bits))
-             (setq val (ash val -7))
-             (setf (aref buffer index) (ilogior bits (if (zerop val) 0 128)))
-             (iincf index))
-        until (zerop val))
-  (values index buffer))
-
-(defun encode-fixed32 (val buffer index)
-  "Encodes the unsigned 32-bit integer 'val' as a fixed int into the buffer
-   at the given index.
-   Modifies the buffer, and returns the new index into the buffer.
-   Watch out, this function turns off all type checking and array bounds checking."
-  (declare #.$optimize-serialization)
-  (declare (type (unsigned-byte 32) val)
-           (type (simple-array (unsigned-byte 8)) buffer)
-           (type fixnum index))
-  (loop repeat 4 doing
-    (let ((byte (ildb (byte 8 0) val)))
-      (declare (type (unsigned-byte 8) byte))
-      (setq val (iash val -8))
-      (setf (aref buffer index) byte)
-      (iincf index)))
-  (values index buffer))
-
-(defun encode-fixed64 (val buffer index)
-  "Encodes the unsigned 64-bit integer 'val' as a fixed int into the buffer
-   at the given index.
-   Modifies the buffer, and returns the new index into the buffer.
-   Watch out, this function turns off all type checking and array bounds checking."
-  (declare #.$optimize-serialization)
-  (declare (type (unsigned-byte 64) val)
-           (type (simple-array (unsigned-byte 8)) buffer)
-           (type fixnum index))
-  (loop repeat 8 doing
-    (let ((byte (ldb (byte 8 0) val)))
-      (declare (type (unsigned-byte 8) byte))
-      (setq val (ash val -8))
-      (setf (aref buffer index) byte)
-      (iincf index)))
-  (values index buffer))
-
-(defun encode-sfixed32 (val buffer index)
-  "Encodes the signed 32-bit integer 'val' as a fixed int into the buffer
-   at the given index.
-   Modifies the buffer, and returns the new index into the buffer.
-   Watch out, this function turns off all type checking and array bounds checking."
-  (declare #.$optimize-serialization)
-  (declare (type (signed-byte 32) val)
-           (type (simple-array (unsigned-byte 8)) buffer)
-           (type fixnum index))
-  (loop repeat 4 doing
-    (let ((byte (ildb (byte 8 0) val)))
-      (declare (type (unsigned-byte 8) byte))
-      (setq val (iash val -8))
-      (setf (aref buffer index) byte)
-      (iincf index)))
-  (values index buffer))
-
-(defun encode-sfixed64 (val buffer index)
-  "Encodes the signed 64-bit integer 'val' as a fixed int into the buffer
-   at the given index.
-   Modifies the buffer, and returns the new index into the buffer.
-   Watch out, this function turns off all type checking and array bounds checking."
-  (declare #.$optimize-serialization)
-  (declare (type (signed-byte 64) val)
-           (type (simple-array (unsigned-byte 8)) buffer)
-           (type fixnum index))
-  (loop repeat 8 doing
-    (let ((byte (ldb (byte 8 0) val)))
-      (declare (type (unsigned-byte 8) byte))
-      (setq val (ash val -8))
-      (setf (aref buffer index) byte)
-      (iincf index)))
-  (values index buffer))
+(generate-integer-encoders 32)
+(generate-integer-encoders 64)
 
 (defun encode-single (val buffer index)
   "Encodes the single float 'val' into the buffer at the given index.
@@ -970,137 +917,93 @@
 
 ;; Decode the value from the buffer at the given index,
 ;; then return the value and new index into the buffer
-(defun decode-uint32 (buffer index)
-  "Decodes the next 32-bit varint integer in the buffer at the given index.
-   Returns both the decoded value and the new index into the buffer.
-   Watch out, this function turns off all type checking and array bounds checking."
-  (declare #.$optimize-serialization)
-  (declare (type (simple-array (unsigned-byte 8)) buffer)
-           (type fixnum index))
-  ;; Seven bits at a time, least significant bits first
-  (let ((val 0))
-    (declare (type (unsigned-byte 32) val))
-    (loop for places fixnum upfrom 0 by 7
-          for byte fixnum = (prog1 (aref buffer index) (iincf index))
-          do (let ((bits (ildb (byte 7 0) byte)))
-               (declare (type (unsigned-byte 8) bits))
-               (setq val (ilogior val (iash bits places))))
-          until (i< byte 128)
-          finally (progn
-                    (assert (< val #.(ash 1 32)) ()
-                            "The value ~D is longer than 32 bits" val)
-                    (return (values val index))))))
+(defmacro generate-integer-decoders (bits)
+  "Generate 32- or 64-bit versions of integer decoders."
+  (assert (and (plusp bits) (zerop (mod bits 8))))
+  (let* ((decode-uint (fintern "~A~A" 'decode-uint bits))
+         (decode-int  (fintern "~A~A" 'decode-int bits))
+         (decode-fixed  (fintern "~A~A" 'decode-fixed bits))
+         (decode-sfixed (fintern "~A~A" 'decode-sfixed bits))
+         (bytes (/ bits 8))
+         ;; Given bits, can we use fixnums safely?
+         (fixnump (<= bits (integer-length most-negative-fixnum)))
+         (ldb (if fixnump 'ildb 'ldb))
+         (ash (if fixnump 'iash 'ash))
+         (decf (if fixnump 'idecf 'decf))
+         (logior (if fixnump 'ilogior 'logior)))
+    `(progn
+       (defun ,decode-uint (buffer index)
+         ,(format nil
+                  "Decodes the next ~A-bit varint integer in the buffer at the given index.~
+                   ~&    Returns both the decoded value and the new index into the buffer.~
+                   ~&    Watch out, this function turns off all type checking and array bounds checking." bits)
+         (declare #.$optimize-serialization)
+         (declare (type (simple-array (unsigned-byte 8)) buffer)
+                  (type fixnum index))
+         ;; Seven bits at a time, least significant bits first
+         (let ((val 0))
+           (declare (type (unsigned-byte ,bits) val))
+           (loop for places fixnum upfrom 0 by 7
+                 for byte fixnum = (prog1 (aref buffer index) (iincf index))
+                 do (let ((bits (ildb (byte 7 0) byte)))
+                      (declare (type (unsigned-byte 8) bits))
+                      (setq val (,logior val (,ash bits places))))
+                 until (i< byte 128)
+                 finally (progn
+                           (assert (< val ,(ash 1 bits)) ()
+                                   "The value ~D is longer than ~A bits" val ,bits)
+                           (return (values val index))))))
+       (defun ,decode-int (buffer index)
+         ,(format nil
+                  "Decodes the next ~A-bit varint integer in the buffer at the given index.~
+                   ~&    Returns both the decoded value and the new index into the buffer.~
+                   ~&    Watch out, this function turns off all type checking and array bounds checking." bits)
+         (declare #.$optimize-serialization)
+         (declare (type (simple-array (unsigned-byte 8)) buffer)
+                  (type fixnum index))
+         (multiple-value-bind (val index)
+             (,decode-uint buffer index)
+           ,@(when fixnump `((declare (type fixnum val))))
+           (when (i= (,ldb (byte 1 ,(1- bits)) val) 1)
+             (,decf val ,(ash 1 bits)))
+           (values val index)))
+       (defun ,decode-fixed (buffer index)
+         ,(format nil
+                  "Decodes the next ~A-bit unsigned fixed integer in the buffer at the given index.~
+                   ~&    Returns both the decoded value and the new index into the buffer.~
+                   ~&    Watch out, this function turns off all type checking and array bounds checking." bits)
+         (declare #.$optimize-serialization)
+         (declare (type (simple-array (unsigned-byte 8)) buffer)
+                  (type fixnum index))
+         ;; Eight bits at a time, least significant bits first
+         (let ((val 0))
+           ,@(when fixnump `((declare (type fixnum val))))
+           (loop repeat ,bytes
+                 for places fixnum upfrom 0 by 8
+                 for byte fixnum = (prog1 (aref buffer index) (iincf index))
+                 do (setq val (,logior val (,ash byte places))))
+           (values val index)))
+       (defun ,decode-sfixed (buffer index)
+         ,(format nil
+                  "Decodes the next ~A-bit signed fixed integer in the buffer at the given index.~
+                   ~&    Returns both the decoded value and the new index into the buffer.~
+                   ~&    Watch out, this function turns off all type checking and array bounds checking." bits)
+         (declare #.$optimize-serialization)
+         (declare (type (simple-array (unsigned-byte 8)) buffer)
+                  (type fixnum index))
+         ;; Eight bits at a time, least significant bits first
+         (let ((val 0))
+           ,@(when fixnump `((declare (type fixnum val))))
+           (loop repeat ,bytes
+                 for places fixnum upfrom 0 by 8
+                 for byte fixnum = (prog1 (aref buffer index) (iincf index))
+                 do (setq val (,logior val (,ash byte places))))
+           (when (i= (,ldb (byte 1 ,(1- bits)) val) 1)  ;sign bit set, so negative value
+             (,decf val ,(ash 1 bits)))
+           (values val index))))))
 
-(defun decode-uint64 (buffer index)
-  "Decodes the next 64-bit varint integer in the buffer at the given index.
-   Returns both the decoded value and the new index into the buffer.
-   Watch out, this function turns off all type checking and array bounds checking."
-  (declare #.$optimize-serialization)
-  (declare (type (simple-array (unsigned-byte 8)) buffer)
-           (type fixnum index))
-  ;; Seven bits at a time, least significant bits first
-  (let ((val 0))
-    (declare (type (unsigned-byte 64) val))
-    (loop for places fixnum upfrom 0 by 7
-          for byte fixnum = (prog1 (aref buffer index) (iincf index))
-          do (let ((bits (ildb (byte 7 0) byte)))
-               (declare (type (unsigned-byte 8) bits))
-               (setq val (logior val (ash bits places))))
-          until (i< byte 128)
-          finally (return (values val index)))))
-
-(defun decode-int32 (buffer index)
-  "Decodes the next 32-bit varint integer in the buffer at the given index.
-   Returns both the decoded value and the new index into the buffer.
-   Watch out, this function turns off all type checking and array bounds checking."
-  (declare #.$optimize-serialization)
-  (declare (type (simple-array (unsigned-byte 8)) buffer)
-           (type fixnum index))
-  (multiple-value-bind (val index)
-      (decode-uint32 buffer index)
-    (declare (type fixnum val))
-    (when (i= (ildb (byte 1 31) val) 1)
-      (idecf val #.(ash 1 32)))
-    (values val index)))
-
-(defun decode-int64 (buffer index)
-  "Decodes the next 64-bit varint integer in the buffer at the given index.
-   Returns both the decoded value and the new index into the buffer.
-   Watch out, this function turns off all type checking and array bounds checking."
-  (declare #.$optimize-serialization)
-  (declare (type (simple-array (unsigned-byte 8)) buffer)
-           (type fixnum index))
-  (multiple-value-bind (val index)
-      (decode-uint64 buffer index)
-    (when (i= (ldb (byte 1 63 ) val) 1)
-      (decf val #.(ash 1 64)))
-    (values val index)))
-
-(defun decode-fixed32 (buffer index)
-  "Decodes the next 32-bit unsigned fixed integer in the buffer at the given index.
-   Returns both the decoded value and the new index into the buffer.
-   Watch out, this function turns off all type checking and array bounds checking."
-  (declare #.$optimize-serialization)
-  (declare (type (simple-array (unsigned-byte 8)) buffer)
-           (type fixnum index))
-  ;; Eight bits at a time, least significant bits first
-  (let ((val 0))
-    (declare (type fixnum val))
-    (loop repeat 4
-          for places fixnum upfrom 0 by 8
-          for byte fixnum = (prog1 (aref buffer index) (iincf index))
-          do (setq val (ilogior val (iash byte places))))
-    (values val index)))
-
-(defun decode-fixed64 (buffer index)
-  "Decodes the next unsigned 64-bit fixed integer in the buffer at the given index.
-   Returns both the decoded value and the new index into the buffer.
-   Watch out, this function turns off all type checking and array bounds checking."
-  (declare #.$optimize-serialization)
-  (declare (type (simple-array (unsigned-byte 8)) buffer)
-           (type fixnum index))
-  ;; Eight bits at a time, least significant bits first
-  (let ((val 0))
-    (loop repeat 8
-          for places fixnum upfrom 0 by 8
-          for byte fixnum = (prog1 (aref buffer index) (iincf index))
-          do (setq val (logior val (ash byte places))))
-    (values val index)))
-
-(defun decode-sfixed32 (buffer index)
-  "Decodes the next 32-bit signed fixed integer in the buffer at the given index.
-   Returns both the decoded value and the new index into the buffer.
-   Watch out, this function turns off all type checking and array bounds checking."
-  (declare #.$optimize-serialization)
-  (declare (type (simple-array (unsigned-byte 8)) buffer)
-           (type fixnum index))
-  ;; Eight bits at a time, least significant bits first
-  (let ((val 0))
-    (declare (type fixnum val))
-    (loop repeat 4
-          for places fixnum upfrom 0 by 8
-          for byte fixnum = (prog1 (aref buffer index) (iincf index))
-          do (setq val (ilogior val (iash byte places))))
-    (when (i= (ldb (byte 1 31) val) 1)              ;sign bit set, so negative value
-      (decf val #.(ash 1 32)))
-    (values val index)))
-
-(defun decode-sfixed64 (buffer index)
-  "Decodes the next signed 64-bit fixed integer in the buffer at the given index.
-   Returns both the decoded value and the new index into the buffer.
-   Watch out, this function turns off all type checking and array bounds checking."
-  (declare #.$optimize-serialization)
-  (declare (type (simple-array (unsigned-byte 8)) buffer)
-           (type fixnum index))
-  ;; Eight bits at a time, least significant bits first
-  (let ((val 0))
-    (loop repeat 8
-          for places fixnum upfrom 0 by 8
-          for byte fixnum = (prog1 (aref buffer index) (iincf index))
-          do (setq val (logior val (ash byte places))))
-    (when (i= (ldb (byte 1 63) val) 1)             ;sign bit set, so negative value
-      (decf val #.(ash 1 64)))
-    (values val index)))
+(generate-integer-decoders 32)
+(generate-integer-decoders 64)
 
 (defun decode-single (buffer index)
   "Decodes the next single float in the buffer at the given index.
@@ -1172,29 +1075,27 @@
 ;;; Wire-level lengths
 ;;; These are called at the lowest level, so arg types are assumed to be correct
 
-(defun length32 (val)
-  "Returns the length that 'val' will take when encoded as a 32-bit integer."
-  (declare #.$optimize-serialization)
-  (declare (type (unsigned-byte 32) val))
-  (let ((size 0))
-    (declare (type fixnum size))
-    (loop do (progn
-               (setq val (iash val -7))
-               (iincf size))
-          until (i= val 0))
-    size))
+(defmacro gen-length (bits)
+  "Generate 32- or 64-bit versions of integer length functions."
+  (assert (and (plusp bits) (zerop (mod bits 8))))
+  (let* (;; Given bits, can we use fixnums safely?
+         (fixnump (<= bits (integer-length most-negative-fixnum)))
+         (ash (if fixnump 'iash 'ash))
+         (zerop-val (if fixnump '(i= val 0) '(zerop val))))
+    `(defun ,(fintern "~A~A" 'length bits) (val)
+       ,(format nil "Returns the length that 'val' will take when encoded as a ~A-bit integer." bits)
+       (declare #.$optimize-serialization)
+       (declare (type (unsigned-byte ,bits) val))
+       (let ((size 0))
+         (declare (type fixnum size))
+         (loop do (progn
+                    (setq val (,ash val -7))
+                    (iincf size))
+               until ,zerop-val)
+         size))))
 
-(defun length64 (val)
-  "Returns the length that 'val' will take when encoded as a 64-bit integer."
-  (declare #.$optimize-serialization)
-  (declare (type (unsigned-byte 64) val))
-  (let ((size 0))
-    (declare (type fixnum size))
-    (loop do (progn
-               (setq val (ash val -7))
-               (iincf size))
-          until (zerop val))
-    size))
+(gen-length 32)
+(gen-length 64)
 
 
 ;;; Skipping elements
