@@ -350,7 +350,7 @@
                          :class  (proto-class message)
                          :name   (proto-name message)
                          :qualified-name (proto-qualified-name message)
-                         :parent (proto-parent message)
+                         :parent *protobuf*
                          :alias-for alias-for
                          :conc-name conc-name
                          :enums    (copy-list (proto-enums message))
