@@ -833,38 +833,37 @@
    'serializer' is a function that takes a Lisp object and generates a Protobufs object.
    'deserializer' is a function that takes a Protobufs object and generates a Lisp object.
    If 'alias-for' is given, no Lisp 'deftype' will be defined."
-  (let* ((name  (or name (class-name->proto type)))
-         (proto (multiple-value-bind (typ cl)
-                    (lisp-type-to-protobuf-type proto-type)
-                  (declare (ignore typ))
-                  (assert (keywordp cl) ()
-                          "The alias ~S must resolve to a Protobufs primitive type"
-                          type)
-                  cl))
-         (alias (make-instance 'protobuf-type-alias
-                  :class  type
-                  :name   name
-                  :lisp-type  lisp-type
-                  :proto-type proto
-                  :serializer   serializer
-                  :deserializer deserializer
-                  :qualified-name (make-qualified-name *protobuf* name)
-                  :parent *protobuf*
-                  :documentation documentation
-                  :source-location source-location)))
-    (with-collectors ((forms collect-form))
-      (if alias-for
-        ;; If we've got an alias, define a a type that is the subtype of
-        ;; the Lisp enum so that typep and subtypep work
-        (unless (eq type alias-for)
-          (collect-form `(deftype ,type () ',alias-for)))
-        ;; If no alias, define the Lisp enum type now
-        (collect-form `(deftype ,type () ',lisp-type)))
-      `(progn
-         define-type-alias
-         ,alias
-         ((with-proto-source-location (,type ,name protobuf-type-alias ,@source-location)
-            ,@forms))))))
+  (multiple-value-bind (type-str proto)
+      (lisp-type-to-protobuf-type proto-type)
+    (assert (keywordp proto) ()
+            "The alias ~S must resolve to a Protobufs primitive type"
+            type)
+    (let* ((name  (or name (class-name->proto type)))
+           (alias (make-instance 'protobuf-type-alias
+                    :class  type
+                    :name   name
+                    :lisp-type  lisp-type
+                    :proto-type proto
+                    :proto-type-str type-str
+                    :serializer   serializer
+                    :deserializer deserializer
+                    :qualified-name (make-qualified-name *protobuf* name)
+                    :parent *protobuf*
+                    :documentation documentation
+                    :source-location source-location)))
+      (with-collectors ((forms collect-form))
+        (if alias-for
+            ;; If we've got an alias, define a a type that is the subtype of
+            ;; the Lisp enum so that typep and subtypep work
+            (unless (eq type alias-for)
+              (collect-form `(deftype ,type () ',alias-for)))
+            ;; If no alias, define the Lisp enum type now
+            (collect-form `(deftype ,type () ',lisp-type)))
+        `(progn
+           define-type-alias
+           ,alias
+           ((with-proto-source-location (,type ,name protobuf-type-alias ,@source-location)
+              ,@forms)))))))
 
 
 ;;; Ensure everything in a Protobufs schema is defined

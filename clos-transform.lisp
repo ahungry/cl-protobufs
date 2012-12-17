@@ -267,6 +267,8 @@
          (list-of-list-of (list-of-list-of))
          (type-enum (when (and *protobuf* (symbolp type))
                       (find-enum *protobuf* type)))
+         (type-alias (when (and *protobuf* (symbolp type))
+                       (find-type-alias *protobuf* type)))
          (expanded-type (type-expand type)))
     (cond
       ((listp type)
@@ -350,6 +352,8 @@
                    (lisp-type-to-protobuf-type (first tail))
                  (values type class (packed-type-p class)))
                (lisp-type-to-protobuf-type type))))))
+      (type-alias
+       (values (proto-proto-type-str type-alias) type))
       ((not (or type-enum (equal type expanded-type)))
        (clos-type-to-protobuf-type expanded-type))
       (t
