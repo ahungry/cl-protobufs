@@ -248,7 +248,10 @@
          ;; Only now can we bind *protobuf* to the new message
          (*protobuf* message))
     (with-collectors ((slots collect-slot)
-                      (forms collect-form))
+                      (forms collect-form)
+                      ;; The typedef needs to be first in forms otherwise ccl warns.
+                      ;; We'll collect them separately and splice them in first.
+                      (type-forms collect-type-form))
       (dolist (field fields)
         (case (car field)
           ((define-enum define-message define-extend define-extension define-group
@@ -290,14 +293,15 @@
         ;; If we've got an alias, define a a type that is the subtype of
         ;; the Lisp class that typep and subtypep work
         (unless (or (eq type alias-for) (find-class type nil))
-          (collect-form `(deftype ,type () ',alias-for)))
+          (collect-type-form `(deftype ,type () ',alias-for)))
         ;; If no alias, define the class now
-        (collect-form `(defclass ,type () (,@slots)
+        (collect-type-form `(defclass ,type () (,@slots)
                          ,@(and documentation `((:documentation ,documentation))))))
       `(progn
          define-message
          ,message
          ((with-proto-source-location (,type ,name protobuf-message ,@source-location)
+            ,@type-forms
             ,@forms))))))
 
 (defun conc-name-for-type (type conc-name)
@@ -572,7 +576,10 @@
          ;; Only now can we bind *protobuf* to the (group) message
          (*protobuf* message))
     (with-collectors ((slots collect-slot)
-                      (forms collect-form))
+                      (forms collect-form)
+                      ;; The typedef needs to be first in forms otherwise ccl warns.
+                      ;; We'll collect them separately and splice them in first.
+                      (type-forms collect-type-form))
       (dolist (field fields)
         (case (car field)
           ((define-enum define-message define-extend define-extension define-group
@@ -614,14 +621,15 @@
         ;; If we've got an alias, define a a type that is the subtype of
         ;; the Lisp class that typep and subtypep work
         (unless (or (eq type alias-for) (find-class type nil))
-          (collect-form `(deftype ,type () ',alias-for)))
+          (collect-type-form `(deftype ,type () ',alias-for)))
         ;; If no alias, define the class now
-        (collect-form `(defclass ,type () (,@slots)
+        (collect-type-form `(defclass ,type () (,@slots)
                          ,@(and documentation `((:documentation ,documentation))))))
       `(progn
          define-group
          ,message
          ((with-proto-source-location (,type ,name protobuf-message ,@source-location)
+            ,@type-forms
             ,@forms))
          ,mfield
          ,mslot))))
