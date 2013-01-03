@@ -31,7 +31,7 @@
   (:documentation "Indicates that a schema contains a message with a field whose type is not a
                    primitive type and is not a known message (or extend) or enum.")
   (:report (lambda (condition stream)
-             (format stream "~? Field ~S in message ~S has unknown type ~S"
+             (format stream "~? Field ~A in message ~A has unknown type ~A"
                      (simple-condition-format-control condition)
                      (simple-condition-format-arguments condition)
                      (error-field condition)
@@ -58,7 +58,7 @@
                    that a schema contains a service with a method whose input, output, or stream
                    type is not a known message (or extend).")
   (:report (lambda (condition stream)
-             (format stream "~? ~A type for RPC ~S in service ~S has unknown type ~S"
+             (format stream "~? ~A type for RPC ~A in service ~A has unknown type ~A"
                      (simple-condition-format-control condition)
                      (simple-condition-format-arguments condition)
                      (error-where condition)

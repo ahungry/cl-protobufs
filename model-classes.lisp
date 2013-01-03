@@ -187,9 +187,11 @@
           (setf (gethash (make-pathname :type nil :defaults path) *all-schemas*) schema))))))
 
 (defmethod print-object ((s protobuf-schema) stream)
-  (print-unreadable-object (s stream :type t :identity t)
-    (format stream "~@[~S~]~@[ (package ~A)~]"
-            (when (slot-boundp s 'class) (proto-class s)) (proto-package s))))
+  (if *print-escape*
+    (print-unreadable-object (s stream :type t :identity t)
+      (format stream "~@[~S~]~@[ (package ~A)~]"
+              (and (slot-boundp s 'class) (proto-class s)) (proto-package s)))
+    (format stream "~S" (and (slot-boundp s 'class) (proto-class s)))))
 
 (defgeneric make-qualified-name (proto name)
   (:documentation
@@ -296,8 +298,10 @@
   (make-load-form-saving-slots o :environment environment))
 
 (defmethod print-object ((o protobuf-option) stream)
-  (print-unreadable-object (o stream :type t :identity t)
-    (format stream "~A~@[ = ~S~]" (proto-name o) (proto-value o))))
+  (if *print-escape*
+    (print-unreadable-object (o stream :type t :identity t)
+      (format stream "~A~@[ = ~S~]" (proto-name o) (proto-value o)))
+    (format stream "~A" (proto-name o))))
 
 (defgeneric find-option (protobuf name)
   (:documentation
@@ -363,9 +367,12 @@
   (make-load-form-saving-slots e :environment environment))
 
 (defmethod print-object ((e protobuf-enum) stream)
-  (print-unreadable-object (e stream :type t :identity t)
-    (format stream "~S~@[ (alias for ~S)~]"
-            (when (slot-boundp e 'class) (proto-class e)) (proto-alias-for e))))
+  (if *print-escape*
+    (print-unreadable-object (e stream :type t :identity t)
+      (format stream "~S~@[ (alias for ~S)~]"
+              (and (slot-boundp e 'class) (proto-class e)) (proto-alias-for e)))
+    (format stream "~S"
+            (and (slot-boundp e 'class) (proto-class e)))))
 
 (defmethod make-qualified-name ((enum protobuf-enum) name)
   ;; The qualified name is the enum name "dot" the name
@@ -394,9 +401,11 @@
   (make-load-form-saving-slots v :environment environment))
 
 (defmethod print-object ((v protobuf-enum-value) stream)
-  (print-unreadable-object (v stream :type t :identity t)
-    (format stream "~A = ~D"
-            (proto-name v) (proto-index v))))
+  (if *print-escape*
+    (print-unreadable-object (v stream :type t :identity t)
+      (format stream "~A = ~D"
+              (proto-name v) (proto-index v)))
+    (format stream "~A" (proto-name v))))
 
 
 ;; A Protobufs message
@@ -469,12 +478,14 @@
         (setf (gethash name *all-messages*) message)))))
 
 (defmethod print-object ((m protobuf-message) stream)
-  (print-unreadable-object (m stream :type t :identity t)
-    (format stream "~S~@[ (alias for ~S)~]~@[ (group~*)~]~@[ (extended~*)~]"
-            (when (slot-boundp m 'class) (proto-class m))
-            (proto-alias-for m)
-            (eq (proto-message-type m) :group)
-            (eq (proto-message-type m) :extends))))
+  (if *print-escape*
+    (print-unreadable-object (m stream :type t :identity t)
+      (format stream "~S~@[ (alias for ~S)~]~@[ (group~*)~]~@[ (extended~*)~]"
+              (and (slot-boundp m 'class) (proto-class m))
+              (proto-alias-for m)
+              (eq (proto-message-type m) :group)
+              (eq (proto-message-type m) :extends)))
+    (format stream "~S" (and (slot-boundp m 'class) (proto-class m)))))
 
 (defmethod proto-package ((message protobuf-message))
   (and (proto-parent message)
@@ -617,13 +628,15 @@
   (make-load-form-saving-slots f :environment environment))
 
 (defmethod print-object ((f protobuf-field) stream)
-  (print-unreadable-object (f stream :type t :identity t)
-    (format stream "~S :: ~S = ~D~@[ (group~*)~]~@[ (extended~*)~]"
-            (proto-value f)
-            (when (slot-boundp f 'class) (proto-class f))
-            (proto-index f)
-            (eq (proto-message-type f) :group)
-            (eq (proto-message-type f) :extends))))
+  (if *print-escape*
+    (print-unreadable-object (f stream :type t :identity t)
+      (format stream "~S :: ~S = ~D~@[ (group~*)~]~@[ (extended~*)~]"
+              (proto-value f)
+              (and (slot-boundp f 'class) (proto-class f))
+              (proto-index f)
+              (eq (proto-message-type f) :group)
+              (eq (proto-message-type f) :extends)))
+    (format stream "~S" (proto-value f))))
 
 ;; The 'value' slot really holds the name of the slot,
 ;; so let's give it a better name
@@ -672,7 +685,7 @@
 (defmethod print-object ((e protobuf-extension) stream)
   (print-unreadable-object (e stream :type t :identity t)
     (format stream "~D - ~D"
-            (proto-extension-from e) (proto-extension-from e))))
+            (proto-extension-from e) (proto-extension-to e))))
 
 
 ;; A Protobufs service
@@ -688,9 +701,10 @@
   (make-load-form-saving-slots s :environment environment))
 
 (defmethod print-object ((s protobuf-service) stream)
-  (print-unreadable-object (s stream :type t :identity t)
-    (format stream "~A"
-            (proto-name s))))
+  (if *print-escape*
+    (print-unreadable-object (s stream :type t :identity t)
+      (format stream "~S" (proto-name s)))
+    (format stream "~S" (proto-name s))))
 
 (defgeneric find-method (service name)
   (:documentation
@@ -747,11 +761,13 @@
   (make-load-form-saving-slots m :environment environment))
 
 (defmethod print-object ((m protobuf-method) stream)
-  (print-unreadable-object (m stream :type t :identity t)
-    (format stream "~S (~S) => (~S)"
-            (proto-class m)
-            (when (slot-boundp m 'itype) (proto-input-type m))
-            (when (slot-boundp m 'otype) (proto-output-type m)))))
+  (if *print-escape*
+    (print-unreadable-object (m stream :type t :identity t)
+      (format stream "~S (~S) => (~S)"
+              (proto-class m)
+              (and (slot-boundp m 'itype) (proto-input-type m))
+              (and (slot-boundp m 'otype) (proto-output-type m))))
+    (format stream "~S" (proto-class m))))
 
 
 ;;; Lisp-only extensions
@@ -773,10 +789,12 @@
   (make-load-form-saving-slots m :environment environment))
 
 (defmethod print-object ((m protobuf-type-alias) stream)
-  (print-unreadable-object (m stream :type t :identity t)
-    (format stream "~S (maps ~S to ~S)"
-            (proto-class m)
-            (proto-lisp-type m) (proto-proto-type m))))
+  (if *print-escape*
+    (print-unreadable-object (m stream :type t :identity t)
+      (format stream "~S (maps ~S to ~S)"
+              (proto-class m)
+              (proto-lisp-type m) (proto-proto-type m)))
+    (format stream "~S" (proto-class m))))
 
 (defgeneric find-type-alias (protobuf type)
   (:documentation

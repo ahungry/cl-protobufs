@@ -152,11 +152,11 @@ message DefinedMessage {
                                          :conc-name nil)))
            (parse-message-with-field-type (type)
              (parse-schema-containing (format nil "message MessageWithUndefinedFieldType {~%~
-                                                   ~&  optional ~a bar = 1;~%~
+                                                   ~&  optional ~A bar = 1;~%~
                                                    }~%" type)))
            (parse-service-with-rpc (rpc)
              (parse-schema-containing (format nil "service ServiceWithUndefinedMethodType {~%~
-                                                   ~&  ~a~%~
+                                                   ~&  ~A~%~
                                                    }~%" rpc)))
            (poor-mans-assert-regex-equal (expected-strings actual-string)
              (assert-true
@@ -169,28 +169,28 @@ message DefinedMessage {
              (let ((condition (assert-error undefined-field-type
                                 (parse-message-with-field-type field-type))))
                (poor-mans-assert-regex-equal
-                (list "Undefined type: Field #<"
-                      "PROTOBUF-FIELD PROTOBUFS-TEST::BAR :: NIL = 1"
-                      "in message #<"
-                      "PROTOBUF-MESSAGE PROTOBUFS-TEST::MESSAGE-WITH-UNDEFINED-FIELD-TYPE"
-                      (format nil "has unknown type \"~a\"." field-type))
+                (list "Undefined type: Field "
+                      "BAR"
+                      "in message "
+                      "MESSAGE-WITH-UNDEFINED-FIELD-TYPE"
+                      (format nil "has unknown type ~A" field-type))
                 (princ-to-string condition))
                (assert-equal field-type (error-type-name condition))
                (assert-equal "bar" (proto-name (error-field condition)))))
            (method-test-assertions (condition where method-lisp-name method-proto-name type)
              (poor-mans-assert-regex-equal
-              (list (format nil "Undefined type: ~a type for rpc #<" where)
-                    (format nil "PROTOBUF-METHOD PROTOBUFS-TEST::~a" method-lisp-name)
-                    "in service #<"
-                    "PROTOBUF-SERVICE ServiceWithUndefinedMethodType"
-                    (format nil "has unknown type \"~a\"." type))
+              (list (format nil "Undefined type: ~A type for RPC " where)
+                    (format nil "~A" method-lisp-name)
+                    "in service "
+                    "ServiceWithUndefinedMethodType"
+                    (format nil "has unknown type ~A" type))
               (princ-to-string condition))
              (assert-equal type (error-type-name condition))
              (assert-equal method-proto-name (proto-name (error-method condition))))
            (do-method-input-test (input-type)
              (let ((condition (assert-error undefined-input-type
                                 (parse-service-with-rpc
-                                 (format nil "rpc MethodWithUndefinedInput (~a) ~
+                                 (format nil "rpc MethodWithUndefinedInput (~A) ~
                                               returns (DefinedMessage);" input-type)))))
                (method-test-assertions condition "Input" "METHOD-WITH-UNDEFINED-INPUT"
                                        "MethodWithUndefinedInput" input-type)))
@@ -198,7 +198,7 @@ message DefinedMessage {
              (let ((condition (assert-error undefined-output-type
                                 (parse-service-with-rpc
                                  (format nil "rpc MethodWithUndefinedOutput (DefinedMessage) ~
-                                              returns (~a);" output-type)))))
+                                              returns (~A);" output-type)))))
                (method-test-assertions condition "Output" "METHOD-WITH-UNDEFINED-OUTPUT"
                                        "MethodWithUndefinedOutput" output-type)))
            (do-method-stream-test (stream-type)
@@ -206,7 +206,7 @@ message DefinedMessage {
                                 (parse-service-with-rpc
                                  (format nil "rpc MethodWithUndefinedStream (DefinedMessage) ~
                                               returns (DefinedMessage) {~
-                                              ~&    option stream_type = \"~a\";~
+                                              ~&    option stream_type = \"~A\";~
                                               ~&  };" stream-type)))))
                (method-test-assertions condition "Stream" "METHOD-WITH-UNDEFINED-STREAM"
                                        "MethodWithUndefinedStream" stream-type))))

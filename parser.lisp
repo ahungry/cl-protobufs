@@ -288,9 +288,10 @@
                               :start-pos start :end-pos end)))
 
 (defgeneric resolve-lisp-names (protobuf)
-  (:documentation "Second pass of schema parsing which recursively resolves protobuf type names to
-                   lisp type names in all messages and services contained within 'protobuf'.  No
-                   return value."))
+  (:documentation
+   "Second pass of schema parsing which recursively resolves Protobuf type names
+    to Lisp type names in all messages and services contained within 'protobuf'.
+    No return value."))
 
 ;; The syntax for Protocol Buffers is so simple that it doesn't seem worth
 ;; writing a sophisticated parser
@@ -521,8 +522,7 @@
                       token (file-position stream))))))))
 
 (defmethod resolve-lisp-names ((message protobuf-message))
-  "Recursively resolves protobuf type names to lisp type names in nested messages and fields of
-   'message'."
+  "Recursively resolves protobuf type names to lisp type names in nested messages and fields of 'message'."
   (map () #'resolve-lisp-names (proto-messages message))
   (map () #'resolve-lisp-names (proto-fields message)))
 
