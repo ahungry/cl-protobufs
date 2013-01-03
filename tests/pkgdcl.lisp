@@ -41,7 +41,7 @@
    "ASSERT-ERROR"))
 
 
-;;; Packages used by .oroto files
+;;; Packages used by .proto files
 
 (defpackage protobuf-unittest
   (:use :common-lisp :protobufs)
