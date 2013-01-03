@@ -33,6 +33,7 @@
    "DEFINE-TEST-SUITE"
    "REGISTER-TEST"
    "RUN-TEST"
+   #-test-tools
    "RUN-ALL-TESTS"
    "ASSERT-EQUAL"
    "ASSERT-TRUE"
