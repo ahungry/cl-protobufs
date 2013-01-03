@@ -88,6 +88,13 @@
                  (:protobuf-file "forward_reference")
                  (:file "lisp-reference-tests")))
 
+     (module "nested-extend-test"
+             :serial t
+             :pathname #p""
+             :components
+               ((:protobuf-file "extend-test")
+                (:file "lisp-extend-test")))
+
      ;; Google's own protocol buffers and protobuf definitions tests
      #+++notyet
      (:module "google-tests-proto"

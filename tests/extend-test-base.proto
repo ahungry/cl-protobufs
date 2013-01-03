@@ -1,0 +1,20 @@
+// Free Software published under an MIT-like license. See LICENSE
+//
+// Copyright (c) 2012 Google, Inc.  All rights reserved.
+//
+// Original author: Alejandro Sedeño
+
+syntax = "proto2";
+
+package protobuf_extend_base_unittest;
+
+message Foo {
+  extensions 100 to 199;
+}
+
+message Bar {
+}
+
+message Baz {
+  extensions 300 to 399;
+}

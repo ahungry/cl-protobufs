@@ -263,10 +263,15 @@
 (defun clos-type-to-protobuf-type (type &optional type-filter enum-filter)
   "Given a Lisp type, returns a Protobuf type, a class or primitive type,
    whether or not to pack the field, and (optionally) a set of enum values."
-  (let ((type (if type-filter (funcall type-filter type) type))
-        (list-of-list-of (list-of-list-of)))
-    (flet ()
-      (if (listp type)
+  (let* ((type (if type-filter (funcall type-filter type) type))
+         (list-of-list-of (list-of-list-of))
+         (type-enum (when (and *protobuf* (symbolp type))
+                      (find-enum *protobuf* type)))
+         (type-alias (when (and *protobuf* (symbolp type))
+                       (find-type-alias *protobuf* type)))
+         (expanded-type (type-expand type)))
+    (cond
+      ((listp type)
         (destructuring-bind (head &rest tail) type
           (case head
             ((or)
@@ -346,8 +351,13 @@
                (multiple-value-bind (type class)
                    (lisp-type-to-protobuf-type (first tail))
                  (values type class (packed-type-p class)))
-               (lisp-type-to-protobuf-type type)))))
-        (lisp-type-to-protobuf-type type)))))
+               (lisp-type-to-protobuf-type type))))))
+      (type-alias
+       (values (proto-proto-type-str type-alias) type))
+      ((not (or type-enum (equal type expanded-type)))
+       (clos-type-to-protobuf-type expanded-type))
+      (t
+       (lisp-type-to-protobuf-type type)))))
 
 (defun lisp-type-to-protobuf-type (type)
   (case type

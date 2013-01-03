@@ -541,7 +541,7 @@
                          :class (proto-class message)
                          :name  (proto-name message)
                          :qualified-name (proto-qualified-name message)
-                         :parent (proto-parent message)
+                         :parent protobuf
                          :alias-for (proto-alias-for message)
                          :conc-name (proto-conc-name message)
                          :enums    (copy-list (proto-enums message))

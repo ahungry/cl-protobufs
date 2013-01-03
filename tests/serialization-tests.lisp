@@ -15,6 +15,8 @@
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
 
+(deftype user-integer () 'integer)
+
 (defclass basic-test1 ()
   ((intval :type (signed-byte 32)
            :initarg :intval)))
@@ -70,11 +72,16 @@
             :initform ()
             :initarg :recvals)))
 
+(defclass basic-test7 ()
+  ((intval :type (or null user-integer)
+           :initform ()
+           :initarg :intval)))
+
 )       ;eval-when
 
 (defvar *basic-test-schema*
   (generate-schema-for-classes
-    '(basic-test1 basic-test2 basic-test3 basic-test4 basic-test5 basic-test6)
+    '(basic-test1 basic-test2 basic-test3 basic-test4 basic-test5 basic-test6 basic-test7)
     :install t))
 
 (define-test basic-serialization ()
@@ -87,14 +94,17 @@
          (test5  (make-instance 'basic-test5
                    :color :red :intvals '(2 3 5 7) :strvals '("two" "three" "five" "seven")))
          (test6  (make-instance 'basic-test6
-                   :intvals '(2 3 5 7) :strvals '("two" "three" "five" "seven") :recvals (list test2 test2b))))
+                   :intvals '(2 3 5 7) :strvals '("two" "three" "five" "seven") :recvals (list test2 test2b)))
+         (test7  (make-instance 'basic-test7 :intval 150))
+)
     (let ((tser1  (serialize-object-to-bytes test1 'basic-test1))
           (tser1b (serialize-object-to-bytes test1b 'basic-test1))
           (tser2  (serialize-object-to-bytes test2 'basic-test2))
           (tser3  (serialize-object-to-bytes test3 'basic-test3))
           (tser4  (serialize-object-to-bytes test4 'basic-test4))
           (tser5  (serialize-object-to-bytes test5 'basic-test5))
-          (tser6  (serialize-object-to-bytes test6 'basic-test6)))
+          (tser6  (serialize-object-to-bytes test6 'basic-test6))
+          (tser7  (serialize-object-to-bytes test7 'basic-test7)))
       (assert-true (equalp tser1 #(#x08 #x96 #x01)))
       (assert-true (equalp tser1b #(#x08 #xEA #xFE #xFF #xFF #x0F)))
       (assert-true (equalp tser2 #(#x12 #x07 #x74 #x65 #x73 #x74 #x69 #x6E #x67)))
@@ -104,6 +114,7 @@
                                    #x10 #x04 #x02 #x03 #x05 #x07
                                    #x1A #x03 #x74 #x77 #x6F #x1A #x05 #x74 #x68 #x72 #x65 #x65 #x1A #x04 #x66 #x69 #x76 #x65 #x1A #x05 #x73 #x65 #x76 #x65 #x6E)))
       (assert-true (equalp tser6 #(#x08 #x04 #x02 #x03 #x05 #x07 #x12 #x03 #x74 #x77 #x6F #x12 #x05 #x74 #x68 #x72 #x65 #x65 #x12 #x04 #x66 #x69 #x76 #x65 #x12 #x05 #x73 #x65 #x76 #x65 #x6E #x1A #x09 #x12 #x07 #x74 #x65 #x73 #x74 #x69 #x6E #x67 #x1A #x07 #x12 #x05 #x31 #x20 #x32 #x20 #x33)))
+      (assert-true (equalp tser7 #(#x08 #x96 #x01)))
       (macrolet ((slots-equalp (obj1 obj2 &rest slots)
                    (proto-impl::with-gensyms (vobj1 vobj2)
                      (proto-impl::with-collectors ((forms collect-form))
@@ -138,14 +149,17 @@
                       strval)
         (slots-equalp (second (slot-value test6 'recvals))
                       (second (slot-value (deserialize-object 'basic-test6 tser6) 'recvals))
-                      strval)))))
+                      strval)
+        (slots-equalp test7 (deserialize-object 'basic-test7 tser7)
+                      intval)))))
 
 (define-test basic-optimized-serialization ()
   (dolist (class '(basic-test1 basic-test2 basic-test3 basic-test4 basic-test5 basic-test6))
     (let ((message (find-message *basic-test-schema* class)))
-      (eval (generate-object-size  message))
-      (eval (generate-serializer   message))
-      (eval (generate-deserializer message))))
+      (handler-bind ((style-warning #'muffle-warning))
+        (eval (generate-object-size  message))
+        (eval (generate-serializer   message))
+        (eval (generate-deserializer message)))))
   (let* ((test1  (make-instance 'basic-test1 :intval 150))
          (test1b (make-instance 'basic-test1 :intval -150))
          (test2  (make-instance 'basic-test2 :strval "testing"))
@@ -155,14 +169,16 @@
          (test5  (make-instance 'basic-test5
                    :color :red :intvals '(2 3 5 7) :strvals '("two" "three" "five" "seven")))
          (test6  (make-instance 'basic-test6
-                   :intvals '(2 3 5 7) :strvals '("two" "three" "five" "seven") :recvals (list test2 test2b))))
+                   :intvals '(2 3 5 7) :strvals '("two" "three" "five" "seven") :recvals (list test2 test2b)))
+         (test7  (make-instance 'basic-test7 :intval 150)))
     (let ((tser1  (serialize-object-to-bytes test1 'basic-test1))
           (tser1b (serialize-object-to-bytes test1b 'basic-test1))
           (tser2  (serialize-object-to-bytes test2 'basic-test2))
           (tser3  (serialize-object-to-bytes test3 'basic-test3))
           (tser4  (serialize-object-to-bytes test4 'basic-test4))
           (tser5  (serialize-object-to-bytes test5 'basic-test5))
-          (tser6  (serialize-object-to-bytes test6 'basic-test6)))
+          (tser6  (serialize-object-to-bytes test6 'basic-test6))
+          (tser7  (serialize-object-to-bytes test7 'basic-test7)))
       (assert-true (equalp tser1 #(#x08 #x96 #x01)))
       (assert-true (equalp tser1b #(#x08 #xEA #xFE #xFF #xFF #x0F)))
       (assert-true (equalp tser2 #(#x12 #x07 #x74 #x65 #x73 #x74 #x69 #x6E #x67)))
@@ -172,6 +188,7 @@
                                    #x10 #x04 #x02 #x03 #x05 #x07
                                    #x1A #x03 #x74 #x77 #x6F #x1A #x05 #x74 #x68 #x72 #x65 #x65 #x1A #x04 #x66 #x69 #x76 #x65 #x1A #x05 #x73 #x65 #x76 #x65 #x6E)))
       (assert-true (equalp tser6 #(#x08 #x04 #x02 #x03 #x05 #x07 #x12 #x03 #x74 #x77 #x6F #x12 #x05 #x74 #x68 #x72 #x65 #x65 #x12 #x04 #x66 #x69 #x76 #x65 #x12 #x05 #x73 #x65 #x76 #x65 #x6E #x1A #x09 #x12 #x07 #x74 #x65 #x73 #x74 #x69 #x6E #x67 #x1A #x07 #x12 #x05 #x31 #x20 #x32 #x20 #x33)))
+      (assert-true (equalp tser7 #(#x08 #x96 #x01)))
       (macrolet ((slots-equalp (obj1 obj2 &rest slots)
                    (proto-impl::with-gensyms (vobj1 vobj2)
                      (proto-impl::with-collectors ((forms collect-form))
@@ -206,7 +223,9 @@
                       strval)
         (slots-equalp (second (slot-value test6 'recvals))
                       (second (slot-value (deserialize-object 'basic-test6 tser6) 'recvals))
-                      strval)))))
+                      strval)
+        (slots-equalp test7 (deserialize-object 'basic-test7 tser7)
+                      intval)))))
 
 (define-test text-serialization ()
   (let* ((test1  (make-instance 'basic-test1 :intval 150))
@@ -218,14 +237,16 @@
          (test5  (make-instance 'basic-test5
                    :color :red :intvals '(2 3 5 7) :strvals '("two" "three" "five" "seven")))
          (test6  (make-instance 'basic-test6
-                   :intvals '(2 3 5 7) :strvals '("two" "three" "five" "seven") :recvals (list test2 test2b))))
+                   :intvals '(2 3 5 7) :strvals '("two" "three" "five" "seven") :recvals (list test2 test2b)))
+         (test7  (make-instance 'basic-test7 :intval 150)))
     (let ((tser1  (serialize-object-to-bytes test1 'basic-test1))
           (tser1b (serialize-object-to-bytes test1b 'basic-test1))
           (tser2  (serialize-object-to-bytes test2 'basic-test2))
           (tser3  (serialize-object-to-bytes test3 'basic-test3))
           (tser4  (serialize-object-to-bytes test4 'basic-test4))
           (tser5  (serialize-object-to-bytes test5 'basic-test5))
-          (tser6  (serialize-object-to-bytes test6 'basic-test6)))
+          (tser6  (serialize-object-to-bytes test6 'basic-test6))
+          (tser7  (serialize-object-to-bytes test7 'basic-test7)))
       (macrolet ((slots-equalp (obj1 obj2 &rest slots)
                    (proto-impl::with-gensyms (vobj1 vobj2)
                      (proto-impl::with-collectors ((forms collect-form))
@@ -308,7 +329,15 @@
                         (second (slot-value
                                   (with-input-from-string (s text)
                                     (parse-text-format 'basic-test6 :stream s)) 'recvals))
-                        strval))))))
+                        strval))
+        (let ((text (with-output-to-string (s)
+                      (print-text-format test7 'basic-test7 :stream s))))
+          (assert-true (string= text (with-output-to-string (s)
+                                       (print-text-format
+                                         (deserialize-object 'basic-test7 tser7) 'basic-test7 :stream s))))
+          (slots-equalp test7 (with-input-from-string (s text)
+                                (parse-text-format 'basic-test7 :stream s))
+                        intval))))))
 
 
 (proto:define-schema integrity-test
@@ -543,6 +572,31 @@
                                 (proto:deserialize-object 'add-color2 ser2) nil :stream s)))))))
 
 
+;; Type aliases
+(proto:define-schema type-alias-test
+    (:package proto_test)
+  (proto:define-type-alias lisp-integer-as-string ()
+    :lisp-type integer
+    :proto-type string
+    :serializer princ-to-string
+    :deserializer parse-integer)
+  (proto:define-message type-alias-test-message ()
+    (test-field :type (or null lisp-integer-as-string))))
+
+(define-test type-aliases ()
+  (assert-equal
+   (proto-impl:proto-type
+    (first (proto-impl:proto-fields
+            (proto:find-message (proto:find-schema 'type-alias-test)
+                                'proto-test::type-alias-test-message))))
+   "string")
+  (let* ((msg1 (make-instance 'type-alias-test-message :test-field 5))
+         (ser1 (proto:serialize-object-to-bytes msg1 'type-alias-test-message))
+         (dser1 (deserialize-object 'type-alias-test-message ser1)))
+    (assert-equal ser1 #(10 1 53) :test #'equalp)
+    (assert-equal (slot-value msg1 'test-field)
+                  (slot-value dser1 'test-field))))
+
 (define-test-suite serialization-tests ()
   (basic-serialization
    basic-optimized-serialization
@@ -551,6 +605,7 @@
    #+qres geodata-serialization
    #+qres geodata-optimized-serialization
    extension-serialization
-   group-serialization))
+   group-serialization
+   type-aliases))
 
 (register-test 'serialization-tests)

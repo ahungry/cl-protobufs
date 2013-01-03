@@ -778,6 +778,8 @@
               :initarg :lisp-type)
    (proto-type :reader proto-proto-type         ;a .proto type specifier
                :initarg :proto-type)
+   (proto-type-str :reader proto-proto-type-str
+               :initarg :proto-type-str)
    (serializer :reader proto-serializer         ;Lisp -> Protobufs conversion function
                :initarg :serializer)
    (deserializer :reader proto-deserializer     ;Protobufs -> Lisp conversion function
