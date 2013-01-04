@@ -456,10 +456,10 @@
                           (find-package :keyword))))
       (when (or lisp-pkg pkg)
         (let ((pkg (string-upcase (or lisp-pkg pkg))))
-          (format stream "~&(cl:eval-when (:execute :compile-toplevel :load-toplevel) ~
-                          ~%  (unless (cl:find-package \"~A\") ~
-                          ~%    (cl:defpackage ~A (:use~@[ ~(~S~)~])))) ~
-                          ~%(cl:in-package \"~A\") ~
+          (format stream "~&(cl:eval-when (:execute :compile-toplevel :load-toplevel)~
+                          ~%  (unless (cl:find-package \"~A\")~
+                          ~%    (cl:defpackage ~A (:use~@[ ~(~S~)~]))))~
+                          ~%(cl:in-package \"~A\")~
                           ~%(cl:export '(~{~A~^~%             ~}))~%~%"
                   pkg pkg (and *use-common-lisp-package* :common-lisp) pkg
                   (collect-exports schema))))
