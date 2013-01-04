@@ -819,6 +819,7 @@
 ;; Export the class name and all of the accessor names
 (defmethod collect-exports ((message protobuf-message))
   (append (list (proto-class message))
+          (mapcan #'collect-exports (proto-messages message))
           (mapcan #'collect-exports (proto-fields message))))
 
 ;; Export just the slot accessor name
