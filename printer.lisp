@@ -462,7 +462,12 @@
                           ~%(cl:in-package \"~A\")~
                           ~%(cl:export '(~{~A~^~%             ~}))~%~%"
                   pkg pkg (and *use-common-lisp-package* :common-lisp) pkg
-                  (collect-exports schema))))
+                  (remove-if-not
+                   #'(lambda (sym)
+                       (string=
+                        (package-name (symbol-package sym))
+                        pkg))
+                   (collect-exports schema)))))
       (when documentation
         (write-schema-documentation type documentation stream :indentation indentation))
       (format stream "~&(proto:define-schema ~(~A~)" (or class name))
