@@ -213,7 +213,7 @@
                             &key (indentation 0) more)
   (declare (ignore more))
   (with-prefixed-accessors (name documentation index) (proto- val)
-    (format stream "~&~@[~VT~]~A = ~D;~:[~*~*~;~VT// ~A~]~%"
+    (format stream "~&~@[~VT~]~A = ~D;~:[~2*~;~VT// ~A~]~%"
             (and (not (zerop indentation)) indentation)
             (maybe-qualified-name val) index
             documentation *protobuf-enum-comment-column* documentation)))
@@ -343,7 +343,7 @@
                (if (typep msg 'protobuf-type-alias)
                  (format stream "~&~@[~VT~]~(~A~) ~(~A~) ~A = ~D~
                                  ~:[~*~; [default = ~S]~]~@[ [packed = true]~*~]~{ [~:/protobuf-option/]~};~
-                                 ~:[~*~*~;~VT// ~A~]~%"
+                                 ~:[~2*~;~VT// ~A~]~%"
                          (and (not (zerop indentation)) indentation)
                          required (proto-proto-type msg) name index
                          defaultp default packed options
@@ -354,11 +354,11 @@
                                   ;; Keyword class means a primitive type, print default with ~S
                                   "~&~@[~VT~]~(~A~) ~A ~A = ~D~
                                    ~:[~*~; [default = ~S]~]~@[ [packed = true]~*~]~{ [~:/protobuf-option/]~};~
-                                   ~:[~*~*~;~VT// ~A~]~%"
+                                   ~:[~2*~;~VT// ~A~]~%"
                                   ;; Non-keyword class means an enum type, print default with ~A"
                                   "~&~@[~VT~]~(~A~) ~A ~A = ~D~
                                    ~:[~*~; [default = ~A]~]~@[ [packed = true]~*~]~{ [~:/protobuf-option/]~};~
-                                   ~:[~*~*~;~VT// ~A~]~%")
+                                   ~:[~2*~;~VT// ~A~]~%")
                          (and (not (zerop indentation)) indentation)
                          required (maybe-qualified-name msg type) name index
                          defaultp default packed options
@@ -539,8 +539,8 @@
             (and (not (zerop indentation)) indentation) class)
     (let ((other (and name (not (string-equal name (class-name->proto class))) name)))
       (cond ((or other alias-for documentation source-location)
-             (format stream "~%~@[~VT~](~:[~*~*~;:name ~(~S~)~@[~%~VT~]~]~
-                                        ~:[~*~*~;:alias-for ~(~S~)~@[~%~VT~]~]~
+             (format stream "~%~@[~VT~](~:[~2*~;:name ~(~S~)~@[~%~VT~]~]~
+                                        ~:[~2*~;:alias-for ~(~S~)~@[~%~VT~]~]~
                                         ~:[~*~;:documentation ~S~@[~%~VT~]~]~
                                         ~:[~*~;:source-location ~/source-location/~])"
                      (+ indentation 4)
@@ -597,9 +597,9 @@
              (let ((other (and name (not (string-equal name (class-name->proto class))) name)))
                (format stream "~%~@[~VT~](:index ~D~@[~%~VT~]~
                                           :arity ~(~S~)~@[~%~VT~]~
-                                          ~:[~*~*~;:name ~(~S~)~@[~%~VT~]~]~
-                                          ~:[~*~*~;:alias-for ~(~S~)~@[~%~VT~]~]~
-                                          ~:[~*~*~;:conc-name ~(~S~)~@[~%~VT~]~]~
+                                          ~:[~2*~;:name ~(~S~)~@[~%~VT~]~]~
+                                          ~:[~2*~;:alias-for ~(~S~)~@[~%~VT~]~]~
+                                          ~:[~2*~;:conc-name ~(~S~)~@[~%~VT~]~]~
                                           ~:[~*~;:documentation ~S~@[~%~VT~]~]~
                                           ~:[~*~;:source-location ~/source-location/~])"
                        (+ indentation 4)
@@ -630,9 +630,9 @@
                (cond ((eq message-type :extends)
                       (format stream " ()"))
                      ((or other alias-for conc-name documentation source-location)
-                      (format stream "~%~@[~VT~](~:[~*~*~;:name ~(~S~)~@[~%~VT~]~]~
-                                                 ~:[~*~*~;:alias-for ~(~S~)~@[~%~VT~]~]~
-                                                 ~:[~*~*~;:conc-name ~(~S~)~@[~%~VT~]~]~
+                      (format stream "~%~@[~VT~](~:[~2*~;:name ~(~S~)~@[~%~VT~]~]~
+                                                 ~:[~2*~;:alias-for ~(~S~)~@[~%~VT~]~]~
+                                                 ~:[~2*~;:conc-name ~(~S~)~@[~%~VT~]~]~
                                                  ~:[~*~;:documentation ~S~@[~%~VT~]~]~
                                                  ~:[~*~;:source-location ~/source-location/~])"
                               (+ indentation 4)
@@ -746,12 +746,12 @@
                                 "~&~@[~VT~](~A :type ~(~S~)~:[~*~; :default ~S~]~
                                  ~@[ :reader ~(~S~)~]~@[ :writer ~(~S~)~]~@[ :packed ~(~S~)~]~
                                  ~@[ :options (~{~/protobuf-option/~^ ~})~])~
-                                 ~:[~*~*~;~VT; ~A~]"
+                                 ~:[~2*~;~VT; ~A~]"
                                 ;; Non-keyword class means an enum type, print default with ~(~S~)
                                 "~&~@[~VT~](~A :type ~(~S~)~:[~*~; :default ~(~S~)~]~
                                  ~@[ :reader ~(~S~)~]~@[ :writer ~(~S~)~]~@[ :packed ~(~S~)~]~
                                  ~@[ :options (~{~/protobuf-option/~^ ~})~])~
-                                 ~:[~*~*~;~VT; ~A~]")
+                                 ~:[~2*~;~VT; ~A~]")
                        (and (not (zerop indentation)) indentation)
                        slot-name type defaultp default reader writer packed options
                        ;; Don't write the comment if we'll insert a close paren after it
