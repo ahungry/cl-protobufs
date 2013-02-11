@@ -541,7 +541,7 @@
       (cond ((or other alias-for documentation source-location)
              (format stream "~%~@[~VT~](~:[~2*~;:name ~(~S~)~@[~%~VT~]~]~
                                         ~:[~2*~;:alias-for ~(~S~)~@[~%~VT~]~]~
-                                        ~:[~*~;:documentation ~S~@[~%~VT~]~]~
+                                        ~:[~2*~;:documentation ~S~@[~%~VT~]~]~
                                         ~:[~*~;:source-location ~/source-location/~])"
                      (+ indentation 4)
                      other other (and (or alias-for documentation) (+ indentation 5))
@@ -600,7 +600,7 @@
                                           ~:[~2*~;:name ~(~S~)~@[~%~VT~]~]~
                                           ~:[~2*~;:alias-for ~(~S~)~@[~%~VT~]~]~
                                           ~:[~2*~;:conc-name ~(~S~)~@[~%~VT~]~]~
-                                          ~:[~*~;:documentation ~S~@[~%~VT~]~]~
+                                          ~:[~2*~;:documentation ~S~@[~%~VT~]~]~
                                           ~:[~*~;:source-location ~/source-location/~])"
                        (+ indentation 4)
                        index (+ indentation 5)
@@ -633,7 +633,7 @@
                       (format stream "~%~@[~VT~](~:[~2*~;:name ~(~S~)~@[~%~VT~]~]~
                                                  ~:[~2*~;:alias-for ~(~S~)~@[~%~VT~]~]~
                                                  ~:[~2*~;:conc-name ~(~S~)~@[~%~VT~]~]~
-                                                 ~:[~*~;:documentation ~S~@[~%~VT~]~]~
+                                                 ~:[~2*~;:documentation ~S~@[~%~VT~]~]~
                                                  ~:[~*~;:source-location ~/source-location/~])"
                               (+ indentation 4)
                               other other (and (or alias-for conc-name documentation source-location) (+ indentation 5))
@@ -774,7 +774,7 @@
     (format stream "~&~@[~VT~](proto:define-service ~(~S~)"
             (and (not (zerop indentation)) indentation) (proto-class service))
     (cond ((or documentation source-location)
-           (format stream "~%~@[~VT~](~:[~*~;:documentation ~S~@[~%~VT~]~]~
+           (format stream "~%~@[~VT~](~:[~2*~;:documentation ~S~@[~%~VT~]~]~
                                       ~:[~*~;:source-location ~/source-location/~])"
                    (+ indentation 4)
                    documentation documentation (and source-location (+ indentation 5))
