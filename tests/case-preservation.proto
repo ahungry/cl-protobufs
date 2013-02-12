@@ -1,0 +1,18 @@
+// Free Software published under an MIT-like license. See LICENSE
+//
+// Copyright (c) 2013 Google, Inc.  All rights reserved.
+//
+// Original author: Alejandro R Sedeño
+
+syntax = "proto2";
+
+package protobuf_case_preservation_unittest;
+
+// Test case preservation for messages and services.
+
+message QUUXRequest {}
+message QUUXResponse {}
+
+service QUUXService {
+  rpc QUUXMethod(QUUXRequest) returns (QUUXResponse);
+}

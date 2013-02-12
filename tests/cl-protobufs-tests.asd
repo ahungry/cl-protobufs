@@ -95,6 +95,13 @@
                ((:protobuf-file "extend-test")
                 (:file "lisp-extend-test")))
 
+     (module "case-preservation-test"
+             :serial t
+             :pathname #p""
+             :components
+               ((:protobuf-file "case-preservation")
+                (:file "case-preservation-test")))
+
      ;; Google's own protocol buffers and protobuf definitions tests
      #+++notyet
      (:module "google-tests-proto"
