@@ -537,14 +537,14 @@
       (write-schema-documentation type documentation stream :indentation indentation))
     (format stream "~@[~VT~](proto:define-enum ~(~S~)"
             (and (not (zerop indentation)) indentation) class)
-    (let ((other (and name (not (string-equal name (class-name->proto class))) name)))
+    (let ((other (and name (string/= name (class-name->proto class)) name)))
       (cond ((or other alias-for documentation source-location)
-             (format stream "~%~@[~VT~](~:[~2*~;:name ~(~S~)~@[~%~VT~]~]~
+             (format stream "~%~@[~VT~](~:[~2*~;:name ~S~@[~%~VT~]~]~
                                         ~:[~2*~;:alias-for ~(~S~)~@[~%~VT~]~]~
                                         ~:[~2*~;:documentation ~S~@[~%~VT~]~]~
                                         ~:[~*~;:source-location ~/source-location/~])"
                      (+ indentation 4)
-                     other other (and (or alias-for documentation) (+ indentation 5))
+                     other other (and (or alias-for documentation source-location) (+ indentation 5))
                      alias-for alias-for (and (or documentation source-location) (+ indentation 5))
                      documentation documentation (and source-location (+ indentation 5))
                      source-location source-location))
@@ -594,10 +594,10 @@
                (write-schema-documentation type documentation stream :indentation indentation))
              (format stream "~&~@[~VT~](proto:define-group ~(~S~)"
                      (and (not (zerop indentation)) indentation) class)
-             (let ((other (and name (not (string-equal name (class-name->proto class))) name)))
+             (let ((other (and name (string/= name (class-name->proto class)) name)))
                (format stream "~%~@[~VT~](:index ~D~@[~%~VT~]~
                                           :arity ~(~S~)~@[~%~VT~]~
-                                          ~:[~2*~;:name ~(~S~)~@[~%~VT~]~]~
+                                          ~:[~2*~;:name ~S~@[~%~VT~]~]~
                                           ~:[~2*~;:alias-for ~(~S~)~@[~%~VT~]~]~
                                           ~:[~2*~;:conc-name ~(~S~)~@[~%~VT~]~]~
                                           ~:[~2*~;:documentation ~S~@[~%~VT~]~]~
@@ -626,11 +626,11 @@
              (format stream "~&~@[~VT~](proto:define-~A ~(~S~)"
                      (and (not (zerop indentation)) indentation)
                      (if (eq message-type :message) "message" "extend") class)
-             (let ((other (and name (not (string-equal name (class-name->proto class))) name)))
+             (let ((other (and name (string/= name (class-name->proto class)) name)))
                (cond ((eq message-type :extends)
                       (format stream " ()"))
                      ((or other alias-for conc-name documentation source-location)
-                      (format stream "~%~@[~VT~](~:[~2*~;:name ~(~S~)~@[~%~VT~]~]~
+                      (format stream "~%~@[~VT~](~:[~2*~;:name ~S~@[~%~VT~]~]~
                                                  ~:[~2*~;:alias-for ~(~S~)~@[~%~VT~]~]~
                                                  ~:[~2*~;:conc-name ~(~S~)~@[~%~VT~]~]~
                                                  ~:[~2*~;:documentation ~S~@[~%~VT~]~]~
@@ -768,19 +768,22 @@
 (defmethod write-schema-as ((type (eql :lisp)) (service protobuf-service) stream
                             &key (indentation 0) more)
   (declare (ignore more))
-  (with-prefixed-accessors (class documentation source-location) (proto- service)
+  (with-prefixed-accessors (class documentation name source-location) (proto- service)
     (when documentation
       (write-schema-documentation type documentation stream :indentation indentation))
     (format stream "~&~@[~VT~](proto:define-service ~(~S~)"
             (and (not (zerop indentation)) indentation) (proto-class service))
-    (cond ((or documentation source-location)
-           (format stream "~%~@[~VT~](~:[~2*~;:documentation ~S~@[~%~VT~]~]~
-                                      ~:[~*~;:source-location ~/source-location/~])"
-                   (+ indentation 4)
-                   documentation documentation (and source-location (+ indentation 5))
-                   source-location source-location))
-          (t
-           (format stream " ()")))
+    (let ((other (and name (string/= name (class-name->proto (proto-class service))) name)))
+      (cond ((or documentation other source-location)
+             (format stream "~%~@[~VT~](~:[~2*~;:documentation ~S~@[~%~VT~]~]~
+                                        ~:[~2*~;:name ~S~@[~%~VT~]~]~
+                                        ~:[~*~;:source-location ~/source-location/~])"
+                     (+ indentation 4)
+                     documentation documentation (and (or documentation source-location) (+ indentation 5))
+                     other other (and source-location (+ indentation 5))
+                     source-location source-location))
+            (t
+             (format stream " ()"))))
     (loop for (method . more) on (proto-methods service) doing
       (write-schema-as type method stream :indentation (+ indentation 2) :more more)
       (when more
@@ -790,13 +793,26 @@
 (defmethod write-schema-as ((type (eql :lisp)) (method protobuf-method) stream
                             &key (indentation 0) more)
   (declare (ignore more))
-  (with-prefixed-accessors (class input-type output-type streams-type options
-                            documentation source-location) (proto- method)
+  (with-prefixed-accessors (class input-type output-type streams-type
+                            name  input-name output-name streams-name
+                            options documentation source-location) (proto- method)
     (when documentation
       (write-schema-documentation type documentation stream :indentation indentation))
-    (format stream "~&~@[~VT~](~(~S~) (~(~S~) => ~(~S~)~@[ :streams ~(~S~)~])"
-            (and (not (zerop indentation)) indentation)
-            class input-type output-type streams-type)
+    (format stream "~&~@[~VT~](~(~S~) (" (and (not (zerop indentation)) indentation) class)
+    (if (and input-name (string/= (class-name->proto input-type) input-name))
+        (format stream "(~(~S~) :name ~S) => " input-type input-name)
+        (format stream "~(~S~) => " input-type))
+    (if (and output-name (string/= (class-name->proto output-type) output-name))
+        (format stream "(~(~S~) :name ~S)" output-type output-name)
+        (format stream "~(~S~)" output-type))
+    (when streams-type
+      (if (and streams-name (string/= (class-name->proto streams-type) streams-name))
+          (format stream " :streams (~(~S~) :name ~S)" streams-type streams-name)
+          (format stream " :streams ~(~S~)" streams-type)))
+    (format stream ")")
+    (when (and name (string/= (class-name->proto name) name))
+      (format stream "~%~VT:name ~S"
+              (+ indentation 2) name))
     (when options
       (format stream "~%~VT:options (~{~/protobuf-option/~^ ~})"
               (+ indentation 2) options))
