@@ -127,43 +127,42 @@
   (output-files (make-instance 'proto-to-lisp) component))
 
 (defmethod perform ((op compile-op) (component protobuf-file))
-  (let* ((input  (protobuf-input-file component))
-         (output (output-file op component))
-         (lisp   (first (input-files op component)))
-         (fasl   output)
-         (paths  (cons (directory-namestring input) (resolve-search-path component)))
-         (proto-impl:*protobuf-search-path* paths)
-         (proto-impl:*protobuf-output-path* output)
-         (*compile-file-warnings-behaviour* (operation-on-warnings op))
-         (*compile-file-failure-behaviour* (operation-on-failure op)))
-    (proto-impl:process-imports-from-file
-     (make-pathname :type "proto-imports"
-                    :defaults output))
-    (multiple-value-bind (output warnings-p failure-p)
-        (apply #'compile-file* lisp
-               :output-file fasl
-               (compile-op-flags op))
-      (when warnings-p
-        (case (operation-on-warnings op)
-          (:warn  (warn "~@<COMPILE-FILE warned while performing ~A on ~A.~@:>" op component))
-          (:error (error 'compile-warned
-                         :component component :operation op))
-          (:ignore nil)))
-      (when failure-p
-        (case (operation-on-failure op)
-          (:warn  (warn "~@<COMPILE-FILE failed while performing ~A on ~A.~@:>" op component))
-          (:error (error 'compile-failed
-                         :component component :operation op))
-          (:ignore nil)))
-      (unless output
-        (error 'compile-error
-               :component component :operation op)))))
+  (destructuring-bind (lisp-file imports-file) (input-files op component)
+    (destructuring-bind (fasl-file &optional warnings-file) (output-files op component)
+      (let* ((paths  (cons (directory-namestring lisp-file)
+                           (resolve-search-path component)))
+             (proto-impl:*protobuf-search-path* paths)
+             (proto-impl:*protobuf-output-path* fasl-file)
+             (*compile-file-warnings-behaviour* (operation-on-warnings op))
+             (*compile-file-failure-behaviour* (operation-on-failure op)))
+        (proto-impl:process-imports-from-file imports-file)
+        (multiple-value-bind (output warnings-p failure-p)
+            (apply #'compile-file* lisp-file
+                   :output-file fasl-file
+                   #+asdf3 #+asdf3
+                   :warnings-file warnings-file
+                   (compile-op-flags op))
+          (when warnings-p
+            (case (operation-on-warnings op)
+              (:warn  (warn "~@<COMPILE-FILE warned while performing ~A on ~A.~@:>" op component))
+              (:error (error 'compile-warned
+                             :component component :operation op))
+              (:ignore nil)))
+          (when failure-p
+            (case (operation-on-failure op)
+              (:warn  (warn "~@<COMPILE-FILE failed while performing ~A on ~A.~@:>" op component))
+              (:error (error 'compile-failed
+                             :component component :operation op))
+              (:ignore nil)))
+          (unless output
+            (error 'compile-error
+                   :component component :operation op)))))))
 
 (defmethod input-files ((op load-op) (component protobuf-file))
   "The input files are the .fasl and .proto-imports files."
   (declare (ignorable op))
-  (append (output-files (make-instance 'compile-op) component)            ;fasl
-          (cdr (output-files (make-instance 'proto-to-lisp) component)))) ;proto-imports
+  (list (first (output-files (make-instance 'compile-op) component))       ;fasl
+        (second (output-files (make-instance 'proto-to-lisp) component)))) ;proto-imports
 
 (defmethod perform ((op load-op) (component protobuf-file))
   (let* ((input  (protobuf-input-file component))
