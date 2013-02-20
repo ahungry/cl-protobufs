@@ -771,8 +771,9 @@
          (out  (prog2 (expect-char stream #\( () "service")
                    (parse-token stream)
                  (expect-char stream #\) () "service")))
-         (opts (let ((opts (parse-proto-method-options stream)))
-                 (when (or (null opts) (eql (peek-char nil stream nil) #\;))
+         (opts (multiple-value-bind (opts bodyp)
+                   (parse-proto-method-options stream)
+                 (when (or (not bodyp) (eql (peek-char nil stream nil) #\;))
                    (expect-char stream #\; () "service"))
                  (maybe-skip-comments stream)
                  opts))
@@ -836,7 +837,8 @@
 
 (defun parse-proto-method-options (stream)
   "Parse any options in a Protobufs method from 'stream'.
-   Returns a list of 'protobuf-option' objects."
+   Returns a list of 'protobuf-option' objects.
+   If a body was parsed, returns a second value T."
   (when (eql (peek-char nil stream nil) #\{)
     (expect-char stream #\{ () "service")
     (maybe-skip-comments stream)
@@ -849,4 +851,4 @@
         (collect-option (parse-proto-option stream nil)))
       (expect-char stream #\} '(#\;) "service")
       (maybe-skip-comments stream)
-      options)))
+      (values options t)))
