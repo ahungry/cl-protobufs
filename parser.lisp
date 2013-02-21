@@ -851,4 +851,4 @@
         (collect-option (parse-proto-option stream nil)))
       (expect-char stream #\} '(#\;) "service")
       (maybe-skip-comments stream)
-      (values options t)))
+      (values options t))))
