@@ -128,7 +128,12 @@
 
 (defmethod perform ((op compile-op) (component protobuf-file))
   (destructuring-bind (lisp-file imports-file) (input-files op component)
-    (destructuring-bind (fasl-file &optional warnings-file) (output-files op component)
+    (destructuring-bind (fasl-file
+                         &optional
+                           #+clisp lib-file
+                           #+(or ecl mkcl) object-file
+                           #+asdf3 warnings-file)
+        (output-files op component)
       (let* ((paths  (cons (directory-namestring lisp-file)
                            (resolve-search-path component)))
              (proto-impl:*protobuf-search-path* paths)
@@ -141,7 +146,10 @@
                    :output-file fasl-file
                    #+asdf3 #+asdf3
                    :warnings-file warnings-file
-                   (compile-op-flags op))
+                   (append
+                    #+clisp (list :lib-file lib-file)
+                    #+(or ecl mkcl) (list :object-file object-file)
+                    (compile-op-flags op)))
           (when warnings-p
             (case (operation-on-warnings op)
               (:warn  (warn "~@<COMPILE-FILE warned while performing ~A on ~A.~@:>" op component))
