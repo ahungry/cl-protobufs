@@ -2,7 +2,7 @@
 ;;;                                                                  ;;;
 ;;; Free Software published under an MIT-like license. See LICENSE   ;;;
 ;;;                                                                  ;;;
-;;; Copyright (c) 2012 Google, Inc.  All rights reserved.            ;;;
+;;; Copyright (c) 2012-2013 Google, Inc.  All rights reserved.       ;;;
 ;;;                                                                  ;;;
 ;;; Original author: Scott McKay                                     ;;;
 ;;;                                                                  ;;;
@@ -304,16 +304,24 @@
                    :name  name))
          (*protobuf* schema)
          *protobuf-package*
+         *protobuf-rpc-package*
          (*protobuf-conc-name* conc-name))
-    (flet ((ensure-package ()
-             "Find a fallback for our Lisp package if we don't have an obvious one already.
-              * java_package
-              * *package*"
-             (unless *protobuf-package*
-               (let ((java-package (find-option schema "java_package")))
-                 (if java-package
-                     (set-lisp-package schema java-package)
-                     (setq *protobuf-package* *package*))))))
+    (labels ((ensure-package ()
+               "Find a fallback for our Lisp package if we don't have an obvious one already.
+                * java_package
+                * *package*"
+               (unless *protobuf-package*
+                 (let ((java-package (find-option schema "java_package")))
+                   (if java-package
+                       (set-lisp-package schema java-package)
+                       (setq *protobuf-package* *package*)))))
+             (ensure-rpc-package ()
+               (ensure-package)
+               (unless *protobuf-rpc-package*
+                 (let ((rpc-package-name (format nil "~A-~A" (package-name *protobuf-package*) 'rpc)))
+                   (setq *protobuf-rpc-package*
+                         (or (find-proto-package rpc-package-name)
+                             (make-package (string-upcase rpc-package-name) :use ())))))))
       (loop
         (skip-whitespace stream)
         (maybe-skip-comments stream)
@@ -346,7 +354,7 @@
                           (ensure-package)
                           (parse-proto-message stream schema))
                          ((string= token "service")
-                          (ensure-package)
+                          (ensure-rpc-package)
                           (parse-proto-service stream schema)))))
                 (t
                  (error "Syntax error at position ~D" (file-position stream)))))))))
@@ -794,8 +802,8 @@
            (stub (or (and name (make-lisp-symbol name))
                      stub)))
       (setf (proto-class method) stub
-            (proto-client-stub method) stub
-            (proto-server-stub method) (intern (format nil "~A-~A" 'do stub) *protobuf-package*)))
+            (proto-client-stub method) (intern (format nil "~A-~A" 'call stub) *protobuf-rpc-package*)
+            (proto-server-stub method) (intern (format nil "~A-~A" stub 'impl) *protobuf-rpc-package*)))
     (let ((strm (find-option method "stream_type")))
       (when strm
         (setf (proto-streams-name method) strm)))

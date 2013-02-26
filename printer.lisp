@@ -2,7 +2,7 @@
 ;;;                                                                  ;;;
 ;;; Free Software published under an MIT-like license. See LICENSE   ;;;
 ;;;                                                                  ;;;
-;;; Copyright (c) 2012 Google, Inc.  All rights reserved.            ;;;
+;;; Copyright (c) 2012-2013 Google, Inc.  All rights reserved.       ;;;
 ;;;                                                                  ;;;
 ;;; Original author: Scott McKay                                     ;;;
 ;;;                                                                  ;;;
@@ -440,10 +440,13 @@
                                 (proto-options schema)))
            (pkg      (and package (if (stringp package) package (string package))))
            (lisp-pkg (and lisp-package (if (stringp lisp-package) lisp-package (string lisp-package))))
+           (rpc-pkg  (and (or lisp-pkg pkg)
+                          (format nil "~A-~A" (or lisp-pkg pkg) 'rpc)))
            (*show-lisp-enum-indexes*  show-enum-indexes)
            (*show-lisp-field-indexes* show-field-indexes)
            (*use-common-lisp-package* use-common-lisp)
            (*protobuf-package* (find-proto-package lisp-pkg))
+           (*protobuf-rpc-package* (find-proto-package rpc-pkg))
            ;; If *protobuf-package* has not been defined, print symbols
            ;; from :common-lisp if *use-common-lisp-package* is true; or
            ;; :keyword otherwise.  This ensures that all symbols will be
@@ -453,7 +456,27 @@
            ;; Keywords are always printed as :keyword.)
            (*package* (or *protobuf-package*
                           (when *use-common-lisp-package* (find-package :common-lisp))
-                          (find-package :keyword))))
+                          (find-package :keyword)))
+           (exports (collect-exports schema)))
+      (when rpc-pkg
+        (let* ((pkg (string-upcase rpc-pkg))
+               (rpc-exports (remove-if-not
+                             #'(lambda (sym)
+                                 (string=
+                                  (package-name (symbol-package sym))
+                                  pkg))
+                             exports))
+               (*package* (or *protobuf-rpc-package*
+                              (when *use-common-lisp-package* (find-package :common-lisp))
+                              (find-package :keyword))))
+          (when rpc-exports
+            (format stream "~&(cl:eval-when (:execute :compile-toplevel :load-toplevel)~
+                            ~%  (cl:unless (cl:find-package \"~A\")~
+                            ~%    (cl:defpackage ~A (:use~@[ ~(~S~)~]))))~
+                            ~%(cl:in-package \"~A\")~
+                            ~%(cl:export '(~{~A~^~%             ~}))~%~%"
+                    pkg pkg (and *use-common-lisp-package* :common-lisp) pkg
+                    rpc-exports))))
       (when (or lisp-pkg pkg)
         (let ((pkg (string-upcase (or lisp-pkg pkg))))
           (format stream "~&(cl:eval-when (:execute :compile-toplevel :load-toplevel)~
@@ -467,7 +490,7 @@
                        (string=
                         (package-name (symbol-package sym))
                         pkg))
-                   (collect-exports schema)))))
+                   exports))))
       (when documentation
         (write-schema-documentation type documentation stream :indentation indentation))
       (format stream "~&(proto:define-schema ~(~A~)" (or class name))
