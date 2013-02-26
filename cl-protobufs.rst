@@ -683,8 +683,13 @@ with some methods, the macro defines "stubs" (CLOS generic functions)
 for each of the methods in the service. Each method named ``foo`` gets
 a client stub and a server stub whose signatures are, respectively::
 
-  foo    (rpc-channel request &key callback) => response
-  do-foo (rpc-channel request) => response
+  call-foo  (rpc-channel request &key callback) => response
+  foo-impl  (rpc-channel request) => response
+
+These methods are interned in a different lisp package, ``XXX-RPC``,
+where ``XXX`` is the name of the lisp package into which the rest of
+the schema's symbols are interned. This is done so that message field
+accessors methods can't collide with the stubs.
 
 The type of *rpc-channel* is unspecified, but is meant to be a
 "channel" over which the RPC call will be done. The types of *request*
@@ -698,15 +703,15 @@ For example, this fragment defines four stubs::
     (get-color (get-color-request color))
     (add-color (add-color-request color)))
 
-The client stubs are ``get-color`` and ``add-color``, the server stubs
-are ``do-get-color`` and ``do-add-color``. An RPC library will implement
-a method for the client stub. You must fill in the server stub yourself;
-it will implement the desired functionality.
+The client stubs are ``call-get-color`` and ``call-add-color``, the
+server stubs are ``get-color-impl`` and ``add-color-impl``. An RPC
+library will implement a method for the client stub. You must fill in
+the server stub yourself; it will implement the desired functionality.
 
 The client stub also gets a single method defined for it that looks like
 something like this::
 
-  (defmethod foo (rpc-channel (request input-type) &key callback)
+  (defmethod call-foo (rpc-channel (request input-type) &key callback)
     (let ((call (and *rpc-package* *rpc-call-function*)))
       (funcall call rpc-channel method request :callback callback)))
 
