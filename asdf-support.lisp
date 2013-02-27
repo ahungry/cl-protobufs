@@ -150,21 +150,26 @@
                     #+clisp (list :lib-file lib-file)
                     #+(or ecl mkcl) (list :object-file object-file)
                     (compile-op-flags op)))
-          (when warnings-p
-            (case (operation-on-warnings op)
-              (:warn  (warn "~@<COMPILE-FILE warned while performing ~A on ~A.~@:>" op component))
-              (:error (error 'compile-warned
-                             :component component :operation op))
-              (:ignore nil)))
-          (when failure-p
-            (case (operation-on-failure op)
-              (:warn  (warn "~@<COMPILE-FILE failed while performing ~A on ~A.~@:>" op component))
-              (:error (error 'compile-failed
-                             :component component :operation op))
-              (:ignore nil)))
-          (unless output
-            (error 'compile-error
-                   :component component :operation op)))))))
+          #+asdf3
+          (check-lisp-compile-results output warnings-p failure-p
+                                      "~/asdf-action::format-action/" (list (cons op component)))
+          #-asdf3
+          (progn
+            (when warnings-p
+              (case (operation-on-warnings op)
+                (:warn  (warn "~@<COMPILE-FILE warned while performing ~A on ~A.~@:>" op component))
+                (:error (error 'compile-warned
+                               :component component :operation op))
+                (:ignore nil)))
+            (when failure-p
+              (case (operation-on-failure op)
+                (:warn  (warn "~@<COMPILE-FILE failed while performing ~A on ~A.~@:>" op component))
+                (:error (error 'compile-failed
+                               :component component :operation op))
+                (:ignore nil)))
+            (unless output
+              (error 'compile-error
+                     :component component :operation op))))))))
 
 (defmethod input-files ((op load-op) (component protobuf-file))
   "The input files are the .fasl and .proto-imports files."
