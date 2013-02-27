@@ -2,7 +2,7 @@
 ;;;                                                                  ;;;
 ;;; Free Software published under an MIT-like license. See LICENSE   ;;;
 ;;;                                                                  ;;;
-;;; Copyright (c) 2012 Google, Inc.  All rights reserved.            ;;;
+;;; Copyright (c) 2012-2013 Google, Inc.  All rights reserved.       ;;;
 ;;;                                                                  ;;;
 ;;; Original author: Scott McKay                                     ;;;
 ;;;                                                                  ;;;
@@ -52,6 +52,9 @@
 
 (defvar *protobuf-package* nil
   "The Lisp package in which the Protobufs schema is being defined.")
+
+(defvar *protobuf-rpc-package* nil
+  "The Lisp package in which the Protobufs schema's service definitions are being defined.")
 
 (defvar *protobuf-conc-name* nil
   "A global conc-name to use for all the messages in this schema. This controls

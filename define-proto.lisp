@@ -2,7 +2,7 @@
 ;;;                                                                  ;;;
 ;;; Free Software published under an MIT-like license. See LICENSE   ;;;
 ;;;                                                                  ;;;
-;;; Copyright (c) 2012 Google, Inc.  All rights reserved.            ;;;
+;;; Copyright (c) 2012-2013 Google, Inc.  All rights reserved.       ;;;
 ;;;                                                                  ;;;
 ;;; Original author: Scott McKay                                     ;;;
 ;;;                                                                  ;;;
@@ -53,7 +53,8 @@
                                  options)
                      :documentation documentation))
          (*protobuf* schema)
-         (*protobuf-package* (or (find-proto-package lisp-pkg) *package*)))
+         (*protobuf-package* (or (find-proto-package lisp-pkg) *package*))
+         (*protobuf-rpc-package* (or (find-proto-package (format nil "~A-~A" lisp-pkg 'rpc)) *package*)))
     (process-imports schema imports)
     (with-collectors ((forms collect-form))
       (dolist (msg messages)
@@ -762,9 +763,9 @@
                                 collect (make-instance 'protobuf-option
                                           :name  (if (symbolp key) (slot-name->proto key) key)
                                           :value val)))
-                 (package   *protobuf-package*)
-                 (client-fn function)
-                 (server-fn (intern (format nil "~A-~A" 'do function) package))
+                 (package   *protobuf-rpc-package*)
+                 (client-fn (intern (format nil "~A-~A" 'call function) package))
+                 (server-fn (intern (format nil "~A-~A" function 'impl) package))
                  (method  (make-instance 'protobuf-method
                             :class function
                             :name  (or name (class-name->proto function))
