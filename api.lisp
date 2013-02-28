@@ -189,7 +189,7 @@
            (type    (and message (proto-class message))))
       (assert message ()
               "There is no Protobufs message for the class ~S" class)
-      (let ((visited (make-hash-table)))
+      (let ((visited (make-size-cache object type)))
         (object-size object type visited)))))
 
 ;; This is simpler than 'serialize-object', but doesn't fully support aliasing
@@ -206,7 +206,7 @@
            (type    (and message (proto-class message))))
       (assert message ()
               "There is no Protobufs message for the class ~S" class)
-      (let* ((visited (make-hash-table))
+      (let* ((visited (make-size-cache object type))
              (size    (object-size object type visited))
              (start   (or start 0))
              (buffer  (or buffer (make-byte-vector size))))

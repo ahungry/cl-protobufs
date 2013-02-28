@@ -13,6 +13,18 @@
 
 ;;; Protocol buffer defining macros
 
+;;; Base class for all Protobufs-defined classes
+
+(defclass base-protobuf-message ()
+  ;; Just one slot, to hold a size cached by 'object-size'
+  ((%cached-size :type (or null fixnum)
+                 :initform nil))
+  (:documentation
+   "The base class for all user-defined Protobufs messages."))
+
+
+;;; The macros
+
 ;; Define a schema named 'type', corresponding to a .proto file of that name
 (defmacro define-schema (type (&key name syntax package lisp-package import optimize
                                     options documentation)
@@ -296,8 +308,8 @@
         (unless (or (eq type alias-for) (find-class type nil))
           (collect-type-form `(deftype ,type () ',alias-for)))
         ;; If no alias, define the class now
-        (collect-type-form `(defclass ,type () (,@slots)
-                         ,@(and documentation `((:documentation ,documentation))))))
+        (collect-type-form `(defclass ,type (#+use-base-protobuf-message base-protobuf-message) (,@slots)
+                              ,@(and documentation `((:documentation ,documentation))))))
       `(progn
          define-message
          ,message
@@ -624,8 +636,8 @@
         (unless (or (eq type alias-for) (find-class type nil))
           (collect-type-form `(deftype ,type () ',alias-for)))
         ;; If no alias, define the class now
-        (collect-type-form `(defclass ,type () (,@slots)
-                         ,@(and documentation `((:documentation ,documentation))))))
+        (collect-type-form `(defclass ,type (#+use-base-protobuf-message base-protobuf-message) (,@slots)
+                              ,@(and documentation `((:documentation ,documentation))))))
       `(progn
          define-group
          ,message

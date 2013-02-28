@@ -13,6 +13,93 @@
 
 ;;; Protobuf serialization from Lisp objects
 
+;;; Size caches
+
+(defgeneric make-size-cache (object type)
+  (:documentation
+   "Make an object size cache for 'object'."))
+
+;; Note that this gets called on the top-level object being serialized
+;; This means that either all the objects in the tree should be subclasses
+;; of 'base-protobuf-message', or none of them should be. If the root is
+;; not a 'base-protobuf-message', then things will work but be slower; if
+;; the root is a 'base-protobuf-message', but some children are not, then
+;; serialization will fail.
+(defmethod make-size-cache ((object standard-object) type)
+  (declare (ignore type))
+  ;; No '%cached-size' slot in standard objects, create a "visited" table
+  (make-hash-table))
+
+(defmethod make-size-cache ((object base-protobuf-message) type)
+  ;; In classes defined by Protobufs, we will use the '%cached-size' slot
+  ;; This clears the size cache for the tree of objects
+  (clear-size-cache object type)
+  nil)
+
+
+(declaim (inline cached-object-size))
+(defun cached-object-size (object visited)
+  (declare #.$optimize-fast-unsafe)
+  (if visited
+    (gethash object visited)
+    ;; Warning, Will Robinson! Danger!
+    ;; If there's no 'visited' table, assume there's a cached size slot.
+    ;; We should use methods speciaized on 'base-protobuf-message',
+    ;; but we're trying to max out the speed.
+    (slot-value object '%cached-size)))
+
+(defun (setf cached-object-size) (size object visited)
+  (declare #.$optimize-fast-unsafe)
+  (if visited
+    (setf (gethash object visited) size)
+    (setf (slot-value object '%cached-size) size)))
+
+
+(defgeneric clear-size-cache (object type)
+  (:documentation
+   "Clear the size cache for a tree of objects."))
+
+(defmethod clear-size-cache ((object standard-object) type)
+  (declare (ignore type))
+  nil)
+
+(defmethod clear-size-cache ((object base-protobuf-message) type)
+  (let ((message (find-message-for-class type)))
+    (assert message ()
+            "There is no Protobuf message having the type ~S" type)
+    (macrolet ((read-slot (object slot reader)
+                 `(if ,reader
+                    (funcall ,reader ,object)
+                    (slot-value ,object ,slot))))
+      (labels ((do-field (object trace field)
+                 (let* ((type   (if (eq (proto-class field) 'boolean) :bool (proto-class field)))
+                        (slot   (proto-value field))
+                        (reader (proto-reader field))
+                        msg)
+                   (when (or slot reader)
+                     (cond ((eq (proto-required field) :repeated)
+                            (cond ((or (and (proto-packed field) (packed-type-p type))
+                                       (keywordp type)))
+                                  ((typep (setq msg (and type (find-message trace type))) 'protobuf-message)
+                                   (setf (slot-value object '%cached-size) nil)
+                                   (doseq (v (if slot (read-slot object slot reader) (list object)))
+                                     (dolist (f (proto-fields msg))
+                                       (do-field v msg f))))))
+                           (t
+                            (cond ((keywordp type))
+                                  ((typep (setq msg (and type (find-message trace type))) 'protobuf-message)
+                                   (setf (slot-value object '%cached-size) nil)
+                                   (let ((v (if slot (read-slot object slot reader) object)))
+                                     (when v
+                                       (dolist (f (proto-fields msg))
+                                         (do-field v msg f))))))))))))
+          (declare (dynamic-extent #'do-field))
+          (setf (slot-value object '%cached-size) nil)
+          (dolist (field (proto-fields message))
+            (do-field object message field))
+          nil))))
+
+
 ;;; Serialization
 
 (defun serialize-object-to-file (filename object type &key visited)
@@ -38,12 +125,13 @@
    'type' is the Lisp name of a Protobufs message (usually the name of a 
    Lisp class) or a 'protobuf-message'.
    'visited' is a hash table used to cache object sizes. If it is supplied, it will be
-   cleared before it is used; otherwise, a fresh table will be created.
+   cleared before it is used; otherwise, a fresh table will be created if necessary.
    The return value is the buffer containing the serialized object. If the stream is
    nil, the buffer is not actually written to anywhere."
-  (let* ((visited (let ((v (or visited (make-hash-table))))
-                    (clrhash v)
+  (let* ((visited (let ((v (or visited (make-size-cache object type))))
+                    (when v (clrhash v))
                     v))
+         ;; Use 'object-size' to forcibly recompute all the sizes
          (size    (object-size object type visited))
          (buffer  (make-byte-vector size)))
     (serialize-object object type buffer 0 visited)
@@ -63,7 +151,8 @@
     Lisp class) or a 'protobuf-message'.
     The object is serialized into the byte array given by 'buffer' starting
     at the fixnum index 'index' using the wire format.
-    'visited' is a hash table used to cache object sizes.
+    'visited' is a hash table used to cache object sizes; if this is nil, then
+    the object caches its size itself in a '%cached-size' slot.
     The return value is the buffer containing the serialized object."))
 
 (defmethod serialize-object (object type buffer &optional start visited)
@@ -73,12 +162,12 @@
     (serialize-object object message buffer start visited)))
 
 ;; 'visited' is used to cache object sizes
-;; If it's passed in explicitly, it is assumed to already have the sizes within it
+;; If it's non-nil. it must to be a table with the sizes already in it
+;; If it's nil, then the objects must have a '%cached-size' slot
 ;; The default method uses metadata from the protobuf "schema" for the message
 (defmethod serialize-object (object (message protobuf-message) buffer &optional start visited)
   (declare (type (simple-array (unsigned-byte 8)) buffer))
-  (let ((visited (or visited (make-hash-table)))
-        (index   (or start 0)))
+  (let ((index (or start 0)))
     (declare (type fixnum index))
     (macrolet ((read-slot (object slot reader)
                  ;; Don't do a boundp check, we assume the object is fully populated
@@ -124,7 +213,7 @@
                                        ;; To serialize an embedded message, first say that it's
                                        ;; a string, then encode its size, then serialize its fields
                                        (let ((tag (make-tag $wire-type-string (proto-index field)))
-                                             (len (object-size v msg visited)))
+                                             (len (cached-object-size v visited)))
                                          (setq index (encode-uint32 tag buffer index))
                                          (setq index (encode-uint32 len buffer index)))
                                        (dolist (f (proto-fields msg))
@@ -179,7 +268,7 @@
                                              (do-field v msg f))
                                            (setq index (encode-uint32 tag2 buffer index)))
                                          (let ((tag (make-tag $wire-type-string (proto-index field)))
-                                               (len (object-size v msg visited)))
+                                               (len (cached-object-size v visited)))
                                            (setq index (encode-uint32 tag buffer index))
                                            (setq index (encode-uint32 len buffer index))
                                            (dolist (f (proto-fields msg))
@@ -448,7 +537,8 @@
    "Computes the size in bytes of the object 'object' of type 'type'.
     'type' is the Lisp name of a Protobufs message (usually the name of a 
     Lisp class) or a 'protobuf-message'.
-    'visited' is a hash table used to cache object sizes.
+    'visited' is either a hash table used to cache object sizes,
+    or is nil, in which case the objects must have a '%cached-size' slot in them.
     The return value is the size of the object in bytes."))
 
 (defmethod object-size (object type &optional visited)
@@ -460,9 +550,6 @@
 ;; 'visited' is used to cache object sizes
 ;; The default method uses metadata from the protobuf "schema" for the message
 (defmethod object-size (object (message protobuf-message) &optional visited)
-  (let ((size (and visited (gethash object visited))))
-    (when size
-      (return-from object-size size)))
   (let ((size 0))
     (declare (type fixnum size))
     (macrolet ((read-slot (object slot reader)
@@ -502,7 +589,8 @@
                                          (iincf size (length32 tag2))))
                                      (doseq (v (if slot (read-slot object slot reader) (list object)))
                                        (let ((tag (make-tag $wire-type-string (proto-index field)))
-                                             (len (object-size v msg visited)))
+                                             (len (or (cached-object-size v visited)
+                                                      (object-size v msg visited))))
                                          (iincf size (length32 tag))
                                          (iincf size (length32 len))
                                          (dolist (f (proto-fields msg))
@@ -546,13 +634,14 @@
                                      (when v
                                        (if (eq (proto-message-type msg) :group)
                                          (let ((tag1 (make-tag $wire-type-start-group (proto-index field)))
-                                             (tag2 (make-tag $wire-type-end-group   (proto-index field))))
+                                               (tag2 (make-tag $wire-type-end-group   (proto-index field))))
                                            (iincf size (length32 tag1))
                                            (dolist (f (proto-fields msg))
                                              (do-field v msg f))
                                            (iincf size (length32 tag2)))
                                          (let ((tag (make-tag $wire-type-string (proto-index field)))
-                                               (len (object-size v msg visited)))
+                                               (len (or (cached-object-size v visited)
+                                                        (object-size v msg visited))))
                                            (iincf size (length32 tag))
                                            (iincf size (length32 len))
                                            (dolist (f (proto-fields msg))
@@ -575,8 +664,7 @@
         (declare (dynamic-extent #'do-field))
         (dolist (field (proto-fields message))
           (do-field object message field))
-        (when visited
-          (setf (gethash object visited) size))   ;cache the size
+        (setf (cached-object-size object visited) size)          ;cache the size
         size))))
 
 
@@ -629,16 +717,14 @@
                                (let ((tag1 (make-tag $wire-type-start-group index))
                                      (tag2 (make-tag $wire-type-end-group   index)))
                                  `(,iterator (,vval ,reader)
-                                    (let ((len (or (and visited (gethash ,vval visited))
-                                                   (object-size ,vval ,msg visited))))
+                                    (let ((len (cached-object-size ,vval visited)))
                                       (setq ,vidx (encode-uint32 ,tag1 ,vbuf ,vidx))
                                       (serialize-object ,vval ,msg ,vbuf ,vidx visited)
                                       (iincf ,vidx len)
                                       (setq ,vidx (encode-uint32 ,tag2 ,vbuf ,vidx)))))
                                (let ((tag (make-tag $wire-type-string index)))
                                  `(,iterator (,vval ,reader)
-                                    (let ((len (or (and visited (gethash ,vval visited))
-                                                   (object-size ,vval ,msg visited))))
+                                    (let ((len (cached-object-size ,vval visited)))
                                       (setq ,vidx (encode-uint32 ,tag ,vbuf ,vidx))
                                       (setq ,vidx (encode-uint32 len ,vbuf ,vidx))
                                       (serialize-object ,vval ,msg ,vbuf ,vidx visited)
@@ -690,8 +776,7 @@
                                    (tag2 (make-tag $wire-type-end-group   index)))
                                `(let ((,vval ,reader))
                                   (when ,vval
-                                    (let ((len (or (and visited (gethash ,vval visited))
-                                                   (object-size ,vval ,msg visited))))
+                                    (let ((len (cached-object-size ,vval visited)))
                                       (setq ,vidx (encode-uint32 ,tag1 ,vbuf ,vidx))
                                       (serialize-object ,vval ,msg ,vbuf ,vidx visited)
                                       (iincf ,vidx len)
@@ -699,8 +784,7 @@
                              (let ((tag (make-tag $wire-type-string index)))
                                `(let ((,vval ,reader))
                                   (when ,vval
-                                    (let ((len (or (and visited (gethash ,vval visited))
-                                                   (object-size ,vval ,msg visited))))
+                                    (let ((len (cached-object-size ,vval visited)))
                                       (setq ,vidx (encode-uint32 ,tag ,vbuf ,vidx))
                                       (setq ,vidx (encode-uint32 len ,vbuf ,vidx))
                                       (serialize-object ,vval ,msg ,vbuf ,vidx visited)
@@ -967,14 +1051,14 @@
                                (let ((tag1 (make-tag $wire-type-start-group index))
                                      (tag2 (make-tag $wire-type-end-group   index)))
                                  `(,iterator (,vval ,reader)
-                                    (let ((len (or (and visited (gethash ,vval visited))
+                                    (let ((len (or (cached-object-size ,vval visited)
                                                    (object-size ,vval ,msg visited))))
                                       (iincf ,vsize (length32 ,tag1))
                                       (iincf ,vsize len)
                                       (iincf ,vsize ,tag2))))
                                (let ((tag (make-tag $wire-type-string index)))
                                  `(,iterator (,vval ,reader)
-                                    (let ((len (or (and visited (gethash ,vval visited))
+                                    (let ((len (or (cached-object-size ,vval visited)
                                                    (object-size ,vval ,msg visited))))
                                       (iincf ,vsize (length32 ,tag))
                                       (iincf ,vsize (length32 len))
@@ -1025,7 +1109,7 @@
                                    (tag2 (make-tag $wire-type-end-group   index)))
                                `(let ((,vval ,reader))
                                   (when ,vval
-                                    (let ((len (or (and visited (gethash ,vval visited))
+                                    (let ((len (or (cached-object-size ,vval visited)
                                                    (object-size ,vval ,msg visited))))
                                       (iincf ,vsize (length32 ,tag1))
                                       (iincf ,vsize len)
@@ -1033,7 +1117,7 @@
                              (let ((tag (make-tag $wire-type-string index)))
                                `(let ((,vval ,reader))
                                   (when ,vval
-                                    (let ((len (or (and visited (gethash ,vval visited))
+                                    (let ((len (or (cached-object-size ,vval visited)
                                                    (object-size ,vval ,msg visited))))
                                       (iincf ,vsize (length32 ,tag))
                                       (iincf ,vsize (length32 len))
@@ -1063,12 +1147,8 @@
            (,vobj (,vclass (eql ,message)) &optional visited)
          (declare #.$optimize-serialization)
          (declare (ignorable visited))
-         (let ((,vsize (and visited (gethash ,vobj visited))))
-           (when ,vsize
-             (return-from object-size ,vsize)))
          (let ((,vsize 0))
            (declare (type fixnum ,vsize))
            ,@sizers
-           (when visited
-             (setf (gethash ,vobj visited) ,vsize))
+           (setf (cached-object-size ,vobj visited) ,vsize)
            ,vsize)))))

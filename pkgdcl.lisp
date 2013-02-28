@@ -148,6 +148,9 @@
    "SLOT-DEFINITION-WRITERS")
 
   (:export
+   ;; Base class for messages
+   "BASE-PROTOBUF-MESSAGE"
+
    ;; Model class protocol
    "ABSTRACT-PROTOBUF"
    "BASE-PROTOBUF"
