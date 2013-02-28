@@ -95,7 +95,11 @@
   "The output file is a .lisp file and a .proto-imports file with dependency data,
    stored where .fasl files are stored"
   (declare (ignorable op))
-  (let ((lisp-file (lispize-pathname (component-pathname component))))
+  (let* ((base-pathname (component-pathname component))
+         (lisp-file (make-pathname
+                     :name (format nil "~A.proto" (pathname-name base-pathname))
+                     :type "lisp"
+                     :defaults base-pathname)))
     (values (list lisp-file
                   (make-pathname :type "proto-imports"
                                  :defaults lisp-file))
