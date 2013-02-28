@@ -10,6 +10,7 @@
 
 (in-package "PROTO-IMPL")
 
+
 ;;; Protocol buffers conditions
 
 (define-condition undefined-type (simple-error)

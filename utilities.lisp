@@ -324,6 +324,7 @@
   #+sbcl (sb-ext:typexpand type)
   #-(or allegro ccl clisp cmu lispworks sbcl) type)
 
+
 ;;; Code generation utilities
 
 (defvar *proto-name-separators* '(#\- #\_ #\/ #\space))
