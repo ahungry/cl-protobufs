@@ -134,7 +134,8 @@
                            #+(or ecl mkcl) object-file
                            #+asdf3 warnings-file)
         (output-files op component)
-      (let* ((paths  (cons (directory-namestring lisp-file)
+      (let* ((proto-file (protobuf-input-file component))
+             (paths  (cons (directory-namestring proto-file)
                            (resolve-search-path component)))
              (proto-impl:*protobuf-search-path* paths)
              (proto-impl:*protobuf-output-path* fasl-file)
