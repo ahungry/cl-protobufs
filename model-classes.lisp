@@ -309,7 +309,7 @@
 (defun make-option (name value &optional (type 'string))
   (check-type name string)
   (make-instance 'protobuf-option
-    :name key :value val :type type))
+    :name name :value value :type type))
 
 (defgeneric find-option (protobuf name)
   (:documentation
@@ -344,12 +344,12 @@
       ;; This side-effects 'proto-options'
       (setf (proto-options protobuf) 
             (append (proto-options protobuf)
-                    (list (make-option key val type)))))))
+                    (list (make-option name value type)))))))
 
 (defmethod add-option ((options list) (name string) value &optional (type 'string))
   (let ((option (find name options :key #'proto-name :test #'option-name=)))
     (setq options (append (remove option options)
-                          (list (make-option key val type))))))
+                          (list (make-option name value type))))))
 
 (defgeneric remove-options (protobuf &rest names)
   (:documentation
