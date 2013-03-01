@@ -434,9 +434,7 @@
                              (t (kintern (parse-token stream)))))
                 (setq terminator (expect-char stream terminators () "option"))
                 (maybe-skip-comments stream)))
-         (option (make-instance 'protobuf-option
-                   :name  key
-                   :value val)))
+         (option (make-option key val)))
     (cond (protobuf
            (setf (proto-options protobuf) (nconc (proto-options protobuf) (list option)))
            (values option terminator))

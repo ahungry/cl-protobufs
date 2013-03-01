@@ -45,9 +45,7 @@
          (lisp-pkg (and lisp-package (if (stringp lisp-package) lisp-package (string lisp-package))))
          (options  (remove-options
                      (loop for (key val) on options by #'cddr
-                           collect (make-instance 'protobuf-option
-                                     :name  (if (symbolp key) (slot-name->proto key) key)
-                                     :value val))
+                           collect (make-option (if (symbolp key) (slot-name->proto key) key) val))
                      "optimize_for" "lisp_package"))
          (imports  (if (listp import) import (list import)))
          (schema   (make-instance 'protobuf-schema
@@ -58,10 +56,8 @@
                      :lisp-package (or lisp-pkg (substitute #\- #\_ package))
                      :imports  imports
                      :options  (if optimize
-                                 (append options (list (make-instance 'protobuf-option
-                                                         :name  "optimize_for"
-                                                         :value (if (eq optimize :speed) "SPEED" "CODE_SIZE")
-                                                         :type  'symbol)))
+                                 (append options
+                                         (list (make-option "optimize_for" (if (eq optimize :speed) "SPEED" "CODE_SIZE") 'symbol)))
                                  options)
                      :documentation documentation))
          (*protobuf* schema)
@@ -171,9 +167,7 @@
    The body consists of the enum values in the form 'name' or (name index)."
   (let* ((name    (or name (class-name->proto type)))
          (options (loop for (key val) on options by #'cddr
-                        collect (make-instance 'protobuf-option
-                                  :name  (if (symbolp key) (slot-name->proto key) key)
-                                  :value val)))
+                        collect (make-option (if (symbolp key) (slot-name->proto key) key) val)))
          (conc-name (conc-name-for-type type conc-name))
          (index -1)
          (enum  (make-instance 'protobuf-enum
@@ -243,9 +237,7 @@
    'writer' is a Lisp slot writer function to use to set the value."
   (let* ((name    (or name (class-name->proto type)))
          (options (loop for (key val) on options by #'cddr
-                        collect (make-instance 'protobuf-option
-                                  :name  (if (symbolp key) (slot-name->proto key) key)
-                                  :value val)))
+                        collect (make-option (if (symbolp key) (slot-name->proto key) key) val)))
          (conc-name (conc-name-for-type type conc-name))
          (message (make-instance 'protobuf-message
                     :class type
@@ -355,9 +347,7 @@
    'writer' is a Lisp slot writer function to use to set the value."
   (let* ((name    (or name (class-name->proto type)))
          (options (loop for (key val) on options by #'cddr
-                        collect (make-instance 'protobuf-option
-                                  :name  (if (symbolp key) (slot-name->proto key) key)
-                                  :value val)))
+                        collect (make-option (if (symbolp key) (slot-name->proto key) key) val)))
          (message   (find-message *protobuf* type))
          (conc-name (or (conc-name-for-type type conc-name)
                         (and message (proto-conc-name message))))
@@ -542,9 +532,7 @@
   (let* ((slot    (or type (and name (proto->slot-name name *protobuf-package*))))
          (name    (or name (class-name->proto type)))
          (options (loop for (key val) on options by #'cddr
-                        collect (make-instance 'protobuf-option
-                                  :name  (if (symbolp key) (slot-name->proto key) key)
-                                  :value val)))
+                        collect (make-option (if (symbolp key) (slot-name->proto key) key) val)))
          (conc-name (conc-name-for-type type conc-name))
          (reader  (or reader
                       (let ((msg-conc (proto-conc-name *protobuf*)))
@@ -667,13 +655,9 @@
            (options (append
                      (loop for (key val) on other-options by #'cddr
                            unless (member key '(:type :reader :writer :name :default :packed :documentation))
-                             collect (make-instance 'protobuf-option
-                                       :name  (slot-name->proto key)
-                                       :value val))
+                             collect (make-option (slot-name->proto key) val))
                      (loop for (key val) on options by #'cddr
-                         collect (make-instance 'protobuf-option
-                                   :name  (if (symbolp key) (slot-name->proto key) key)
-                                   :value val)))))
+                           collect (make-option (if (symbolp key) (slot-name->proto key) key) val)))))
       (multiple-value-bind (ptype pclass)
           (clos-type-to-protobuf-type type)
         (multiple-value-bind (reqd vectorp)
@@ -741,9 +725,7 @@
    'input-type' and 'output-type' may also be of the form (type &key name)."
   (let* ((name    (or name (class-name->proto type)))
          (options (loop for (key val) on options by #'cddr
-                        collect (make-instance 'protobuf-option
-                                  :name  (if (symbolp key) (slot-name->proto key) key)
-                                  :value val)))
+                        collect (make-option (if (symbolp key) (slot-name->proto key) key) val)))
          (service (make-instance 'protobuf-service
                     :class type
                     :name  name
@@ -772,9 +754,7 @@
                                     (getf (cdr streams-type) :name)))
                  (streams-type (if (listp streams-type) (car streams-type) streams-type))
                  (options (loop for (key val) on options by #'cddr
-                                collect (make-instance 'protobuf-option
-                                          :name  (if (symbolp key) (slot-name->proto key) key)
-                                          :value val)))
+                                collect (make-option (if (symbolp key) (slot-name->proto key) key) val)))
                  (package   *protobuf-rpc-package*)
                  (client-fn (intern (format nil "~A-~A" 'call function) package))
                  (server-fn (intern (format nil "~A-~A" function 'impl) package))

@@ -220,7 +220,9 @@
    "FIND-ENUM"
    "FIND-FIELD"
    "FIND-METHOD"                ;if you ":use proto-impl", watch for name clash
+   "MAKE-OPTION"
    "FIND-OPTION"
+   "ADD-OPTION"
    "REMOVE-OPTIONS"
 
    ;; Printing

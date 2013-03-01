@@ -306,6 +306,11 @@
       (format stream "~A~@[ = ~S~]" (proto-name o) (proto-value o)))
     (format stream "~A" (proto-name o))))
 
+(defun make-option (name value &optional (type 'string))
+  (check-type name string)
+  (make-instance 'protobuf-option
+    :name key :value val :type type))
+
 (defgeneric find-option (protobuf name)
   (:documentation
    "Given a Protobufs schema, message, enum, etc and the name of an option,
@@ -323,6 +328,28 @@
     (if option
       (values (proto-value option) (proto-type option) t)
       (values nil nil nil))))
+
+(defgeneric add-option (protobuf name value &optional type)
+  (:documentation
+   "Given a Protobufs schema, message, enum, etc
+    add the option called 'name' with the value 'value' and type 'type'.
+    If the option was previoously present, it is replaced."))
+
+(defmethod add-option ((protobuf base-protobuf) (name string) value &optional (type 'string))
+  (let ((option (find name (proto-options protobuf) :key #'proto-name :test #'option-name=)))
+    (if option
+      ;; This side-effects the old option
+      (setf (proto-value option) value
+            (proto-type option)  type)
+      ;; This side-effects 'proto-options'
+      (setf (proto-options protobuf) 
+            (append (proto-options protobuf)
+                    (list (make-option key val type)))))))
+
+(defmethod add-option ((options list) (name string) value &optional (type 'string))
+  (let ((option (find name options :key #'proto-name :test #'option-name=)))
+    (setq options (append (remove option options)
+                          (list (make-option key val type))))))
 
 (defgeneric remove-options (protobuf &rest names)
   (:documentation
