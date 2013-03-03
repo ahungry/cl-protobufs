@@ -31,7 +31,7 @@
               :pathname #p""
               :components
                ((:file "pkgdcl")
-		#-qres (:file "qtest")))
+                #-qres (:file "qtest")))
      ;; Wire format tests
      (:module "wire-level-tests"
               :serial t
@@ -53,16 +53,16 @@
      ;; Geodata hack
      (:module "geodata-proto"
               :pathname #p""
-	      :components
+              :components
                 ((:protobuf-file "geodata")))
      (:module "geodata-data"
               :pathname #p""
-	      :components
+              :components
                 ((:static-file "geodata.data")))
      (:module "geodata"
               :pathname #p""
-	      :depends-on ("geodata-proto" "geodata-data")
-	      :components
+              :depends-on ("geodata-proto" "geodata-data")
+              :components
                 ((:file "geodata")))
      
      ;; Bob Brown's protocol buffers tests

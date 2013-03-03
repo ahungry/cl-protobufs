@@ -164,9 +164,9 @@
             (read-sequence golden-buffer golden-input)
             (read-sequence test-buffer test-input)
             (assert-true (equalp golden-buffer test-buffer))
-	    (DESCRIBE P)
-	    (DESCRIBE (DESERIALIZE-OBJECT (TYPE-OF P) TEST-BUFFER))
-	    (DESCRIBE (DESERIALIZE-OBJECT (TYPE-OF P) GOLDEN-BUFFER))))))
+            (DESCRIBE P)
+            (DESCRIBE (DESERIALIZE-OBJECT (TYPE-OF P) TEST-BUFFER))
+            (DESCRIBE (DESERIALIZE-OBJECT (TYPE-OF P) GOLDEN-BUFFER))))))
 
     ;; clean up
     (delete-file *serial-pathname*)))

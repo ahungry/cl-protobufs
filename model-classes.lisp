@@ -14,7 +14,7 @@
 ;;; Protocol buffers model classes
 
 (defvar *all-schemas* (make-hash-table :test #'equal)
-  "A table mapping names to 'protobuf-schema' objects.")
+  "A global table mapping names to 'protobuf-schema' objects.")
 
 (defgeneric find-schema (name)
   (:documentation
@@ -32,7 +32,7 @@
 
 
 (defvar *all-messages* (make-hash-table :test #'equal)
-  "A table mapping Lisp class names to 'protobuf-message' objects.")
+  "A global table mapping Lisp class names to 'protobuf-message' objects.")
 
 (defgeneric find-message-for-class (class)
   (:documentation
@@ -46,39 +46,44 @@
   (values (gethash (class-name class) *all-messages*)))
 
 
-;; A few things (the pretty printer) want to keep track of the current schema
+;;; "Thread-local" variables
+
+;; Parsing (and even pretty printing schemas) want to keep track of the current schema
 (defvar *protobuf* nil
-  "The Protobufs object currently being defined, either a schema or a message.")
+  "Bound to the Protobufs object currently being defined, either a schema or a message.")
 
 (defvar *protobuf-package* nil
-  "The Lisp package in which the Protobufs schema is being defined.")
+  "Bound to the Lisp package in which the Protobufs schema is being defined.")
 
 (defvar *protobuf-rpc-package* nil
-  "The Lisp package in which the Protobufs schema's service definitions are being defined.")
+  "Bound to the Lisp package in which the Protobufs schema's service definitions are being defined.")
 
 (defvar *protobuf-conc-name* nil
-  "A global conc-name to use for all the messages in this schema. This controls
-   the name of the accessors the fields of each message.
-   When it's nil, there is no global conc-name.
+  "Bound to a conc-name to use for all the messages in the schema being defined.
+   This controls the name of the accessors the fields of each message.
+   When it's nil, there is no \"global\" conc-name.
    When it's t, each message will use the message name as the conc-name.
    When it's a string, that string will be used as the conc-name for each message.
    'parse-schema-from-file' defaults conc-name to \"\", meaning that each field in
    every message has an accessor whose name is the name of the field.")
 
 (defvar *protobuf-pathname* nil
-  "The name of the file from where the .proto file is being parsed.")
+  "Bound to he name of the file from where the .proto file is being parsed.")
 
 (defvar *protobuf-search-path* ()
-  "A search-path to use to resolve any relative pathnames.")
+  "Bound to the search-path to use to resolve any relative pathnames.")
 
 (defvar *protobuf-output-path* ()
-  "A path to use to direct output during imports, etc.")
+  "Bound to the path to use to direct output during imports, etc.")
 
 
 ;;; The model classes
 
 (defclass abstract-protobuf () ())
 
+;; It would be nice if most of the slots had only reader functions, but
+;; that makes writing the Protobufs parser a good deal more complicated.
+;; Too bad Common Lisp exports '(setf foo)' when you only want to export 'foo'
 (defclass base-protobuf (abstract-protobuf)
   ((class :type (or null symbol)                ;the Lisp name for this object
           :accessor proto-class                 ;this often names a type or class
@@ -348,8 +353,8 @@
 
 (defmethod add-option ((options list) (name string) value &optional (type 'string))
   (let ((option (find name options :key #'proto-name :test #'option-name=)))
-    (setq options (append (remove option options)
-                          (list (make-option name value type))))))
+    (append (remove option options)
+            (list (make-option name value type)))))
 
 (defgeneric remove-options (protobuf &rest names)
   (:documentation

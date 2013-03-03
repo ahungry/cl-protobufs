@@ -84,16 +84,16 @@
           (map () #'collect-form definers)
           (ecase model-type
             ((define-enum)
-             (setf (proto-enums schema) (nconc (proto-enums schema) (list model))))
+             (appendf (proto-enums schema) (list model)))
             ((define-type-alias)
-             (setf (proto-type-aliases schema) (nconc (proto-type-aliases schema) (list model))))
+             (appendf (proto-type-aliases schema) (list model)))
             ((define-message define-extend)
              (setf (proto-parent model) schema)
-             (setf (proto-messages schema) (nconc (proto-messages schema) (list model)))
+             (appendf (proto-messages schema) (list model))
              (when (eq (proto-message-type model) :extends)
-               (setf (proto-extenders schema) (nconc (proto-extenders schema) (list model)))))
+               (appendf (proto-extenders schema) (list model))))
             ((define-service)
-             (setf (proto-services schema) (nconc (proto-services schema) (list model)))))))
+             (appendf (proto-services schema) (list model))))))
       (let ((var (intern (format nil "*~A*" type) *protobuf-package*)))
         `(progn
            ,@forms
@@ -197,7 +197,7 @@
                             :value  val-name
                             :parent enum)))
           (collect-val val-name)
-          (setf (proto-values enum) (nconc (proto-values enum) (list enum-val)))))
+          (appendf (proto-values enum) (list enum-val))))
       (if alias-for
         ;; If we've got an alias, define a a type that is the subtype of
         ;; the Lisp enum so that typep and subtypep work
@@ -268,22 +268,22 @@
              (map () #'collect-form definers)
              (ecase model-type
                ((define-enum)
-                (setf (proto-enums message) (nconc (proto-enums message) (list model))))
+                (appendf (proto-enums message) (list model)))
                ((define-type-alias)
-                (setf (proto-type-aliases message) (nconc (proto-type-aliases message) (list model))))
+                (appendf (proto-type-aliases message) (list model)))
                ((define-message define-extend)
                 (setf (proto-parent model) message)
-                (setf (proto-messages message) (nconc (proto-messages message) (list model)))
+                (appendf (proto-messages message) (list model))
                 (when (eq (proto-message-type model) :extends)
-                  (setf (proto-extenders message) (nconc (proto-extenders message) (list model)))))
+                  (appendf (proto-extenders message) (list model))))
                ((define-group)
                 (setf (proto-parent model) message)
-                (setf (proto-messages message) (nconc (proto-messages message) (list model)))
+                (appendf (proto-messages message) (list model))
                 (when extra-slot
                   (collect-slot extra-slot))
-                (setf (proto-fields message) (nconc (proto-fields message) (list extra-field))))
+                (appendf (proto-fields message) (list extra-field)))
                ((define-extension)
-                (setf (proto-extensions message) (nconc (proto-extensions message) (list model)))))))
+                (appendf (proto-extensions message) (list model))))))
           (otherwise
            (multiple-value-bind (field slot idx)
                (process-field field index :conc-name conc-name :alias-for alias-for)
@@ -293,7 +293,7 @@
              (setq index idx)
              (when slot
                (collect-slot slot))
-             (setf (proto-fields message) (nconc (proto-fields message) (list field)))))))
+             (appendf (proto-fields message) (list field))))))
       (if alias-for
         ;; If we've got an alias, define a a type that is the subtype of
         ;; the Lisp class that typep and subtypep work
@@ -393,7 +393,7 @@
              (ecase model-type
                ((define-group)
                 (setf (proto-parent model) extends)
-                (setf (proto-messages extends) (nconc (proto-messages extends) (list model)))
+                (appendf (proto-messages extends) (list model))
                 (when extra-slot
                   ;;--- Refactor to get rid of all this duplicated code!
                   (let* ((inits  (cdr extra-slot))
@@ -431,9 +431,9 @@
                                             ;; 'defsetf' needs to be visible at compile time
                                             `((eval-when (:compile-toplevel :load-toplevel :execute)
                                                 (defsetf ,reader ,writer))))))))
-                (setf (proto-message-type extra-field) :extends) ;this field is an extension
-                (setf (proto-fields extends) (nconc (proto-fields extends) (list extra-field)))
-                (setf (proto-extended-fields extends) (nconc (proto-extended-fields extends) (list extra-field)))))))
+                (setf (proto-message-type extra-field) :extends)        ;this field is an extension
+                (appendf (proto-fields extends) (list extra-field))
+                (appendf (proto-extended-fields extends) (list extra-field))))))
           (otherwise
            (multiple-value-bind (field slot idx)
                (process-field field index :conc-name conc-name :alias-for alias-for)
@@ -488,8 +488,8 @@
                  (setf (proto-reader field) reader
                        (proto-writer field) writer)))
              (setf (proto-message-type field) :extends)         ;this field is an extension
-             (setf (proto-fields extends) (nconc (proto-fields extends) (list field)))
-             (setf (proto-extended-fields extends) (nconc (proto-extended-fields extends) (list field)))))))
+             (appendf (proto-fields extends) (list field))
+             (appendf (proto-extended-fields extends) (list field))))))
       `(progn
          define-extend
          ,extends
@@ -592,22 +592,22 @@
              (map () #'collect-form definers)
              (ecase model-type
                ((define-enum)
-                (setf (proto-enums message) (nconc (proto-enums message) (list model))))
+                (appendf (proto-enums message) (list model)))
                ((define-type-alias)
-                (setf (proto-type-aliases message) (nconc (proto-type-aliases message) (list model))))
+                (appendf (proto-type-aliases message) (list model)))
                ((define-message define-extend)
                 (setf (proto-parent model) message)
-                (setf (proto-messages message) (nconc (proto-messages message) (list model)))
+                (appendf (proto-messages message) (list model))
                 (when (eq (proto-message-type model) :extends)
-                  (setf (proto-extenders message) (nconc (proto-extenders message) (list model)))))
+                  (appendf (proto-extenders message) (list model))))
                ((define-group)
                 (setf (proto-parent model) message)
-                (setf (proto-messages message) (nconc (proto-messages message) (list model)))
+                (appendf (proto-messages message) (list model))
                 (when extra-slot
                   (collect-slot extra-slot))
-                (setf (proto-fields message) (nconc (proto-fields message) (list extra-field))))
+                (appendf (proto-fields message) (list extra-field)))
                ((define-extension)
-                (setf (proto-extensions message) (nconc (proto-extensions message) (list model)))))))
+                (appendf (proto-extensions message) (list model))))))
           (otherwise
            (multiple-value-bind (field slot idx)
                (process-field field index :conc-name conc-name :alias-for alias-for)
@@ -617,7 +617,7 @@
              (setq index idx)
              (when slot
                (collect-slot slot))
-             (setf (proto-fields message) (nconc (proto-fields message) (list field)))))))
+             (appendf (proto-fields message) (list field))))))
       (if alias-for
         ;; If we've got an alias, define a a type that is the subtype of
         ;; the Lisp class that typep and subtypep work
@@ -776,7 +776,7 @@
                             :options options
                             :documentation documentation
                             :source-location source-location)))
-            (setf (proto-methods service) (nconc (proto-methods service) (list method)))
+            (appendf (proto-methods service) (list method))
             ;; The following are the hooks to an RPC implementation
             (let* ((vrequest  (intern (symbol-name 'request) package))
                    (vchannel  (intern (symbol-name 'channel) package))
@@ -869,7 +869,8 @@
 
 ;;; Ensure everything in a Protobufs schema is defined
 
-(defvar *undefined-messages*)
+(defvar *undefined-messages* nil
+  "Bound to a list of undefined messages during schame validation.")
 
 ;; A very useful tool during development...
 (defun ensure-all-schemas ()

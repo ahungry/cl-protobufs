@@ -405,7 +405,7 @@
                   (expect-char stream terminator () "import")
                   (maybe-skip-comments stream))))
     (process-imports schema (list import))
-    (setf (proto-imports schema) (nconc (proto-imports schema) (list import)))))
+    (appendf (proto-imports schema) (list import))))
 
 (defun parse-proto-option (stream protobuf &optional (terminators '(#\;)))
   "Parse a Protobufs option line from 'stream'.
@@ -436,7 +436,7 @@
                 (maybe-skip-comments stream)))
          (option (make-option key val)))
     (cond (protobuf
-           (setf (proto-options protobuf) (nconc (proto-options protobuf) (list option)))
+           (appendf (proto-options protobuf) (list option))
            (values option terminator))
           (t
            ;; If nothing to graft the option into, just return it as the value
@@ -462,7 +462,7 @@
         (when (null name)
           (expect-char stream #\} '(#\;) "enum")
           (maybe-skip-comments stream)
-          (setf (proto-enums protobuf) (nconc (proto-enums protobuf) (list enum)))
+          (appendf (proto-enums protobuf) (list enum))
           (let ((type (find-option enum "lisp_name")))
             (when type
               (setf (proto-class enum) (make-lisp-symbol type))))
@@ -489,7 +489,7 @@
                   :index idx
                   :value (proto->enum-name name *protobuf-package*)
                   :parent enum)))
-    (setf (proto-values enum) (nconc (proto-values enum) (list value)))
+    (appendf (proto-values enum) (list value))
     value))
 
 
@@ -516,7 +516,7 @@
         (when (null token)
           (expect-char stream #\} '(#\;) "message")
           (maybe-skip-comments stream)
-          (setf (proto-messages protobuf) (nconc (proto-messages protobuf) (list message)))
+          (appendf (proto-messages protobuf) (list message))
           (let ((type (find-option message "lisp_name")))
             (when type
               (setf (proto-class message) (make-lisp-symbol type))))
@@ -577,8 +577,8 @@
         (when (null token)
           (expect-char stream #\} '(#\;) "extend")
           (maybe-skip-comments stream)
-          (setf (proto-messages protobuf) (nconc (proto-messages protobuf) (list extends)))
-          (setf (proto-extenders protobuf) (nconc (proto-extenders protobuf) (list extends)))
+          (appendf (proto-messages protobuf) (list extends))
+          (appendf (proto-extenders protobuf) (list extends))
           (let ((type (find-option extends "lisp_name")))
             (when type
               (setf (proto-class extends) (make-lisp-symbol type))))
@@ -588,7 +588,7 @@
           (return-from parse-proto-extend extends))
         (cond ((member token '("required" "optional" "repeated") :test #'string=)
                (let ((field (parse-proto-field stream extends token message)))
-                 (setf (proto-extended-fields extends) (nconc (proto-extended-fields extends) (list field)))))
+                 (appendf (proto-extended-fields extends) (list field))))
               ((string= token "option")
                (parse-proto-option stream extends))
               (t
@@ -640,7 +640,7 @@
         (let ((slot (find-option opts "lisp_name")))
           (when slot
             (setf (proto-value field) (make-lisp-symbol type))))
-        (setf (proto-fields message) (nconc (proto-fields message) (list field)))
+        (appendf (proto-fields message) (list field))
         field))))
 
 (defmethod resolve-lisp-names ((field protobuf-field))
@@ -688,7 +688,7 @@
       (assert (index-within-extensions-p idx extended-from) ()
               "The index ~D is not in range for extending ~S"
               idx (proto-class extended-from)))
-    (setf (proto-fields message) (nconc (proto-fields message) (list field)))
+    (appendf (proto-fields message) (list field))
     field))
 
 (defun parse-proto-field-options (stream)
@@ -724,9 +724,7 @@
     (let ((extension (make-instance 'protobuf-extension
                        :from from
                        :to   (if (integerp to) to #.(1- (ash 1 29))))))
-      (setf (proto-extensions message)
-            (nconc (proto-extensions message)
-                   (list extension)))
+      (appendf (proto-extensions message) (list extension))
       extension)))
 
 
@@ -750,7 +748,7 @@
         (when (null token)
           (expect-char stream #\} '(#\;) "service")
           (maybe-skip-comments stream)
-          (setf (proto-services schema) (nconc (proto-services schema) (list service)))
+          (appendf (proto-services schema) (list service))
           (return-from parse-proto-service service))
         (cond ((string= token "option")
                (parse-proto-option stream service))
@@ -805,7 +803,7 @@
     (let ((strm (find-option method "stream_type")))
       (when strm
         (setf (proto-streams-name method) strm)))
-    (setf (proto-methods service) (nconc (proto-methods service) (list method)))
+    (appendf (proto-methods service) (list method))
     method))
 
 (defmethod resolve-lisp-names ((method protobuf-method))

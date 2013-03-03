@@ -231,14 +231,12 @@
         ;; If this schema has already been imported somewhere else,
         ;; mark it as imported here and carry on
         (when imported
-          (setf (proto-imported-schemas schema)
-                (nconc (proto-imported-schemas schema) (list imported)))
+          (appendf (proto-imported-schemas schema) (list imported))
           (return-from import-one))
         (do-process-import import import-name)
         (let* ((imported (find-schema (class-name->proto import-name))))
           (when imported
-            (setf (proto-imported-schemas schema)
-                  (nconc (proto-imported-schemas schema) (list imported))))
+            (appendf (proto-imported-schemas schema) (list imported)))
           (return-from import-one))))))
 
 (defun process-imports-from-file (imports-file)

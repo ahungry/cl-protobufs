@@ -258,6 +258,11 @@
            ,@body)))))
 
 
+(defmacro appendf (place tail)
+  "Append 'tail' to the list given by 'place', then set the place to the new list."
+  `(setf ,place (append ,place ,tail)))
+
+
 ;;; Functional programming, please
 
 (defun curry (function &rest args)
@@ -327,8 +332,8 @@
 
 ;;; Code generation utilities
 
-(defvar *proto-name-separators* '(#\- #\_ #\/ #\space))
-(defvar *camel-case-field-names* nil)
+(defparameter *proto-name-separators* '(#\- #\_ #\/ #\space))
+(defparameter *camel-case-field-names* nil)
 
 (defun find-proto-package (name)
   "A very fuzzy definition of 'find-package'."

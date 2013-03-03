@@ -13,7 +13,9 @@
 
 ;;; Can a version of a Protobufs schema be upgraded to a new version
 
-(defvar *upgrade-warnings*)
+(defvar *upgrade-warnings* nil
+  "Bound to the list of upgrade warning messages.")
+
 (defun upgrade-warn (format-string &rest format-args)
   "Collect an upgrade warning into *upgrade-warnings*.
    Returns the list of warnings."
