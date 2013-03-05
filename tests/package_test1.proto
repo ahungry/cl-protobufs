@@ -15,20 +15,20 @@ message MessageDefinedInBothPackages {
 }
 
 message MessageWithCrossPackageReference {
-  required MessageInOtherPackage baz = 1;
-  required EnumInOtherPackage bonk = 2;
+  required protobuf_package_unittest2.MessageInOtherPackage baz = 1;
+  required protobuf_package_unittest2.EnumInOtherPackage bonk = 2;
   required MessageDefinedInBothPackages bam = 3;
   required protobuf_package_unittest2.MessageDefinedInBothPackages bing = 5;
 }
 
 message MessageWithCrossPackageExtension {
-  extend MessageInOtherPackage {
+  extend protobuf_package_unittest2.MessageInOtherPackage {
     required int32 baa = 1000;
   }
-  required MessageInOtherPackage boo = 1;
+  required protobuf_package_unittest2.MessageInOtherPackage boo = 1;
 }
 
 service ServiceWithCrossPackageInputOutput {
-  rpc Bloop(MessageInOtherPackage) returns (MessageWithCrossPackageReference);
-  rpc Beep(MessageWithCrossPackageReference) returns (MessageInOtherPackage);
+  rpc Bloop(protobuf_package_unittest2.MessageInOtherPackage) returns (MessageWithCrossPackageReference);
+  rpc Beep(MessageWithCrossPackageReference) returns (protobuf_package_unittest2.MessageInOtherPackage);
 }
