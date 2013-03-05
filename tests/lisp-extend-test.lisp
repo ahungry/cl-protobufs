@@ -11,8 +11,8 @@
 (in-package "PROTO-TEST")
 
 (define-test extend-test ()
-  (let* ((schema (proto:find-schema "ExtendTest"))
-         (imported-schema (proto:find-schema "ExtendTestBase"))
+  (let* ((schema (proto:find-schema 'protobuf-extend-unittest::extend-test))
+         (imported-schema (proto:find-schema 'protobuf-extend-base-unittest::extend-test-base))
          (foo (proto:find-message schema "Foo"))
          (bar (proto:find-message schema "Bar"))
          (quux (proto:find-message schema "Quux"))

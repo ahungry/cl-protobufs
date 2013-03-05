@@ -21,14 +21,12 @@
    "Given a name (a symbol or string), return the 'protobuf-schema' object having that name."))
 
 (defmethod find-schema ((name symbol))
-  (values (gethash (keywordify name) *all-schemas*)))
-
-(defmethod find-schema ((name string))
-  (values (gethash (string-upcase name) *all-schemas*)))
+  (assert (not (keywordp name)))
+  (values (gethash name *all-schemas*)))
 
 (defmethod find-schema ((path pathname))
   "Given a pathname, return the 'protobuf-schema' object that came from that path."
-  (values (gethash (make-pathname :type nil :defaults path) *all-schemas*)))
+  (values (gethash path *all-schemas*)))
 
 
 (defvar *all-messages* (make-hash-table :test #'equal)
@@ -170,29 +168,26 @@
    "The model class that represents a Protobufs schema, i.e., one .proto file."))
 
 (defmethod make-load-form ((s protobuf-schema) &optional environment)
-  (with-slots (class name) s
+  (with-slots (class) s
     (multiple-value-bind (constructor initializer)
         (make-load-form-saving-slots s :environment environment)
       (values `(let ((s ,constructor))
-                  (record-protobuf s ',class ',name nil)
+                  (record-protobuf s ',class nil)
                   s)
               initializer))))
 
-(defgeneric record-protobuf (schema &optional symbol name type)
+(defgeneric record-protobuf (schema &optional symbol type)
   (:documentation
    "Record all the names by which the Protobufs schema might be known.")
-  (:method ((schema protobuf-schema) &optional symbol name type)
+  (:method ((schema protobuf-schema) &optional symbol type)
     (declare (ignore type))
-    (let ((symbol (or symbol (proto-class schema)))
-          (name   (or name (proto-name schema))))
+    (let ((symbol (or symbol (proto-class schema))))
       (when symbol
-        (setf (gethash (keywordify symbol) *all-schemas*) schema))
-      (when name
-        (setf (gethash (string-upcase name) *all-schemas*) schema))
+        (setf (gethash symbol *all-schemas*) schema))
       (let ((path (or *protobuf-pathname* *compile-file-pathname*)))
         (when path
-          ;; Record the file from which the Protobufs schema came, sans file type
-          (setf (gethash (make-pathname :type nil :defaults path) *all-schemas*) schema))))))
+          ;; Record the file from which the Protobufs schema came
+          (setf (gethash path *all-schemas*) schema))))))
 
 (defmethod print-object ((s protobuf-schema) stream)
   (if *print-escape*
@@ -491,26 +486,23 @@
    "The model class that represents a Protobufs message."))
 
 (defmethod make-load-form ((m protobuf-message) &optional environment)
-  (with-slots (class name message-type) m
+  (with-slots (class message-type) m
     (multiple-value-bind (constructor initializer)
         (make-load-form-saving-slots m :environment environment)
       (values (if (eq message-type :extends)
                 constructor
                 `(let ((m ,constructor))
-                   (record-protobuf m ',class ',name ',message-type)
+                   (record-protobuf m ',class ',message-type)
                    m))
               initializer))))
 
-(defmethod record-protobuf ((message protobuf-message) &optional class name type)
+(defmethod record-protobuf ((message protobuf-message) &optional class type)
   ;; No need to record an extension, it's already been recorded
   (let ((class (or class (proto-class message)))
-        (name  (or name (proto-name message)))
         (type  (or type (proto-message-type message))))
     (unless (eq type :extends)
       (when class
-        (setf (gethash class *all-messages*) message))
-      (when name
-        (setf (gethash name *all-messages*) message)))))
+        (setf (gethash class *all-messages*) message)))))
 
 (defmethod print-object ((m protobuf-message) stream)
   (if *print-escape*

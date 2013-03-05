@@ -13,7 +13,7 @@
 (define-test cross-package-reference-test ()
   (flet ((find-by-name (name proto-objects)
            (find name proto-objects :key #'proto-name :test #'string=)))
-    (let* ((schema (find-schema :package_test1))
+    (let* ((schema (find-schema 'protobuf-package-unittest1::package_test1))
            (message-with-cross-package-reference
             (find-by-name "MessageWithCrossPackageReference" (proto-messages schema)))
            (baz (find-by-name "baz" (proto-fields message-with-cross-package-reference)))
@@ -93,7 +93,7 @@
 (define-test forward-reference-test ()
   (flet ((find-by-name (name proto-objects)
            (find name proto-objects :key #'proto-name :test #'string=)))
-    (let* ((schema (find-schema :forward_reference))
+    (let* ((schema (find-schema 'protobuf-forward-reference-unittest::forward_reference))
            (message-with-forward-reference
             (find-by-name "MessageWithForwardReference" (proto-messages schema)))
            (foo (find-by-name "foo" (proto-fields message-with-forward-reference)))
