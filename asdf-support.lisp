@@ -239,17 +239,11 @@
     (block import-one
       (let* ((import      (pathname import))
              (import-name (pathname-name import))
-             (imported    (find-schema (class-name->proto import-name))))
-        ;; If this schema has already been imported somewhere else,
-        ;; mark it as imported here and carry on
+             (proto-file  (do-process-import import import-name))
+             (imported    (find-schema proto-file)))
         (when imported
-          (appendf (proto-imported-schemas schema) (list imported))
-          (return-from import-one))
-        (do-process-import import import-name)
-        (let* ((imported (find-schema (class-name->proto import-name))))
-          (when imported
-            (appendf (proto-imported-schemas schema) (list imported)))
-          (return-from import-one))))))
+          (appendf (proto-imported-schemas schema) (list imported)))
+        (return-from import-one)))))
 
 (defun process-imports-from-file (imports-file)
   (when (probe-file imports-file)
@@ -261,9 +255,7 @@
       (dolist (import imports)
         (let* ((import      (pathname import))
                (import-name (pathname-name import)))
-          ;; If this schema has already been loaded, we're done.
-          (unless (find-schema (class-name->proto import-name))
-            (do-process-import import import-name)))))))
+          (do-process-import import import-name))))))
 
 (defun do-process-import (import import-name
                           &key (search-path *protobuf-search-path*)
@@ -286,6 +278,8 @@
            (fasl-date  (asdf::safe-file-write-date fasl-file))
            (imports-date  (asdf::safe-file-write-date imports-file)))
       (when (probe-file proto-file)
+        (when (find-schema proto-file)
+          (return proto-file))
         (let ((*protobuf-pathname* proto-file))
           (when (string= (pathname-type base-path) "proto")
             ;; The user asked to import a .proto file
@@ -323,4 +317,4 @@
                  (let ((*compile-file-pathname* nil)
                        (*load-pathname* fasl-file))
                    (load fasl-file)))))
-        (return (values))))))
+        (return proto-file)))))
