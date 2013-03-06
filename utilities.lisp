@@ -321,13 +321,15 @@
 
 ;; Type expansion
 (defun type-expand (type)
+  #+(or abcl xcl) (system::expand-deftype type)
   #+allegro (excl:normalize-type type :default type)
   #+ccl (ccl::type-expand type)
   #+clisp (ext:type-expand type)
   #+cmu (kernel:type-expand type)
+  #+(or ecl mkcl) (si::expand-deftype type)
   #+lispworks (type:expand-user-type type)
   #+sbcl (sb-ext:typexpand type)
-  #-(or allegro ccl clisp cmu lispworks sbcl) type)
+  #-(or abcl allegro ccl clisp cmu ecl lispworks mkcl sbcl xcl) type)
 
 
 ;;; Code generation utilities

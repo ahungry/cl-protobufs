@@ -19,7 +19,7 @@
   :maintainer '("Scott McKay")
   :description      "Protobufs for Common Lisp"
   :long-description "Protobufs for Common Lisp"
-  :depends-on (:closer-mop :babel)
+  :depends-on (:closer-mop :babel :trivial-garbage)
   :serial t
   :components
     ((:module "packages"

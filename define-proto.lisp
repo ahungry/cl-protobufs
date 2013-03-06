@@ -408,8 +408,7 @@
                                      (intern (format nil "~A-~A" 'set reader) *protobuf-package*)))
                          (default (getf inits :initform)))
                     (collect-form `(without-redefinition-warnings ()
-                                     (let ((,stable #+ccl  (make-hash-table :test #'eq :weak t)
-                                                    #+sbcl (make-hash-table :test #'eq :weakness :value)))
+                                     (let ((,stable (tg:make-weak-hash-table :weakness :value :test #'eq)))
                                        ,@(and reader `((defmethod ,reader ((object ,type))
                                                          (gethash object ,stable ,default))))
                                        ,@(and writer `((defmethod ,writer ((object ,type) value)
@@ -463,8 +462,7 @@
                  ;; will result in harmless redefinitions, so squelch the warnings
                  ;;--- Maybe these methods need to be defined in 'define-message'?
                  (collect-form `(without-redefinition-warnings ()
-                                  (let ((,stable #+ccl  (make-hash-table :test #'eq :weak t)
-                                                 #+sbcl (make-hash-table :test #'eq :weakness :value)))
+                                  (let ((,stable (tg:make-weak-hash-table :weakness :value :test #'eq)))
                                     ,@(and reader `((defmethod ,reader ((object ,type))
                                                       (gethash object ,stable ,default))))
                                     ,@(and writer `((defmethod ,writer ((object ,type) value)
@@ -796,7 +794,8 @@
               ;; response as an application object.
               (collect-form `(defgeneric ,client-fn (,vchannel ,vrequest &key ,vcallback)
                                ,@(and documentation `((:documentation ,documentation)))
-                               #-sbcl (declare (values ,output-type))
+                               #+(or ccl)
+                               (declare (values ,output-type))
                                (:method (,vchannel (,vrequest ,input-type) &key ,vcallback)
                                  (declare (ignorable ,vchannel ,vcallback))
                                  (let ((call (and *rpc-package* *rpc-call-function*)))
@@ -817,7 +816,8 @@
               ;; The RPC code provides the channel classes and does (de)serialization, etc
               (collect-form `(defgeneric ,server-fn (,vchannel ,vrequest)
                                ,@(and documentation `((:documentation ,documentation)))
-                               #-sbcl (declare (values ,output-type))))))))
+                               #+(or ccl)
+                               (declare (values ,output-type))))))))
       `(progn
          define-service
          ,service
