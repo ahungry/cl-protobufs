@@ -11,7 +11,8 @@
 (in-package "PROTO-TEST")
 
 (define-test case-preservation-test ()
-  (let ((service (proto:find-service :case-preservation "QUUXService")))
+  (let ((service (proto:find-service 'protobuf-case-preservation-unittest::case-preservation
+                                     "QUUXService")))
     (assert-true service)
     ;; We're reaching into the implementation to verify the objects have
     ;; been properly constructed.

@@ -86,6 +86,21 @@
   (pathname-directory-pathname
    (merge-pathnames* path parent-path)))
 
+(defun protobuf-mangle-name (input-file)
+  (let ((directory (pathname-directory input-file)))
+    (format nil "~{~A-~}~A-~A"
+            (if (eq (first directory) :absolute)
+              (rest directory)
+              directory)
+            (pathname-name input-file)
+            (pathname-type input-file))))
+
+(defun protobuf-lispize-pathname (input-file)
+  (make-pathname
+   :name (protobuf-mangle-name input-file)
+   :type "lisp"
+   :defaults input-file))
+
 (defmethod input-files ((op proto-to-lisp) (component protobuf-file))
   "The input file is just the .proto file."
   (declare (ignorable op))
@@ -96,10 +111,7 @@
    stored where .fasl files are stored"
   (declare (ignorable op))
   (let* ((base-pathname (component-pathname component))
-         (lisp-file (make-pathname
-                     :name (format nil "~A.proto" (pathname-name base-pathname))
-                     :type "lisp"
-                     :defaults base-pathname)))
+         (lisp-file (protobuf-lispize-pathname base-pathname)))
     (values (list lisp-file
                   (make-pathname :type "proto-imports"
                                  :defaults lisp-file))
@@ -227,17 +239,11 @@
     (block import-one
       (let* ((import      (pathname import))
              (import-name (pathname-name import))
-             (imported    (find-schema (class-name->proto import-name))))
-        ;; If this schema has already been imported somewhere else,
-        ;; mark it as imported here and carry on
+             (proto-file  (do-process-import import import-name))
+             (imported    (find-schema proto-file)))
         (when imported
-          (appendf (proto-imported-schemas schema) (list imported))
-          (return-from import-one))
-        (do-process-import import import-name)
-        (let* ((imported (find-schema (class-name->proto import-name))))
-          (when imported
-            (appendf (proto-imported-schemas schema) (list imported)))
-          (return-from import-one))))))
+          (appendf (proto-imported-schemas schema) (list imported)))
+        (return-from import-one)))))
 
 (defun process-imports-from-file (imports-file)
   (when (probe-file imports-file)
@@ -249,9 +255,7 @@
       (dolist (import imports)
         (let* ((import      (pathname import))
                (import-name (pathname-name import)))
-          ;; If this schema has already been loaded, we're done.
-          (unless (find-schema (class-name->proto import-name))
-            (do-process-import import import-name)))))))
+          (do-process-import import import-name))))))
 
 (defun do-process-import (import import-name
                           &key (search-path *protobuf-search-path*)
@@ -260,11 +264,11 @@
     (let* ((base-path  (asdf::merge-pathnames* import path))
            (proto-file (make-pathname :name import-name :type "proto"
                                       :defaults base-path))
-           (lisp-file  (asdf::lispize-pathname
-                        (if output-path
-                            (make-pathname :name import-name
-                                           :directory (pathname-directory output-path))
-                            base-path)))
+           (lisp-file (if output-path
+                        (asdf::lispize-pathname
+                         (make-pathname :name (asdf::protobuf-mangle-name base-path)
+                                        :directory (pathname-directory output-path)))
+                        (asdf::protobuf-lispize-pathname base-path)))
            (imports-file (make-pathname :type "proto-imports"
                                         :defaults lisp-file))
            (fasl-file  (compile-file-pathname lisp-file))
@@ -274,6 +278,8 @@
            (fasl-date  (asdf::safe-file-write-date fasl-file))
            (imports-date  (asdf::safe-file-write-date imports-file)))
       (when (probe-file proto-file)
+        (when (find-schema proto-file)
+          (return proto-file))
         (let ((*protobuf-pathname* proto-file))
           (when (string= (pathname-type base-path) "proto")
             ;; The user asked to import a .proto file
@@ -311,4 +317,4 @@
                  (let ((*compile-file-pathname* nil)
                        (*load-pathname* fasl-file))
                    (load fasl-file)))))
-        (return (values))))))
+        (return proto-file)))))
