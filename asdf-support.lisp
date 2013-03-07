@@ -67,7 +67,7 @@
     ;; Path was specified with ':proto-pathname'
     (subpathname (component-pathname (component-parent component))
                  (proto-relative-pathname component)
-                 :type "proto")
+                 :type (source-explicit-file-type component))
     ;; No ':proto-pathname', the path of the protobuf file
     ;; defaults to the component-pathname, with its automatic type "proto"
     (component-pathname component)))
@@ -125,7 +125,7 @@
          (proto-impl:*protobuf-output-path* output))
     (dolist (path paths (error 'compile-failed
                           :component component :operation op))
-      (let ((proto (make-pathname :type "proto" :defaults (merge-pathnames* path (pathname input)))))
+      (let ((proto (merge-pathnames* path input)))
         (destructuring-bind (lisp imports)
             (output-files op component)
           (when (probe-file proto)
