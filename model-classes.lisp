@@ -184,10 +184,9 @@
     (let ((symbol (or symbol (proto-class schema))))
       (when symbol
         (setf (gethash symbol *all-schemas*) schema))
-      (let ((path (or *protobuf-pathname* *compile-file-pathname*)))
-        (when path
-          ;; Record the file from which the Protobufs schema came
-          (setf (gethash path *all-schemas*) schema))))))
+      (when *protobuf-pathname*
+        ;; Record the file from which the Protobufs schema came
+        (setf (gethash *protobuf-pathname* *all-schemas*) schema)))))
 
 (defmethod print-object ((s protobuf-schema) stream)
   (if *print-escape*
