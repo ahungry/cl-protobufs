@@ -44,7 +44,8 @@
 (defun run-all-tests ()
   (dolist (test *all-registered-tests*)
     (format t "~&Running test ~A" test)
-    (funcall test)))
+    (funcall test))
+  (fresh-line))
 
 (defmacro assert-equal (actual expected &key (test '#'equal))
   `(unless (funcall ,test ,actual ,expected)
