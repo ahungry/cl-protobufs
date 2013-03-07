@@ -202,7 +202,8 @@
     (destructuring-bind (fasl proto-imports)
         (input-files op component)
       (proto-impl:process-imports-from-file proto-imports)
-      (load fasl))))
+      (let ((proto-impl:*protobuf-pathname* (protobuf-input-file component)))
+        (load fasl)))))
 
 (defmethod operation-description ((op compile-op) (component protobuf-file))
   (format nil (compatfmt "~@<compiling ~3i~_~A~@:>")
