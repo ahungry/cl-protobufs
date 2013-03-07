@@ -236,14 +236,10 @@
    If the file is a .proto file, it first parses it and writes a .lisp file.
    The .lisp file is the compiled and loaded."
   (dolist (import imports)
-    (block import-one
-      (let* ((import      (pathname import))
-             (import-name (pathname-name import))
-             (proto-file  (do-process-import import import-name))
-             (imported    (find-schema proto-file)))
-        (when imported
-          (appendf (proto-imported-schemas schema) (list imported)))
-        (return-from import-one)))))
+    (let* ((proto-file (do-process-import (pathname import)))
+           (imported   (find-schema proto-file)))
+      (when imported
+        (appendf (proto-imported-schemas schema) (list imported))))))
 
 (defun process-imports-from-file (imports-file)
   (when (probe-file imports-file)
@@ -253,15 +249,14 @@
                                     :element-type 'character)
                      (with-standard-io-syntax (read stream)))))
       (dolist (import imports)
-        (let* ((import      (pathname import))
-               (import-name (pathname-name import)))
-          (do-process-import import import-name))))))
+        (do-process-import (pathname import))))))
 
-(defun do-process-import (import import-name
+(defun do-process-import (import
                           &key (search-path *protobuf-search-path*)
                                (output-path *protobuf-output-path*))
   (dolist (path search-path (error "Could not import ~S" import))
     (let* ((base-path  (asdf::merge-pathnames* import path))
+           (import-name (pathname-name import))
            (proto-file (make-pathname :name import-name :type "proto"
                                       :defaults base-path))
            (lisp-file (if output-path
