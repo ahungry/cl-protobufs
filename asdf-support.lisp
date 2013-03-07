@@ -255,15 +255,12 @@
                           &key (search-path *protobuf-search-path*)
                                (output-path *protobuf-output-path*))
   (dolist (path search-path (error "Could not import ~S" import))
-    (let* ((base-path  (asdf::merge-pathnames* import path))
-           (import-name (pathname-name import))
-           (proto-file (make-pathname :name import-name :type "proto"
-                                      :defaults base-path))
+    (let* ((proto-file (asdf::merge-pathnames* import path))
            (lisp-file (if output-path
                         (asdf::lispize-pathname
-                         (make-pathname :name (asdf::protobuf-mangle-name base-path)
+                         (make-pathname :name (asdf::protobuf-mangle-name proto-file)
                                         :directory (pathname-directory output-path)))
-                        (asdf::protobuf-lispize-pathname base-path)))
+                        (asdf::protobuf-lispize-pathname proto-file)))
            (imports-file (make-pathname :type "proto-imports"
                                         :defaults lisp-file))
            (fasl-file  (compile-file-pathname lisp-file))
@@ -276,27 +273,25 @@
         (when (find-schema proto-file)
           (return proto-file))
         (let ((*protobuf-pathname* proto-file))
-          (when (string= (pathname-type base-path) "proto")
-            ;; The user asked to import a .proto file
-            ;; If there's no .lisp file or an older .lisp file, or no
-            ;; .proto-imports file or an older .proto-imports file parse
-            ;; the .proto file now
-            ;; If we did not parse the .proto file, process the generated
-            ;; .proto-imports file now.
-            (cond ((not proto-date)
-                   (warn "Could not find the .proto file to be imported: ~A" proto-file))
-                  ((or (not (and lisp-date imports-date))
-                       (< lisp-date proto-date)
-                       (< imports-date proto-date))
-                   (parse-protobuf-file proto-file lisp-file imports-file)
-                   (setq lisp-date (file-write-date lisp-file))
-                   (setq imports-date (file-write-date imports-file)))
-                  (t
-                   (process-imports-from-file imports-file))))
+          ;; The user asked to import a .proto file
+          ;; If there's no .lisp file or an older .lisp file, or no
+          ;; .proto-imports file or an older .proto-imports file parse
+          ;; the .proto file now.
+          ;; If we did not parse the .proto file, process the generated
+          ;; .proto-imports file now.
+          (cond ((not proto-date)
+                 (warn "Could not find the .proto file to be imported: ~A" proto-file))
+                ((or (not (and lisp-date imports-date))
+                     (< lisp-date proto-date)
+                     (< imports-date proto-date))
+                 (parse-protobuf-file proto-file lisp-file imports-file)
+                 (setq lisp-date (file-write-date lisp-file))
+                 (setq imports-date (file-write-date imports-file)))
+                (t
+                 (process-imports-from-file imports-file)))
           ;; Compile the .lisp file, if necessary
           (cond ((not lisp-date)
-                 (unless (string= (pathname-type base-path) "proto")
-                   (warn "Could not find the .lisp file to be compiled: ~A" lisp-file)))
+                 (warn "Could not find the .lisp file to be compiled: ~A" lisp-file))
                 (t
                  (when (or (not fasl-date)
                            (< fasl-date lisp-date))
@@ -306,8 +301,7 @@
                    (setq fasl-date (file-write-date fasl-file)))))
           ;; Load the .fasl file
           (cond ((not fasl-date)
-                 (unless (string= (pathname-type base-path) "proto")
-                   (warn "Could not find the .fasl file to be loaded: ~A" fasl-file)))
+                 (warn "Could not find the .fasl file to be loaded: ~A" fasl-file))
                 (t
                  (let ((*compile-file-pathname* nil)
                        (*load-pathname* fasl-file))
