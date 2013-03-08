@@ -67,7 +67,7 @@
     ;; Path was specified with ':proto-pathname'
     (subpathname (component-pathname (component-parent component))
                  (proto-relative-pathname component)
-                 :type (source-explicit-file-type component))
+                 :type (source-file-explicit-type component))
     ;; No ':proto-pathname', the path of the protobuf file
     ;; defaults to the component-pathname, with its automatic type "proto"
     (component-pathname component)))
