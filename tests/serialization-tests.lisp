@@ -372,6 +372,46 @@
     (do-test (make-instance 'outer 
                :simple (make-instance 'inner :i -4)))))
 
+(proto:define-schema empty-message-optimize-speed-test
+    (:package proto_test :optimize :speed)
+  (proto:define-message speed-empty ())
+  (proto:define-message speed-optional ()
+    (foo :type (or null speed-empty)))
+  (proto:define-message speed-repeated ()
+    (foo :type (proto:list-of speed-empty))))
+
+(proto:define-schema empty-message-optimize-space-test
+    (:package proto_test :optimize :space)
+  (proto:define-message space-empty ())
+  (proto:define-message space-optional ()
+    (foo :type (or null space-empty)))
+  (proto:define-message space-repeated ()
+    (foo :type (proto:list-of space-empty))))
+
+(define-test empty-message-serialization ()
+  (let ((speed0 (make-instance 'speed-empty))
+        (speed1 (make-instance 'speed-optional))
+        (speed2 (make-instance 'speed-repeated))
+        (space0 (make-instance 'space-empty))
+        (space1 (make-instance 'space-optional))
+        (space2 (make-instance 'space-repeated)))
+    (setf (slot-value speed1 'foo) speed0)
+    (setf (slot-value space1 'foo) space0)
+    (push speed0 (slot-value speed2 'foo))
+    (push space0 (slot-value space2 'foo))
+   (let ((ser-speed0 (serialize-object-to-bytes speed0 (type-of speed0)))
+         (ser-speed1 (serialize-object-to-bytes speed1 (type-of speed1)))
+         (ser-speed2 (serialize-object-to-bytes speed2 (type-of speed2)))
+         (ser-space0 (serialize-object-to-bytes space0 (type-of space0)))
+         (ser-space1 (serialize-object-to-bytes space1 (type-of space1)))
+         (ser-space2 (serialize-object-to-bytes space2 (type-of space2))))
+     (assert-true (equalp ser-speed0 #()))
+     (assert-true (equalp ser-speed1 #(#x0A #x00)))
+     (assert-true (equalp ser-speed2 #(#x0A #x00)))
+     (assert-true (equalp ser-space0 #()))
+     (assert-true (equalp ser-space1 #(#x0A #x00)))
+     (assert-true (equalp ser-space2 #(#x0A #x00))))))
+
 
 #+qres (progn
 
@@ -606,6 +646,7 @@
    #+qres geodata-optimized-serialization
    extension-serialization
    group-serialization
+   empty-message-serialization
    type-aliases))
 
 (register-test 'serialization-tests)
