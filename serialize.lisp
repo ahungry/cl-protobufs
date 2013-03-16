@@ -1017,9 +1017,9 @@
       (return-from generate-object-size
         `(defmethod object-size
              (,vobj (,vclass (eql ,message)) &optional visited)
-         (declare #.$optimize-serialization)
-         (declare (ignorable ,vobj visited))
-         0)))
+           (declare #.$optimize-serialization)
+           (setf (cached-object-size ,vobj visited) 0)
+           0)))
     (with-collectors ((sizers collect-sizer))
       (dolist (field (proto-fields message))
         (let* ((class  (if (eq (proto-class field) 'boolean) :bool (proto-class field)))
