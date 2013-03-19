@@ -233,14 +233,18 @@
 
 ;; Process 'import' lines
 (defun process-imports (schema imports)
-  "Imports all of the files given by 'imports'.
-   If the file is a .proto file, it first parses it and writes a .lisp file.
-   The .lisp file is the compiled and loaded."
+  "Processes the imports for a schema.
+   If the import is a symbol, see if that resolves to an existing schema.
+   If the import is a file (string, pathname), parse it as a .proto in the usual manner."
   (dolist (import imports)
-    (let* ((proto-file (do-process-import (pathname import)))
-           (imported   (find-schema proto-file)))
-      (when imported
-        (appendf (proto-imported-schemas schema) (list imported))))))
+    (let ((imported-schema (find-schema
+                            (etypecase import
+                              ((or string pathname)
+                               (do-process-import (pathname import)))
+                              (symbol import)))))
+      (if imported-schema
+        (appendf (proto-imported-schemas schema) (list imported-schema))
+        (error "Could not import ~S" import)))))
 
 (defun process-imports-from-file (imports-file)
   (when (probe-file imports-file)
