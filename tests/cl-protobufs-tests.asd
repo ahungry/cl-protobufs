@@ -48,7 +48,8 @@
               :depends-on ("wire-level-tests")
               :components
               ((:file "serialization-tests")
-               (:file "stability-tests")))
+               (:file "stability-tests")
+               (:file "symbol-import-tests")))
 
      ;; Geodata hack
      (:module "geodata-proto"
