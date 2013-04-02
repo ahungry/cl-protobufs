@@ -261,7 +261,7 @@
                                (output-path *protobuf-output-path*))
   (dolist (path (or search-path
                     ;; Fallback in case someone is playing with 'parse-schema' by hand
-                    (and (asdf:absolute-pathname-p import) (list (directory-namestring import))))
+                    (and (asdf::absolute-pathname-p import) (list (directory-namestring import))))
            (error "Could not import ~S" import))
     (let* ((proto-file (asdf::merge-pathnames* import path))
            (lisp-file (if output-path
