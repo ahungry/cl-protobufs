@@ -1099,6 +1099,18 @@
 (gen-length 32)
 (gen-length 64)
 
+(defun varint-length (val)
+  "Return the length that 'val' will take when encoded as a varint integer."
+  (declare #.$optimize-serialization)
+  (let ((val (ldb (byte 64 0) val))
+        (size 0))
+    (declare (type (unsigned-byte 64) val))
+    (declare (type fixnum size))
+    (loop do (setq val (ash val -7))
+             (iincf size)
+          until (zerop val))
+    size))
+
 
 ;;; Skipping elements
 ;;; This is called at the lowest level, so arg types are assumed to be correct

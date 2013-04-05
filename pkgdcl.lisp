@@ -296,6 +296,7 @@
    "ZIG-ZAG-DECODE64"
    "LENGTH32"
    "LENGTH64"
+   "VARINT-LENGTH"
    "SKIP-ELEMENT"
 
    ;; Utilities
