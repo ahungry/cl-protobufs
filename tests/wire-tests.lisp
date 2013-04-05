@@ -114,8 +114,8 @@
             '((#x0 (#x00))
               (#x1 (#x01))
               (#x7fffffff (#xff #xff #xff #xff #x07))
-              (#x-80000000 (#x80 #x80 #x80 #x80 #x08))
-              (#x-1 (#xff #xff #xff #xff #x0f))))
+              (#x-80000000 (#x80 #x80 #x80 #x80 #x80 #x80 #x80 #x80 #x80 #x08))
+              (#x-1 (#xff #xff #xff #xff #xff #xff #xff #xff #xff #x0f))))
     (verify #'encode-fixed32
             #'decode-fixed32
             '((#x0 (#x00 #x00 #x00 #x00))
