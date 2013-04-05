@@ -829,6 +829,25 @@
 (generate-integer-encoders 32)
 (generate-integer-encoders 64)
 
+(defun encode-int (val buffer index)
+  "Encodes the signed integer 'val' as a varint into the buffer at the given index.
+   Modifies the buffer, and returns the new index into the buffer.
+   Watch out, this function turns off all type checking and array bounds checking."
+  (declare #.$optimize-serialization)
+  (let ((val (ldb (byte 64 0) val))) ;clamp val to 64-bits maximum
+    (declare (type (unsigned-byte 64) val)
+             (type (simple-array (unsigned-byte 8)) buffer)
+             (type fixnum index))
+    ;; Seven bits at a time, least significant bits first
+    (loop do (let ((bits (ldb (byte 7 0) val)))
+               (declare (type (unsigned-byte 8) bits))
+               (setq val (ash val -7))
+               (setf (aref buffer index)
+                     (ilogior bits (if (zerop val) 0 128)))
+               (iincf index))
+          until (zerop val))
+    (values index buffer)))  ;return the buffer to improve 'trace'
+
 (defun encode-single (val buffer index)
   "Encodes the single float 'val' into the buffer at the given index.
    Modifies the buffer, and returns the new index into the buffer.
@@ -994,6 +1013,19 @@
 
 (generate-integer-decoders 32)
 (generate-integer-decoders 64)
+
+(defun decode-int (buffer index)
+  "Decodes the next varint integer in the buffer at the given index.
+   Returns both the decoded value and the new index into the buffer.
+   Watch out, this function turns off all type checking and array bounds checking."
+  (declare #.$optimize-serialization)
+  (declare (type (simple-array (unsigned-byte 8)) buffer)
+           (type fixnum index))
+  (multiple-value-bind (val index)
+      (decode-uint64 buffer index)
+    (when (i= (ldb (byte 1 63) val) 1)
+      (decf val (ash 1 64)))
+    (values val index)))
 
 (defun decode-single (buffer index)
   "Decodes the next single float in the buffer at the given index.
