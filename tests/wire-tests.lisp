@@ -104,7 +104,7 @@
               (#x10000000 (#x80 #x80 #x80 #x80 #x01))
               (#xffffffff (#xff #xff #xff #xff #x0f))))
     (verify nil
-            #'decode-int32
+            #'decode-int
             '((#x0 (#x00))
               (#x1 (#x01))
               (#x7fffffff (#xff #xff #xff #xff #x07))
@@ -164,7 +164,7 @@
               (#x8000000000000000 (#x80 #x80 #x80 #x80 #x80 #x80 #x80 #x80 #x80 #x01))
               (#xffffffffffffffff (#xff #xff #xff #xff #xff #xff #xff #xff #xff #x01))))
     (verify nil
-            #'decode-int64
+            #'decode-int
             '((#x0 (#x00))
               (#x1 (#x01))
               (#x7fffffffffffffff (#xff #xff #xff #xff #xff #xff #xff #xff #xff #x00))
