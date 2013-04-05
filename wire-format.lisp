@@ -922,7 +922,6 @@
   "Generate 32- or 64-bit versions of integer decoders."
   (assert (and (plusp bits) (zerop (mod bits 8))))
   (let* ((decode-uint (fintern "~A~A" 'decode-uint bits))
-         (decode-int  (fintern "~A~A" 'decode-int bits))
          (decode-fixed  (fintern "~A~A" 'decode-fixed bits))
          (decode-sfixed (fintern "~A~A" 'decode-sfixed bits))
          (bytes (/ bits 8))
@@ -954,20 +953,6 @@
                            (unless (< val ,(ash 1 bits))
                              (serialization-error "The value ~D is longer than ~A bits" val ,bits))
                            (return (values val index))))))
-       (defun ,decode-int (buffer index)
-         ,(format nil
-                  "Decodes the next ~A-bit varint integer in the buffer at the given index.~
-                   ~&    Returns both the decoded value and the new index into the buffer.~
-                   ~&    Watch out, this function turns off all type checking and array bounds checking." bits)
-         (declare #.$optimize-serialization)
-         (declare (type (simple-array (unsigned-byte 8)) buffer)
-                  (type fixnum index))
-         (multiple-value-bind (val index)
-             (,decode-uint buffer index)
-           ,@(when fixnump `((declare (type fixnum val))))
-           (when (i= (,ldb (byte 1 ,(1- bits)) val) 1)
-             (,decf val ,(ash 1 bits)))
-           (values val index)))
        (defun ,decode-fixed (buffer index)
          ,(format nil
                   "Decodes the next ~A-bit unsigned fixed integer in the buffer at the given index.~
@@ -1088,28 +1073,6 @@
 
 ;;; Wire-level lengths
 ;;; These are called at the lowest level, so arg types are assumed to be correct
-
-(defmacro gen-length (bits)
-  "Generate 32- or 64-bit versions of integer length functions."
-  (assert (and (plusp bits) (zerop (mod bits 8))))
-  (let* (;; Given bits, can we use fixnums safely?
-         (fixnump (<= bits (integer-length most-negative-fixnum)))
-         (ash (if fixnump 'iash 'ash))
-         (zerop-val (if fixnump '(i= val 0) '(zerop val))))
-    `(defun ,(fintern "~A~A" 'length bits) (val)
-       ,(format nil "Returns the length that 'val' will take when encoded as a ~A-bit integer." bits)
-       (declare #.$optimize-serialization)
-       (declare (type (unsigned-byte ,bits) val))
-       (let ((size 0))
-         (declare (type fixnum size))
-         (loop do (progn
-                    (setq val (,ash val -7))
-                    (iincf size))
-               until ,zerop-val)
-         size))))
-
-(gen-length 32)
-(gen-length 64)
 
 (defun varint-length (val)
   "Return the length that 'val' will take when encoded as a varint integer."
