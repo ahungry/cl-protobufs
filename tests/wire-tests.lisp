@@ -59,13 +59,7 @@
   (flet ((verify (encoder pairs)
            (loop for (input output) in pairs
                  do (assert-true (= (funcall encoder input) output)))))
-    (verify #'length32
-            '((#x0 1) (#x7f 1)                ; 0-7 bits
-              (#x80 2) (#x3fff 2)             ; 8-14 bits
-              (#x4000 3) (#x1fffff 3)         ; 15-21 bits
-              (#x200000 4) (#xfffffff 4)      ; 22-28 bits
-              (#x10000000 5) (#xffffffff 5))) ; 29-35 bits, though we'll actually stop at 32 bits.
-    (verify #'length64
+    (verify #'varint-length
             '((#x0 1) (#x7f 1)                                    ; 0-7 bits
               (#x80 2) (#x3fff 2)                                 ; 8-14 bits
               (#x4000 3) (#x1fffff 3)                             ; 15-21 bits
