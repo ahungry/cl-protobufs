@@ -173,7 +173,7 @@
                       (format nil "~A:~A" (package-name (symbol-package val)) (symbol-name val)))))
            (encode-string val buffer idx)))
         ((:date :time :datetime :timestamp)
-         (encode-uint64 (ldb (byte 64 0) val) buffer idx))))))
+         (encode-uint64 val buffer idx))))))
 
 (define-compiler-macro serialize-prim (&whole form val type tag buffer index)
   (setq type (fold-symbol type)
@@ -324,7 +324,7 @@
            (idx (encode-uint32 tag buffer index)))
       (declare (type (unsigned-byte 32) val)
                (type fixnum idx))
-      (encode-uint32 (ldb (byte 32 0) val) buffer idx))))
+      (encode-uint32 val buffer idx))))
 
 (defun serialize-packed-enum (values enum-values tag buffer index)
   "Serializes Protobufs enum values into the buffer at the given index.
@@ -346,7 +346,7 @@
                   (let ((val (let ((e (find val enum-values :key #'proto-value)))
                                (and e (proto-index e)))))
                     (declare (type (unsigned-byte 32) val))
-                    (setq idx (encode-uint32 (ldb (byte 32 0) val) buffer idx)))) values)
+                    (setq idx (encode-uint32 val buffer idx)))) values)
       idx)))
 
 
