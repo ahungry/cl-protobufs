@@ -773,17 +773,18 @@
                    ~&    Modifies the buffer, and returns the new index into the buffer.~
                    ~&    Watch out, this function turns off all type checking and array bounds checking." bits)
          (declare #.$optimize-serialization)
-         (declare (type (unsigned-byte ,bits) val)
-                  (type (simple-array (unsigned-byte 8)) buffer)
-                  (type fixnum index))
-         ;; Seven bits at a time, least significant bits first
-         (loop do (let ((bits (,ldb (byte 7 0) val)))
-                    (declare (type (unsigned-byte 8) bits))
-                    (setq val (,ash val -7))
-                    (setf (aref buffer index)
-                          (ilogior bits (if ,zerop-val 0 128)))
-                    (iincf index))
-               until ,zerop-val)
+         (let ((val (ldb (byte ,bits 0) val)))
+           (declare (type (unsigned-byte ,bits) val)
+                    (type (simple-array (unsigned-byte 8)) buffer)
+                    (type fixnum index))
+           ;; Seven bits at a time, least significant bits first
+           (loop do (let ((bits (,ldb (byte 7 0) val)))
+                      (declare (type (unsigned-byte 8) bits))
+                      (setq val (,ash val -7))
+                      (setf (aref buffer index)
+                            (ilogior bits (if ,zerop-val 0 128)))
+                      (iincf index))
+                 until ,zerop-val))
          (values index buffer))                 ;return the buffer to improve 'trace'
        (defun ,encode-fixed (val buffer index)
          ,(format nil
