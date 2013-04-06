@@ -65,8 +65,8 @@
 
 (defmethod clear-size-cache ((object base-protobuf-message) type)
   (let ((message (find-message-for-class type)))
-    (assert message ()
-            "There is no Protobuf message having the type ~S" type)
+    (unless message
+      (serialization-error "There is no Protobuf message having the type ~S" type))
     (macrolet ((read-slot (object slot reader)
                  `(if ,reader
                     (funcall ,reader ,object)
@@ -157,9 +157,12 @@
 
 (defmethod serialize-object (object type buffer &optional start visited)
   (let ((message (find-message-for-class type)))
-    (assert message ()
-            "There is no Protobuf message having the type ~S" type)
-    (serialize-object object message buffer start visited)))
+    (unless message
+      (serialization-error "There is no Protobuf message having the type ~S" type))
+    (handler-case        
+       (serialize-object object message buffer start visited)
+     (error (e)
+      (serialization-error "Error serializing object ~S: ~A" object (princ-to-string e))))))
 
 ;; 'visited' is used to cache object sizes
 ;; If it's non-nil. it must to be a table with the sizes already in it
@@ -335,9 +338,12 @@
 
 (defmethod deserialize-object (type buffer &optional start end (end-tag 0))
   (let ((message (find-message-for-class type)))
-    (assert message ()
-            "There is no Protobuf message having the type ~S" type)
-    (deserialize-object message buffer start end end-tag)))
+    (unless message
+      (serialization-error "There is no Protobuf message having the type ~S" type))
+    (handler-case        
+       (deserialize-object message buffer start end end-tag)
+     (error (e)
+      (serialization-error "Error deserializing buffer ~S: ~A" buffer (princ-to-string e))))))
 
 ;; The default method uses metadata from the protobuf "schema" for the message
 (defmethod deserialize-object ((message protobuf-message) buffer &optional start end (end-tag 0))
@@ -408,7 +414,10 @@
                            ;; If there's no field descriptor for this index, just skip
                            ;; the next element in the buffer having the given wire type
                            (setq index (skip-element buffer index tag))
-                           ;;--- Check for mismatched wire type, running past end of buffer, etc
+                           ;; We don't explicitly check for mismatched wire type, running past the
+                           ;; end of the buffer, etc; instead, we'll count on the high likelihood
+                           ;; of some kind of an error getting signalled (e.g., array out of bounds)
+                           ;; and catch it at a higher level. Yay, Lisp!
                            (cond ((and field (eq (proto-required field) :repeated))
                                   (let ((vectorp (vector-field-p field)))
                                     (cond ((and (proto-packed field) (packed-type-p type))
@@ -543,8 +552,8 @@
 
 (defmethod object-size (object type &optional visited)
   (let ((message (find-message-for-class type)))
-    (assert message ()
-            "There is no Protobuf message having the type ~S" type)
+    (unless message
+      (serialization-error "There is no Protobuf message having the type ~S" type))
     (object-size object message visited)))
 
 ;; 'visited' is used to cache object sizes

@@ -19,8 +19,8 @@
 
 (defmethod object-initialized-p (object (type symbol))
   (let ((message (find-message-for-class type)))
-    (assert message ()
-            "There is no Protobuf message having the type ~S" type)
+    (unless message
+      (serialization-error "There is no Protobuf message having the type ~S" type))
     (object-initialized-p object message)))
 
 (defmethod object-initialized-p (object (message protobuf-message))
@@ -77,8 +77,8 @@
 
 (defmethod slot-initialized-p (object (type symbol) slot)
   (let ((message (find-message-for-class type)))
-    (assert message ()
-            "There is no Protobuf message having the type ~S" type)
+    (unless message
+      (serialization-error "There is no Protobuf message having the type ~S" type))
     (slot-initialized-p object message slot)))
 
 (defmethod slot-initialized-p (object (message protobuf-message) slot)
@@ -104,8 +104,8 @@
 
 (defmethod reinitialize-object (object (type symbol))
   (let ((message (find-message-for-class type)))
-    (assert message ()
-            "There is no Protobuf message having the type ~S" type)
+    (unless message
+      (serialization-error "There is no Protobuf message having the type ~S" type))
     (reinitialize-object object message)))
 
 (defmethod reinitialize-object (object (message protobuf-message))
@@ -144,8 +144,8 @@
   (:method ((object standard-object))
     (let* ((class   (type-of object))
            (message (find-message-for-class class)))
-      (assert message ()
-              "There is no Protobufs message for the class ~S" class)
+      (unless message
+        (serialization-error "There is no Protobufs message for the class ~S" class))
       (object-initialized-p object message))))
 
 (defgeneric clear (object)
@@ -154,8 +154,8 @@
   (:method ((object standard-object))
     (let* ((class   (type-of object))
            (message (find-message-for-class class)))
-      (assert message ()
-              "There is no Protobufs message for the class ~S" class)
+      (unless message
+        (serialization-error "There is no Protobufs message for the class ~S" class))
       (reinitialize-object object message))))
 
 (defgeneric has-field (object slot)
@@ -164,8 +164,8 @@
   (:method ((object standard-object) slot)
     (let* ((class   (type-of object))
            (message (find-message-for-class class)))
-      (assert message ()
-              "There is no Protobufs message for the class ~S" class)
+      (unless message
+        (serialization-error "There is no Protobufs message for the class ~S" class))
       (slot-initialized-p object message slot))))
 
 (defgeneric clear-field (object slot)
@@ -174,8 +174,8 @@
   (:method ((object standard-object) slot)
     (let* ((class   (type-of object))
            (message (find-message-for-class class)))
-      (assert message ()
-              "There is no Protobufs message for the class ~S" class)
+      (unless message
+        (serialization-error "There is no Protobufs message for the class ~S" class))
       (reinitialize-slot object message slot))))
 
 ;; This is simpler than 'object-size', but doesn't fully support aliasing
@@ -187,8 +187,8 @@
     (let* ((class   (type-of object))
            (message (find-message-for-class class))
            (type    (and message (proto-class message))))
-      (assert message ()
-              "There is no Protobufs message for the class ~S" class)
+      (unless message
+        (serialization-error "There is no Protobufs message for the class ~S" class))
       (let ((visited (make-size-cache object type)))
         (object-size object type visited)))))
 
@@ -204,18 +204,18 @@
     (let* ((class   (type-of object))
            (message (find-message-for-class class))
            (type    (and message (proto-class message))))
-      (assert message ()
-              "There is no Protobufs message for the class ~S" class)
+      (unless message
+        (serialization-error "There is no Protobufs message for the class ~S" class))
       (let* ((visited (make-size-cache object type))
              (size    (object-size object type visited))
              (start   (or start 0))
              (buffer  (or buffer (make-byte-vector size))))
-        (assert (>= (length buffer) size) ()
-                "The buffer ~S is not large enough to hold ~S" buffer object)
+        (unless (>= (length buffer) size)
+          (serialization-error "The buffer ~S is not large enough to hold ~S" buffer))
         (multiple-value-bind (nbuf nend)
             (serialize-object object type buffer start visited)
-        (declare (ignore nbuf))
-        (values nend buffer))))))
+          (declare (ignore nbuf))
+          (values nend buffer))))))
 
 (defgeneric merge-from-array (object buffer &optional start end)
   (:documentation
@@ -228,8 +228,8 @@
     (let* ((class   (type-of object))
            (message (find-message-for-class class))
            (type    (and message (proto-class message))))
-      (assert message ()
-              "There is no Protobufs message for the class ~S" class)
+      (unless message
+        (serialization-error "There is no Protobufs message for the class ~S" class))
       (let* ((start  (or start 0))
              (end    (or end (length buffer))))
         (merge-from-message object (deserialize-object type buffer start end))))))
@@ -245,10 +245,10 @@
     (let* ((class   (type-of object))
            (message (find-message-for-class class))
            (type    (and message (proto-class message))))
-      (assert message ()
-              "There is no Protobufs message for the class ~S" class)
-      (assert (eq class (type-of source)) ()
-              "The objects ~S and ~S are of not of the same class" object source)
+      (unless message
+        (serialization-error "There is no Protobufs message for the class ~S" class))
+      (unless (eq class (type-of source))
+        (serialization-error "The objects ~S and ~S are of not of the same class" object source))
       ;;--- Do this (should return side-effected 'object', not 'source')
       type
       source)))

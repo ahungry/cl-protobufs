@@ -56,6 +56,7 @@
    "ERROR-TYPE-NAME"
    "ERROR-FIELD"
    "ERROR-METHOD"
+   "SERIALIZATION-ERROR"
 
    ;; Object lookup
    "FIND-MESSAGE"

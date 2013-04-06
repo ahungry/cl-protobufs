@@ -27,8 +27,8 @@
                                    (suppress-line-breaks *suppress-line-breaks*) (print-name t))
   (let* ((type    (or type (type-of object)))
          (message (find-message-for-class type)))
-    (assert message ()
-            "There is no Protobuf message having the type ~S" type)
+    (unless message
+      (serialization-error "There is no Protobuf message having the type ~S" type))
     (macrolet ((read-slot (object slot reader)
                  ;; Don't do a boundp check, we assume the object is fully populated
                  ;; Unpopulated slots should be "nullable" and should contain nil
@@ -188,16 +188,16 @@
 (defmethod parse-text-format ((type symbol)
                               &key (stream *standard-input*) (parse-name t))
   (let ((message (find-message-for-class type)))
-    (assert message ()
-            "There is no Protobuf message having the type ~S" type)
+    (unless message
+      (serialization-error "There is no Protobuf message having the type ~S" type))
     (parse-text-format message :stream stream :parse-name parse-name)))
 
 (defmethod parse-text-format ((message protobuf-message)
                               &key (stream *standard-input*) (parse-name t))
   (when parse-name
     (let ((name (parse-token stream)))
-      (assert (string= name (proto-name message)) ()
-              "The message is not of the expected type ~A" (proto-name message))))
+      (unless (string= name (proto-name message))
+        (serialization-error "The message is not of the expected type ~A" (proto-name message)))))
   (labels ((deserialize (type trace)
              (let* ((message (find-message trace type))
                     (object  (and message

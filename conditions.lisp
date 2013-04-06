@@ -78,3 +78,20 @@
 (define-condition undefined-stream-type (undefined-method-type)
   ()
   (:default-initargs :where "Stream"))
+
+
+;;; (De)serialization errors
+
+(define-condition serialization-error (simple-error)
+  ()
+  (:documentation "Indicates that some sort of (de)serialization error has occurred.")
+  (:default-initargs :format-control "Serialization error")
+  (:report (lambda (condition stream)
+             (format stream "~?"
+                     (simple-condition-format-control condition)
+                     (simple-condition-format-arguments condition)))))
+
+(defun serialization-error (format-control &rest format-args)
+  (error 'serialization-error
+    :format-control format-control
+    :format-arguments (copy-list format-args)))

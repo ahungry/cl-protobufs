@@ -186,7 +186,7 @@
        (let ((idx (encode-uint32 ,tag ,buffer ,index)))
          (declare (type fixnum idx))
          ,(ecase type
-            ((:int32 )
+            ((:int32)
              `(encode-uint32 (ldb (byte 32 0) ,val) ,buffer idx))
             ((:int64)
              `(encode-uint64 (ldb (byte 64 0) ,val) ,buffer idx))
@@ -748,7 +748,8 @@
            (type (unsigned-byte 32) tag))
   (let ((idx (let ((e (find val enum-values :key #'proto-value)))
                (and e (proto-index e)))))
-    (assert idx () "There is no enum value for ~S" val)
+    (unless idx
+      (serialization-error "There is no enum value for ~S" val))
     (i+ (length32 tag) (length32 (ldb (byte 32 0) idx)))))
 
 (defun packed-enum-size (values enum-values tag)
@@ -760,7 +761,8 @@
                (map () #'(lambda (val)
                            (let ((idx (let ((e (find val enum-values :key #'proto-value)))
                                         (and e (proto-index e)))))
-                             (assert idx () "There is no enum value for ~S" val)
+                             (unless idx
+                               (serialization-error "There is no enum value for ~S" val))
                              (iincf len (length32 (ldb (byte 32 0) idx))))) values)
                len)))
     (declare (type (unsigned-byte 32) len))
@@ -950,8 +952,8 @@
                       (setq val (,logior val (,ash bits places))))
                  until (i< byte 128)
                  finally (progn
-                           (assert (< val ,(ash 1 bits)) ()
-                                   "The value ~D is longer than ~A bits" val ,bits)
+                           (unless (< val ,(ash 1 bits))
+                             (serialization-error "The value ~D is longer than ~A bits" val ,bits))
                            (return (values val index))))))
        (defun ,decode-int (buffer index)
          ,(format nil
@@ -1134,6 +1136,6 @@
                    ((i= (i- tag $wire-type-start-group) (i- new-tag $wire-type-end-group))
                     (return idx))
                    (t
-                    (assert (i= (i- tag $wire-type-start-group) (i- new-tag $wire-type-end-group)) ()
-                            "Couldn't find a matching end group tag"))))))
+                    (unless (i= (i- tag $wire-type-start-group) (i- new-tag $wire-type-end-group))
+                      (serialization-error "Couldn't find a matching end group tag")))))))
     (t index)))
