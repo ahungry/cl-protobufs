@@ -226,7 +226,7 @@
    the case that trying to (de)serialize into a Lisp object won't work.
    'options' is a set of keyword/value pairs, both of which are strings.
 
-   Fields take the form (slot &key type name default reader)
+   Fields take the form (slot &key type name default reader writer)
    'slot' can be either a symbol giving the field name, or a list whose
    first element is the slot name and whose second element is the index.
    'type' is the type of the slot.
@@ -336,7 +336,7 @@
    The body consists only  of fields.
    'options' is a set of keyword/value pairs, both of which are strings.
 
-   Fields take the form (slot &key type name default reader)
+   Fields take the form (slot &key type name default reader writer)
    'slot' can be either a symbol giving the field name, or a list whose
    first element is the slot name and whose second element is the index.
    'type' is the type of the slot.
@@ -516,7 +516,7 @@
    the case that trying to (de)serialize into a Lisp object won't work.
    'options' is a set of keyword/value pairs, both of which are strings.
 
-   Fields take the form (slot &key type name default reader)
+   Fields take the form (slot &key type name default reader writer)
    'slot' can be either a symbol giving the field name, or a list whose
    first element is the slot name and whose second element is the index.
    'type' is the type of the slot.
