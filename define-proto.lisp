@@ -211,6 +211,67 @@
          ((with-proto-source-location (,type ,name protobuf-enum ,@source-location)
             ,@forms))))))
 
+;; Helper for message-like forms
+(defun generate-message-forms (type fields env &aux (index 0))
+  "Generates the forms used by DEFINE-MESSAGE and DEFINE-GROUP."
+  (with-accessors ((alias-for proto-alias-for)
+                   (conc-name proto-conc-name)
+                   (documentation proto-documentation))
+      *protobuf*
+    (with-collectors ((slots collect-slot)
+                      (forms collect-form)
+                      ;; The typedef needs to be first in forms otherwise ccl warns.
+                      ;; We'll collect them separately and splice them in first.
+                      (type-forms collect-type-form))
+      (dolist (field fields)
+        (case (car field)
+          ((define-enum define-message define-extend define-extension define-group
+             define-type-alias)
+           (destructuring-bind (&optional progn model-type model definers extra-field extra-slot)
+               (macroexpand-1 field env)
+             (assert (eq progn 'progn) ()
+                     "The macroexpansion for ~S failed" field)
+             (map () #'collect-form definers)
+             (ecase model-type
+               ((define-enum)
+                (appendf (proto-enums *protobuf*) (list model)))
+               ((define-type-alias)
+                (appendf (proto-type-aliases *protobuf*) (list model)))
+               ((define-message define-extend)
+                (setf (proto-parent model) *protobuf*)
+                (appendf (proto-messages *protobuf*) (list model))
+                (when (eq (proto-message-type model) :extends)
+                  (appendf (proto-extenders *protobuf*) (list model))))
+               ((define-group)
+                (setf (proto-parent model) *protobuf*)
+                (appendf (proto-messages *protobuf*) (list model))
+                (when extra-slot
+                  (collect-slot extra-slot))
+                (appendf (proto-fields *protobuf*) (list extra-field)))
+               ((define-extension)
+                (appendf (proto-extensions *protobuf*) (list model))))))
+          (otherwise
+           (multiple-value-bind (field slot idx)
+               (process-field field index :conc-name conc-name :alias-for alias-for)
+             (assert (not (find-field *protobuf* (proto-index field))) ()
+                     "The field ~S overlaps with another field in ~S"
+                     (proto-value field) (proto-class *protobuf*))
+             (setq index idx)
+             (when slot
+               (collect-slot slot))
+             (appendf (proto-fields *protobuf*) (list field))))))
+      (if alias-for
+        ;; If we've got an alias, define a type that is the subtype of
+        ;; the Lisp class that typep and subtypep work
+        (unless (or (eq type alias-for) (find-class type nil))
+          (collect-type-form `(deftype ,type () ',alias-for)))
+        ;; If no alias, define the class now
+        (collect-type-form `(defclass ,type (#+use-base-protobuf-message base-protobuf-message)
+                              ,slots
+                              ,@(and documentation `((:documentation ,documentation))))))
+      (nconc type-forms forms))))
+
+
 ;; Define a message named 'name' and a Lisp 'defclass'
 (defmacro define-message (type (&key name conc-name alias-for options
                                      documentation source-location)
@@ -249,65 +310,13 @@
                     :options   (remove-options options "default" "packed")
                     :documentation documentation
                     :source-location source-location))
-         (index 0)
          ;; Only now can we bind *protobuf* to the new message
          (*protobuf* message))
-    (with-collectors ((slots collect-slot)
-                      (forms collect-form)
-                      ;; The typedef needs to be first in forms otherwise ccl warns.
-                      ;; We'll collect them separately and splice them in first.
-                      (type-forms collect-type-form))
-      (dolist (field fields)
-        (case (car field)
-          ((define-enum define-message define-extend define-extension define-group
-            define-type-alias)
-           (destructuring-bind (&optional progn model-type model definers extra-field extra-slot)
-               (macroexpand-1 field env)
-             (assert (eq progn 'progn) ()
-                     "The macroexpansion for ~S failed" field)
-             (map () #'collect-form definers)
-             (ecase model-type
-               ((define-enum)
-                (appendf (proto-enums message) (list model)))
-               ((define-type-alias)
-                (appendf (proto-type-aliases message) (list model)))
-               ((define-message define-extend)
-                (setf (proto-parent model) message)
-                (appendf (proto-messages message) (list model))
-                (when (eq (proto-message-type model) :extends)
-                  (appendf (proto-extenders message) (list model))))
-               ((define-group)
-                (setf (proto-parent model) message)
-                (appendf (proto-messages message) (list model))
-                (when extra-slot
-                  (collect-slot extra-slot))
-                (appendf (proto-fields message) (list extra-field)))
-               ((define-extension)
-                (appendf (proto-extensions message) (list model))))))
-          (otherwise
-           (multiple-value-bind (field slot idx)
-               (process-field field index :conc-name conc-name :alias-for alias-for)
-             (assert (not (find-field message (proto-index field))) ()
-                     "The field ~S overlaps with another field in ~S"
-                     (proto-value field) (proto-class message))
-             (setq index idx)
-             (when slot
-               (collect-slot slot))
-             (appendf (proto-fields message) (list field))))))
-      (if alias-for
-        ;; If we've got an alias, define a a type that is the subtype of
-        ;; the Lisp class that typep and subtypep work
-        (unless (or (eq type alias-for) (find-class type nil))
-          (collect-type-form `(deftype ,type () ',alias-for)))
-        ;; If no alias, define the class now
-        (collect-type-form `(defclass ,type (#+use-base-protobuf-message base-protobuf-message) (,@slots)
-                              ,@(and documentation `((:documentation ,documentation))))))
-      `(progn
-         define-message
-         ,message
-         ((with-proto-source-location (,type ,name protobuf-message ,@source-location)
-            ,@type-forms
-            ,@forms))))))
+    `(progn
+       define-message
+       ,message
+       ((with-proto-source-location (,type ,name protobuf-message ,@source-location)
+          ,@(generate-message-forms type fields env))))))
 
 (defun conc-name-for-type (type conc-name)
   (and conc-name
@@ -571,67 +580,15 @@
                     :message-type :group                ;this message is a group
                     :documentation documentation
                     :source-location source-location))
-         (index 0)
          ;; Only now can we bind *protobuf* to the (group) message
          (*protobuf* message))
-    (with-collectors ((slots collect-slot)
-                      (forms collect-form)
-                      ;; The typedef needs to be first in forms otherwise ccl warns.
-                      ;; We'll collect them separately and splice them in first.
-                      (type-forms collect-type-form))
-      (dolist (field fields)
-        (case (car field)
-          ((define-enum define-message define-extend define-extension define-group
-            define-type-alias)
-           (destructuring-bind (&optional progn model-type model definers extra-field extra-slot)
-               (macroexpand-1 field env)
-             (assert (eq progn 'progn) ()
-                     "The macroexpansion for ~S failed" field)
-             (map () #'collect-form definers)
-             (ecase model-type
-               ((define-enum)
-                (appendf (proto-enums message) (list model)))
-               ((define-type-alias)
-                (appendf (proto-type-aliases message) (list model)))
-               ((define-message define-extend)
-                (setf (proto-parent model) message)
-                (appendf (proto-messages message) (list model))
-                (when (eq (proto-message-type model) :extends)
-                  (appendf (proto-extenders message) (list model))))
-               ((define-group)
-                (setf (proto-parent model) message)
-                (appendf (proto-messages message) (list model))
-                (when extra-slot
-                  (collect-slot extra-slot))
-                (appendf (proto-fields message) (list extra-field)))
-               ((define-extension)
-                (appendf (proto-extensions message) (list model))))))
-          (otherwise
-           (multiple-value-bind (field slot idx)
-               (process-field field index :conc-name conc-name :alias-for alias-for)
-             (assert (not (find-field message (proto-index field))) ()
-                     "The field ~S overlaps with another field in ~S"
-                     (proto-value field) (proto-class message))
-             (setq index idx)
-             (when slot
-               (collect-slot slot))
-             (appendf (proto-fields message) (list field))))))
-      (if alias-for
-        ;; If we've got an alias, define a a type that is the subtype of
-        ;; the Lisp class that typep and subtypep work
-        (unless (or (eq type alias-for) (find-class type nil))
-          (collect-type-form `(deftype ,type () ',alias-for)))
-        ;; If no alias, define the class now
-        (collect-type-form `(defclass ,type (#+use-base-protobuf-message base-protobuf-message) (,@slots)
-                              ,@(and documentation `((:documentation ,documentation))))))
-      `(progn
-         define-group
-         ,message
-         ((with-proto-source-location (,type ,name protobuf-message ,@source-location)
-            ,@type-forms
-            ,@forms))
-         ,mfield
-         ,mslot))))
+    `(progn
+       define-group
+       ,message
+       ((with-proto-source-location (,type ,name protobuf-message ,@source-location)
+          ,@(generate-message-forms type fields env)))
+       ,mfield
+       ,mslot)))
 
 (defun process-field (field index &key conc-name alias-for)
   "Process one field descriptor within 'define-message' or 'define-extend'.
