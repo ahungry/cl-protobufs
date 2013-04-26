@@ -893,7 +893,7 @@
   (let* ((octets (babel:string-to-octets string :encoding :utf-8))
          (len (length octets))
          (idx (encode-uint32 len buffer index)))
-    (declare (type (array (unsigned-byte 8)) octets)
+    (declare (type (simple-array (unsigned-byte 8)) octets)
              (type fixnum len)
              (type (unsigned-byte 32) idx))
     (replace buffer octets :start1 idx)
