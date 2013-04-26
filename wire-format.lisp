@@ -827,19 +827,20 @@
    Modifies the buffer, and returns the new index into the buffer.
    Watch out, this function turns off all type checking and array bounds checking."
   (declare #.$optimize-serialization)
-  (let ((val (ldb (byte 64 0) val))) ;clamp val to 64-bits maximum
-    (declare (type (unsigned-byte 64) val)
-             (type (simple-array (unsigned-byte 8)) buffer)
-             (type fixnum index))
-    ;; Seven bits at a time, least significant bits first
-    (loop do (let ((bits (ldb (byte 7 0) val)))
-               (declare (type (unsigned-byte 8) bits))
-               (setq val (ash val -7))
-               (setf (aref buffer index)
-                     (ilogior bits (if (zerop val) 0 128)))
-               (iincf index))
-          until (zerop val))
-    (values index buffer)))  ;return the buffer to improve 'trace'
+  (declare (type (simple-array (unsigned-byte 8)) buffer)
+           (type fixnum index))
+  ;; Seven bits at a time, least significant bits first
+  (loop repeat 9                ;up to 63 bits
+        do (setf (aref buffer index) (ldb (byte 7 0) val))
+           (setq val (ash val -7))
+        until (zerop val)
+        do (iincf (aref buffer index) #x80)
+           (iincf index)
+        finally (unless (zerop val)     ;take the 64th bit as needed
+                  (setf (aref buffer index) 1)
+                  (unless (= val -1)
+                    (serialization-error "Integer too large while encoding VarInt."))))
+  (values (iincf index) buffer))        ;return the buffer to improve 'trace'
 
 (defun encode-single (val buffer index)
   "Encodes the single float 'val' into the buffer at the given index.
