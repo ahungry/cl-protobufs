@@ -929,10 +929,10 @@
          (bytes (/ bits 8))
          ;; Given bits, can we use fixnums safely?
          (fixnump (<= bits (integer-length most-negative-fixnum)))
-         (ldb (if fixnump 'ildb 'ldb))
          (ash (if fixnump 'iash 'ash))
          (decf (if fixnump 'idecf 'decf))
-         (logior (if fixnump 'ilogior 'logior)))
+         (logior (if fixnump 'ilogior 'logior))
+         (logbitp (if fixnump 'ilogbitp 'logbitp)))
     `(progn
        (defun ,decode-uint (buffer index)
          ,(format nil
@@ -950,7 +950,7 @@
                  do (let ((bits (ildb (byte 7 0) byte)))
                       (declare (type (unsigned-byte 8) bits))
                       (setq val (,logior val (,ash bits places))))
-                 until (i< byte 128)
+                 while (ilogbitp 7 byte)
                  finally (progn
                            (unless (< val ,(ash 1 bits))
                              (serialization-error "The value ~D is longer than ~A bits" val ,bits))
@@ -986,7 +986,7 @@
                  for places fixnum upfrom 0 by 8
                  for byte fixnum = (prog1 (aref buffer index) (iincf index))
                  do (setq val (,logior val (,ash byte places))))
-           (when (i= (,ldb (byte 1 ,(1- bits)) val) 1)  ;sign bit set, so negative value
+           (when (,logbitp ,(1- bits) val)      ;sign bit set, so negative value
              (,decf val ,(ash 1 bits)))
            (values val index))))))
 
@@ -1002,8 +1002,8 @@
            (type fixnum index))
   (multiple-value-bind (val index)
       (decode-uint64 buffer index)
-    (when (i= (ldb (byte 1 63) val) 1)
-      (decf val (ash 1 64)))
+    (when (logbitp 63 val)
+      (decf val #.(ash 1 64)))
     (values val index)))
 
 (defun decode-single (buffer index)
@@ -1015,13 +1015,15 @@
            (type fixnum index))
   ;; Eight bits at a time, least significant bits first
   (let ((bits 0))
+    (declare (type (unsigned-byte 32) bits))
     (loop repeat 4
           for places fixnum upfrom 0 by 8
           for byte fixnum = (prog1 (aref buffer index) (iincf index))
           do (setq bits (logior bits (ash byte places))))
-    (when (i= (ldb (byte 1 31) bits) 1)             ;sign bit set, so negative value
-      (decf bits #.(ash 1 32)))
-    (values (make-single-float bits) index)))
+    (values (make-single-float (if (logbitp 31 bits)    ;sign bit
+                                 (- bits #.(ash 1 32))
+                                 bits))
+            index)))
 
 (defun decode-double (buffer index)
   "Decodes the next double float in the buffer at the given index.
@@ -1033,6 +1035,8 @@
   ;; Eight bits at a time, least significant bits first
   (let ((low  0)
         (high 0))
+    (declare (type (unsigned-byte 32) low)
+             (type (unsigned-byte 32) high))
     (loop repeat 4
           for places fixnum upfrom 0 by 8
           for byte fixnum = (prog1 (aref buffer index) (iincf index))
@@ -1042,9 +1046,10 @@
           for byte fixnum = (prog1 (aref buffer index) (iincf index))
           do (setq high (logior high (ash byte places))))
     ;; High bits are signed, but low bits are unsigned
-    (when (i= (ldb (byte 1 31) high) 1)             ;sign bit set, so negative value
-      (decf high #.(ash 1 32)))
-    (values (make-double-float low high) index)))
+    (values (make-double-float low (if (logbitp 31 high)        ;sign bit
+                                     (- high #.(ash 1 32))
+                                     high))
+            index)))
 
 (defun decode-string (buffer index)
   "Decodes the next UTF-8 encoded string in the buffer at the given index.
