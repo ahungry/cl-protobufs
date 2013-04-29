@@ -828,6 +828,7 @@
    Watch out, this function turns off all type checking and array bounds checking."
   (declare #.$optimize-serialization)
   (declare (type (simple-array (unsigned-byte 8)) buffer)
+           (type (signed-byte 64) val)
            (type fixnum index))
   ;; Seven bits at a time, least significant bits first
   (loop repeat 9                ;up to 63 bits
@@ -851,6 +852,7 @@
            (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
   (let ((bits (single-float-bits val)))
+    (declare (type (signed-byte 32) bits))
     (loop repeat 4 doing
       (let ((byte (ldb (byte 8 0) bits)))
         (declare (type (unsigned-byte 8) byte))
@@ -869,6 +871,8 @@
            (type fixnum index))
   (multiple-value-bind (low high)
       (double-float-bits val)
+    (declare (type (unsigned-byte 32) low)
+             (type (signed-byte 32) high))
     (loop repeat 4 doing
       (let ((byte (ldb (byte 8 0) low)))
         (declare (type (unsigned-byte 8) byte))
