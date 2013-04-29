@@ -1006,9 +1006,11 @@
            (type fixnum index))
   (multiple-value-bind (val index)
       (decode-uint64 buffer index)
-    (when (logbitp 63 val)
-      (decf val #.(ash 1 64)))
-    (values val index)))
+    (declare (type (unsigned-byte 64) val))
+    (values (if (logbitp 63 val)
+                (- val #.(ash 1 64))
+                val)
+            index)))
 
 (defun decode-single (buffer index)
   "Decodes the next single float in the buffer at the given index.
