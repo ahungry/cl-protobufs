@@ -454,7 +454,7 @@
                (appendf (proto-messages extends) (list model))
                (when extra-slot
                  (collect-form (gen-extend-field-forms extra-slot)))
-               (process-extend-field field)))
+               (process-extend-field extra-field)))
             (otherwise
              (multiple-value-bind (field slot idx)
                  (process-field field index :conc-name conc-name :alias-for alias-for)
