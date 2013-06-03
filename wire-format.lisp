@@ -137,10 +137,12 @@
     (let ((idx (encode-uint32 tag buffer index)))
       (declare (type fixnum idx))
       (ecase type
-        ((:int32 :uint32)
-         (encode-uint32 (ldb (byte 32 0) val) buffer idx))
-        ((:int64 :uint64)
-         (encode-uint64 (ldb (byte 64 0) val) buffer idx))
+        ((:int32 :int64)
+         (encode-int val buffer idx))
+        ((:uint32)
+         (encode-uint32 val buffer idx))
+        ((:uint64)
+         (encode-uint64 val buffer idx))
         ((:sint32)
          (encode-uint32 (zig-zag-encode32 val) buffer idx))
         ((:sint64)
@@ -171,7 +173,7 @@
                       (format nil "~A:~A" (package-name (symbol-package val)) (symbol-name val)))))
            (encode-string val buffer idx)))
         ((:date :time :datetime :timestamp)
-         (encode-uint64 (ldb (byte 64 0) val) buffer idx))))))
+         (encode-uint64 val buffer idx))))))
 
 (define-compiler-macro serialize-prim (&whole form val type tag buffer index)
   (setq type (fold-symbol type)
@@ -186,10 +188,8 @@
        (let ((idx (encode-uint32 ,tag ,buffer ,index)))
          (declare (type fixnum idx))
          ,(ecase type
-            ((:int32)
-             `(encode-uint32 (ldb (byte 32 0) ,val) ,buffer idx))
-            ((:int64)
-             `(encode-uint64 (ldb (byte 64 0) ,val) ,buffer idx))
+            ((:int32 :int64)
+             `(encode-int ,val ,buffer idx))
             ((:uint32)
              `(encode-uint32 ,val ,buffer idx))
             ((:uint64)
@@ -234,29 +234,21 @@
           (packed-size values type tag)
         (declare (type fixnum len) (ignore full-len))
         (setq idx (encode-uint32 len buffer idx)))
-      (ecase type
-        ((:int32 :uint32)
-         (map () #'(lambda (val) (setq idx (encode-uint32 (ldb (byte 32 0) val) buffer idx))) values))
-        ((:int64 :uint64)
-         (map () #'(lambda (val) (setq idx (encode-uint64 (ldb (byte 64 0) val) buffer idx))) values))
-        ((:sint32)
-         (map () #'(lambda (val) (setq idx (encode-uint32 (zig-zag-encode32 val) buffer idx))) values))
-        ((:sint64)
-         (map () #'(lambda (val) (setq idx (encode-uint64 (zig-zag-encode64 val) buffer idx))) values))
-        ((:fixed32)
-         (map () #'(lambda (val) (setq idx (encode-fixed32 val buffer idx))) values))
-        ((:sfixed32)
-         (map () #'(lambda (val) (setq idx (encode-sfixed32 val buffer idx))) values))
-        ((:fixed64)
-         (map () #'(lambda (val) (setq idx (encode-fixed64 val buffer idx))) values))
-        ((:sfixed64)
-         (map () #'(lambda (val) (setq idx (encode-sfixed64 val buffer idx))) values))
-        ((:bool)
-         (map () #'(lambda (val) (setq idx (encode-uint32 (if val 1 0) buffer idx))) values))
-        ((:float)
-         (map () #'(lambda (val) (setq idx (encode-single val buffer idx))) values))
-        ((:double)
-         (map () #'(lambda (val) (setq idx (encode-double val buffer idx))) values)))
+      (map ()
+           (ecase type
+             ((:int32 :int64) #'(lambda (val) (setq idx (encode-int val buffer idx))))
+             ((:uint32) #'(lambda (val) (setq idx (encode-uint32 val buffer idx))))
+             ((:uint64) #'(lambda (val) (setq idx (encode-uint64 val buffer idx))))
+             ((:sint32) #'(lambda (val) (setq idx (encode-uint32 (zig-zag-encode32 val) buffer idx))))
+             ((:sint64) #'(lambda (val) (setq idx (encode-uint64 (zig-zag-encode64 val) buffer idx))))
+             ((:fixed32) #'(lambda (val) (setq idx (encode-fixed32 val buffer idx))))
+             ((:sfixed32) #'(lambda (val) (setq idx (encode-sfixed32 val buffer idx))))
+             ((:fixed64) #'(lambda (val) (setq idx (encode-fixed64 val buffer idx))))
+             ((:sfixed64) #'(lambda (val) (setq idx (encode-sfixed64 val buffer idx))))
+             ((:bool) #'(lambda (val) (setq idx (encode-uint32 (if val 1 0) buffer idx))))
+             ((:float) #'(lambda (val) (setq idx (encode-single val buffer idx))))
+             ((:double) #'(lambda (val) (setq idx (encode-double val buffer idx)))))
+           values)
       idx)))
 
 ;; The optimized serializers supply 'vectorp' so we can generate better code
@@ -280,10 +272,8 @@
            (setq idx (encode-uint32 len ,buffer idx)))
          (,(if vectorp 'dovector 'dolist) (val ,values)
             ,(ecase type
-               ((:int32)
-                `(setq idx (encode-uint32 (ldb (byte 32 0) val) ,buffer idx)))
-               ((:int64)
-                `(setq idx (encode-uint64 (ldb (byte 64 0) val) ,buffer idx)))
+               ((:int32 :int64)
+                `(setq idx (encode-int val ,buffer idx)))
                ((:uint32)
                 `(setq idx (encode-uint32 val ,buffer idx)))
                ((:uint64)
@@ -324,7 +314,7 @@
            (idx (encode-uint32 tag buffer index)))
       (declare (type (unsigned-byte 32) val)
                (type fixnum idx))
-      (encode-uint32 (ldb (byte 32 0) val) buffer idx))))
+      (encode-uint32 val buffer idx))))
 
 (defun serialize-packed-enum (values enum-values tag buffer index)
   "Serializes Protobufs enum values into the buffer at the given index.
@@ -346,7 +336,7 @@
                   (let ((val (let ((e (find val enum-values :key #'proto-value)))
                                (and e (proto-index e)))))
                     (declare (type (unsigned-byte 32) val))
-                    (setq idx (encode-uint32 (ldb (byte 32 0) val) buffer idx)))) values)
+                    (setq idx (encode-uint32 val buffer idx)))) values)
       idx)))
 
 
@@ -362,10 +352,8 @@
            (type fixnum index))
   (locally (declare #.$optimize-serialization)
     (ecase type
-      ((:int32)
-       (decode-int32 buffer index))
-      ((:int64)
-       (decode-int64 buffer index))
+      ((:int32 :int64)
+       (decode-int buffer index))
       ((:uint32)
        (decode-uint32 buffer index))
       ((:uint64)
@@ -416,10 +404,8 @@
                        (type (simple-array (unsigned-byte 8)) ,buffer)
                        (type fixnum ,index))
        ,(ecase type
-          ((:int32)
-           `(decode-int32 ,buffer ,index))
-          ((:int64)
-           `(decode-int64 ,buffer ,index))
+          ((:int32 :int64)
+           `(decode-int ,buffer ,index))
           ((:uint32)
            `(decode-uint32 ,buffer ,index))
           ((:uint64)
@@ -474,10 +460,8 @@
               (return-from deserialize-packed (values values idx)))
             (multiple-value-bind (val nidx)
                 (ecase type
-                  ((:int32)
-                   (decode-int32 buffer idx))
-                  ((:int64)
-                   (decode-int64 buffer idx))
+                  ((:int32 :int64)
+                   (decode-int buffer idx))
                   ((:uint32)
                    (decode-uint32 buffer idx))
                   ((:uint64)
@@ -530,10 +514,8 @@
                    (return-from deserialize-packed (values values idx)))
                  (multiple-value-bind (val nidx)
                      ,(ecase type
-                        ((:int32)
-                         `(decode-int32 ,buffer idx))
-                        ((:int64)
-                         `(decode-int64 ,buffer idx))
+                        ((:int32 :int64)
+                         `(decode-int ,buffer idx))
                         ((:uint32)
                          `(decode-uint32 ,buffer idx))
                         ((:uint64)
@@ -576,7 +558,7 @@
            (type fixnum index))
   (locally (declare #.$optimize-serialization)
     (multiple-value-bind (val idx)
-        (decode-int32 buffer index)
+        (decode-int buffer index)
       (let ((val (let ((e (find val enum-values :key #'proto-index)))
                    (and e (proto-value e)))))
         (values val idx)))))
@@ -601,7 +583,7 @@
             (when (>= idx end)
               (return-from deserialize-packed-enum (values values idx)))
             (multiple-value-bind (val nidx)
-                (decode-int32 buffer idx)
+                (decode-int buffer idx)
               (let ((val (let ((e (find val enum-values :key #'proto-index)))
                            (and e (proto-value e)))))
                 (collect-value val)
@@ -616,38 +598,36 @@
   (declare (type (unsigned-byte 32) tag))
   (locally (declare #.$optimize-serialization)
     (ecase type
-      ((:int32 :uint32)
-       (i+ (length32 tag) (length32 (ldb (byte 32 0) val))))
-      ((:int64 :uint64)
-       (i+ (length32 tag) (length64 (ldb (byte 64 0) val))))
+      ((:int32 :uint32 :int64 :uint64)
+       (i+ (varint-length tag) (varint-length val)))
       ((:sint32)
-       (i+ (length32 tag) (length32 (zig-zag-encode32 val))))
+       (i+ (varint-length tag) (varint-length (zig-zag-encode32 val))))
       ((:sint64)
-       (i+ (length32 tag) (length64 (zig-zag-encode64 val))))
+       (i+ (varint-length tag) (varint-length (zig-zag-encode64 val))))
       ((:fixed32 :sfixed32)
-       (i+ (length32 tag) 4))
+       (i+ (varint-length tag) 4))
       ((:fixed64 :sfixed64)
-       (i+ (length32 tag) 8))
+       (i+ (varint-length tag) 8))
       ((:string)
        (let ((len (babel:string-size-in-octets val :encoding :utf-8)))
-         (i+ (length32 tag) (length32 len) len)))
+         (i+ (varint-length tag) (varint-length len) len)))
       ((:bytes)
        (let ((len (length val)))
-         (i+ (length32 tag) (length32 len) len)))
+         (i+ (varint-length tag) (varint-length len) len)))
       ((:bool)
-       (i+ (length32 tag) 1))
+       (i+ (varint-length tag) 1))
       ((:float)
-       (i+ (length32 tag) 4))
+       (i+ (varint-length tag) 4))
       ((:double)
-       (i+ (length32 tag) 8))
+       (i+ (varint-length tag) 8))
       ;; A few of our homegrown types
       ((:symbol)
        (let ((len (if (keywordp val)
                     (length (symbol-name val))
                     (i+ (length (package-name (symbol-package val))) 1 (length (symbol-name val))))))
-         (i+ (length32 tag) (length32 len) len)))
+         (i+ (varint-length tag) (varint-length len) len)))
       ((:date :time :datetime :timestamp)
-       (i+ (length32 tag) 8)))))
+       (i+ (varint-length tag) 8)))))
 
 (define-compiler-macro prim-size (&whole form val type tag)
   (setq type (fold-symbol type)
@@ -657,34 +637,28 @@
                      :string :bytes :bool :float :double))
     `(locally (declare #.$optimize-serialization)
        ,(ecase type
-          ((:int32)
-           `(i+ (length32 ,tag) (length32 (ldb (byte 32 0) ,val))))
-          ((:int64)
-           `(i+ (length32 ,tag) (length64 (ldb (byte 64 0) ,val))))
-          ((:uint32)
-           `(i+ (length32 ,tag) (length32 ,val)))
-          ((:uint64)
-           `(i+ (length32 ,tag) (length64 ,val)))
+          ((:int32 :int64 :uint32 :uint64)
+           `(i+ (varint-length ,tag) (varint-length ,val)))
           ((:sint32)
-           `(i+ (length32 ,tag) (length32 (zig-zag-encode32 ,val))))
+           `(i+ (varint-length ,tag) (varint-length (zig-zag-encode32 ,val))))
           ((:sint64)
-           `(i+ (length32 ,tag) (length64 (zig-zag-encode64 ,val))))
+           `(i+ (varint-length ,tag) (varint-length (zig-zag-encode64 ,val))))
           ((:fixed32 :sfixed32)
-           `(i+ (length32 ,tag) 4))
+           `(i+ (varint-length ,tag) 4))
           ((:fixed64 :sfixed64)
-           `(i+ (length32 ,tag) 8))
+           `(i+ (varint-length ,tag) 8))
           ((:string)
            `(let ((len (babel:string-size-in-octets ,val :encoding :utf-8)))
-              (i+ (length32 ,tag) (length32 len) len)))
+              (i+ (varint-length ,tag) (varint-length len) len)))
           ((:bytes)
            `(let ((len (length ,val)))
-              (i+ (length32 ,tag) (length32 len) len)))
+              (i+ (varint-length ,tag) (varint-length len) len)))
           ((:bool)
-           `(i+ (length32 ,tag) 1))
+           `(i+ (varint-length ,tag) 1))
           ((:float)
-           `(i+ (length32 ,tag) 4))
+           `(i+ (varint-length ,tag) 4))
           ((:double)
-           `(i+ (length32 ,tag) 8))))
+           `(i+ (varint-length ,tag) 8))))
     form))
 
 (defun packed-size (values type tag &optional vectorp)
@@ -697,10 +671,9 @@
                  (declare (type fixnum len))
                  (map () #'(lambda (val)
                              (iincf len (ecase type
-                                          ((:int32 :uint32) (length32 (ldb (byte 32 0) val)))
-                                          ((:int64 :uint64) (length64 (ldb (byte 64 0) val)))
-                                          ((:sint32) (length32 (zig-zag-encode32 val)))
-                                          ((:sint64) (length64 (zig-zag-encode64 val)))
+                                          ((:int32 :uint32 :int64 :uint64) (varint-length val))
+                                          ((:sint32) (varint-length (zig-zag-encode32 val)))
+                                          ((:sint64) (varint-length (zig-zag-encode64 val)))
                                           ((:fixed32 :sfixed32) 4)
                                           ((:fixed64 :sfixed64) 8)
                                           ((:bool)   1)
@@ -710,7 +683,7 @@
       (declare (type (unsigned-byte 32) len))
       ;; Two value: the full size of the packed object, and the size
       ;; of just the payload
-      (values (i+ (length32 tag) (length32 len) len) len))))
+      (values (i+ (varint-length tag) (varint-length len) len) len))))
 
 ;; The optimized serializers supply 'vectorp' so we can generate better code
 (define-compiler-macro packed-size (&whole form values type tag
@@ -726,12 +699,9 @@
                     (declare (type fixnum len))
                     (,(if vectorp 'dovector 'dolist) (val ,values)
                        (iincf len ,(ecase type
-                                     ((:int32) `(length32 (ldb (byte 32 0) val)))
-                                     ((:int64) `(length64 (ldb (byte 64 0) val)))
-                                     ((:uint32) `(length32 val))
-                                     ((:uint64) `(length64 val))
-                                     ((:sint32) `(length32 (zig-zag-encode32 val)))
-                                     ((:sint64) `(length64 (zig-zag-encode64 val)))
+                                     ((:int32 :uint32 :int64 :uint64) `(varint-length val))
+                                     ((:sint32) `(varint-length (zig-zag-encode32 val)))
+                                     ((:sint64) `(varint-length (zig-zag-encode64 val)))
                                      ((:fixed32 :sfixed32) `4)
                                      ((:fixed64 :sfixed64) `8)
                                      ((:bool)   `1)
@@ -739,7 +709,7 @@
                                      ((:double) `8))))
                     len)))
          (declare (type (unsigned-byte 32) len))
-         (values (i+ (length32 (the (unsigned-byte 32) ,tag)) (length32 len) len) len)))
+         (values (i+ (varint-length (the (unsigned-byte 32) ,tag)) (varint-length len) len) len)))
     form))
 
 (defun enum-size (val enum-values tag)
@@ -750,7 +720,7 @@
                (and e (proto-index e)))))
     (unless idx
       (serialization-error "There is no enum value for ~S" val))
-    (i+ (length32 tag) (length32 (ldb (byte 32 0) idx)))))
+    (i+ (varint-length tag) (varint-length (ldb (byte 32 0) idx)))))
 
 (defun packed-enum-size (values enum-values tag)
   "Returns the size in bytes that the enum values will take when serialized."
@@ -763,12 +733,12 @@
                                         (and e (proto-index e)))))
                              (unless idx
                                (serialization-error "There is no enum value for ~S" val))
-                             (iincf len (length32 (ldb (byte 32 0) idx))))) values)
+                             (iincf len (varint-length (ldb (byte 32 0) idx))))) values)
                len)))
     (declare (type (unsigned-byte 32) len))
     ;; Two value: the full size of the packed object, and the size
     ;; of just the payload
-    (values (i+ (length32 tag) (length32 len) len) len)))
+    (values (i+ (varint-length tag) (varint-length len) len) len)))
 
 
 ;;; Wire-level encoders
@@ -793,17 +763,18 @@
                    ~&    Modifies the buffer, and returns the new index into the buffer.~
                    ~&    Watch out, this function turns off all type checking and array bounds checking." bits)
          (declare #.$optimize-serialization)
-         (declare (type (unsigned-byte ,bits) val)
-                  (type (simple-array (unsigned-byte 8)) buffer)
-                  (type fixnum index))
-         ;; Seven bits at a time, least significant bits first
-         (loop do (let ((bits (,ldb (byte 7 0) val)))
-                    (declare (type (unsigned-byte 8) bits))
-                    (setq val (,ash val -7))
-                    (setf (aref buffer index)
-                          (ilogior bits (if ,zerop-val 0 128)))
-                    (iincf index))
-               until ,zerop-val)
+         (let ((val (ldb (byte ,bits 0) val)))
+           (declare (type (unsigned-byte ,bits) val)
+                    (type (simple-array (unsigned-byte 8)) buffer)
+                    (type fixnum index))
+           ;; Seven bits at a time, least significant bits first
+           (loop do (let ((bits (,ldb (byte 7 0) val)))
+                      (declare (type (unsigned-byte 8) bits))
+                      (setq val (,ash val -7))
+                      (setf (aref buffer index)
+                            (ilogior bits (if ,zerop-val 0 128)))
+                      (iincf index))
+                 until ,zerop-val))
          (values index buffer))                 ;return the buffer to improve 'trace'
        (defun ,encode-fixed (val buffer index)
          ,(format nil
@@ -841,6 +812,27 @@
 (generate-integer-encoders 32)
 (generate-integer-encoders 64)
 
+(defun encode-int (val buffer index)
+  "Encodes the signed integer 'val' as a varint into the buffer at the given index.
+   Modifies the buffer, and returns the new index into the buffer.
+   Watch out, this function turns off all type checking and array bounds checking."
+  (declare #.$optimize-serialization)
+  (declare (type (simple-array (unsigned-byte 8)) buffer)
+           (type (signed-byte 64) val)
+           (type fixnum index))
+  ;; Seven bits at a time, least significant bits first
+  (loop repeat 9                ;up to 63 bits
+        do (setf (aref buffer index) (ldb (byte 7 0) val))
+           (setq val (ash val -7))
+        until (zerop val)
+        do (iincf (aref buffer index) #x80)
+           (iincf index)
+        finally (unless (zerop val)     ;take the 64th bit as needed
+                  (setf (aref buffer index) 1)
+                  (unless (= val -1)
+                    (serialization-error "Integer too large while encoding VarInt."))))
+  (values (iincf index) buffer))        ;return the buffer to improve 'trace'
+
 (defun encode-single (val buffer index)
   "Encodes the single float 'val' into the buffer at the given index.
    Modifies the buffer, and returns the new index into the buffer.
@@ -850,6 +842,7 @@
            (type (simple-array (unsigned-byte 8)) buffer)
            (type fixnum index))
   (let ((bits (single-float-bits val)))
+    (declare (type (signed-byte 32) bits))
     (loop repeat 4 doing
       (let ((byte (ldb (byte 8 0) bits)))
         (declare (type (unsigned-byte 8) byte))
@@ -868,6 +861,8 @@
            (type fixnum index))
   (multiple-value-bind (low high)
       (double-float-bits val)
+    (declare (type (unsigned-byte 32) low)
+             (type (signed-byte 32) high))
     (loop repeat 4 doing
       (let ((byte (ldb (byte 8 0) low)))
         (declare (type (unsigned-byte 8) byte))
@@ -892,7 +887,7 @@
   (let* ((octets (babel:string-to-octets string :encoding :utf-8))
          (len (length octets))
          (idx (encode-uint32 len buffer index)))
-    (declare (type (array (unsigned-byte 8)) octets)
+    (declare (type (simple-array (unsigned-byte 8)) octets)
              (type fixnum len)
              (type (unsigned-byte 32) idx))
     (replace buffer octets :start1 idx)
@@ -923,16 +918,15 @@
   "Generate 32- or 64-bit versions of integer decoders."
   (assert (and (plusp bits) (zerop (mod bits 8))))
   (let* ((decode-uint (fintern "~A~A" 'decode-uint bits))
-         (decode-int  (fintern "~A~A" 'decode-int bits))
          (decode-fixed  (fintern "~A~A" 'decode-fixed bits))
          (decode-sfixed (fintern "~A~A" 'decode-sfixed bits))
          (bytes (/ bits 8))
          ;; Given bits, can we use fixnums safely?
          (fixnump (<= bits (integer-length most-negative-fixnum)))
-         (ldb (if fixnump 'ildb 'ldb))
          (ash (if fixnump 'iash 'ash))
          (decf (if fixnump 'idecf 'decf))
-         (logior (if fixnump 'ilogior 'logior)))
+         (logior (if fixnump 'ilogior 'logior))
+         (logbitp (if fixnump 'ilogbitp 'logbitp)))
     `(progn
        (defun ,decode-uint (buffer index)
          ,(format nil
@@ -950,25 +944,11 @@
                  do (let ((bits (ildb (byte 7 0) byte)))
                       (declare (type (unsigned-byte 8) bits))
                       (setq val (,logior val (,ash bits places))))
-                 until (i< byte 128)
+                 while (ilogbitp 7 byte)
                  finally (progn
                            (unless (< val ,(ash 1 bits))
                              (serialization-error "The value ~D is longer than ~A bits" val ,bits))
                            (return (values val index))))))
-       (defun ,decode-int (buffer index)
-         ,(format nil
-                  "Decodes the next ~A-bit varint integer in the buffer at the given index.~
-                   ~&    Returns both the decoded value and the new index into the buffer.~
-                   ~&    Watch out, this function turns off all type checking and array bounds checking." bits)
-         (declare #.$optimize-serialization)
-         (declare (type (simple-array (unsigned-byte 8)) buffer)
-                  (type fixnum index))
-         (multiple-value-bind (val index)
-             (,decode-uint buffer index)
-           ,@(when fixnump `((declare (type fixnum val))))
-           (when (i= (,ldb (byte 1 ,(1- bits)) val) 1)
-             (,decf val ,(ash 1 bits)))
-           (values val index)))
        (defun ,decode-fixed (buffer index)
          ,(format nil
                   "Decodes the next ~A-bit unsigned fixed integer in the buffer at the given index.~
@@ -1000,12 +980,27 @@
                  for places fixnum upfrom 0 by 8
                  for byte fixnum = (prog1 (aref buffer index) (iincf index))
                  do (setq val (,logior val (,ash byte places))))
-           (when (i= (,ldb (byte 1 ,(1- bits)) val) 1)  ;sign bit set, so negative value
+           (when (,logbitp ,(1- bits) val)      ;sign bit set, so negative value
              (,decf val ,(ash 1 bits)))
            (values val index))))))
 
 (generate-integer-decoders 32)
 (generate-integer-decoders 64)
+
+(defun decode-int (buffer index)
+  "Decodes the next varint integer in the buffer at the given index.
+   Returns both the decoded value and the new index into the buffer.
+   Watch out, this function turns off all type checking and array bounds checking."
+  (declare #.$optimize-serialization)
+  (declare (type (simple-array (unsigned-byte 8)) buffer)
+           (type fixnum index))
+  (multiple-value-bind (val index)
+      (decode-uint64 buffer index)
+    (declare (type (unsigned-byte 64) val))
+    (values (if (logbitp 63 val)
+                (- val #.(ash 1 64))
+                val)
+            index)))
 
 (defun decode-single (buffer index)
   "Decodes the next single float in the buffer at the given index.
@@ -1016,13 +1011,15 @@
            (type fixnum index))
   ;; Eight bits at a time, least significant bits first
   (let ((bits 0))
+    (declare (type (unsigned-byte 32) bits))
     (loop repeat 4
           for places fixnum upfrom 0 by 8
           for byte fixnum = (prog1 (aref buffer index) (iincf index))
           do (setq bits (logior bits (ash byte places))))
-    (when (i= (ldb (byte 1 31) bits) 1)             ;sign bit set, so negative value
-      (decf bits #.(ash 1 32)))
-    (values (make-single-float bits) index)))
+    (values (make-single-float (if (logbitp 31 bits)    ;sign bit
+                                 (- bits #.(ash 1 32))
+                                 bits))
+            index)))
 
 (defun decode-double (buffer index)
   "Decodes the next double float in the buffer at the given index.
@@ -1034,6 +1031,8 @@
   ;; Eight bits at a time, least significant bits first
   (let ((low  0)
         (high 0))
+    (declare (type (unsigned-byte 32) low)
+             (type (unsigned-byte 32) high))
     (loop repeat 4
           for places fixnum upfrom 0 by 8
           for byte fixnum = (prog1 (aref buffer index) (iincf index))
@@ -1043,9 +1042,10 @@
           for byte fixnum = (prog1 (aref buffer index) (iincf index))
           do (setq high (logior high (ash byte places))))
     ;; High bits are signed, but low bits are unsigned
-    (when (i= (ldb (byte 1 31) high) 1)             ;sign bit set, so negative value
-      (decf high #.(ash 1 32)))
-    (values (make-double-float low high) index)))
+    (values (make-double-float low (if (logbitp 31 high)        ;sign bit
+                                     (- high #.(ash 1 32))
+                                     high))
+            index)))
 
 (defun decode-string (buffer index)
   "Decodes the next UTF-8 encoded string in the buffer at the given index.
@@ -1077,28 +1077,13 @@
 ;;; Wire-level lengths
 ;;; These are called at the lowest level, so arg types are assumed to be correct
 
-(defmacro gen-length (bits)
-  "Generate 32- or 64-bit versions of integer length functions."
-  (assert (and (plusp bits) (zerop (mod bits 8))))
-  (let* (;; Given bits, can we use fixnums safely?
-         (fixnump (<= bits (integer-length most-negative-fixnum)))
-         (ash (if fixnump 'iash 'ash))
-         (zerop-val (if fixnump '(i= val 0) '(zerop val))))
-    `(defun ,(fintern "~A~A" 'length bits) (val)
-       ,(format nil "Returns the length that 'val' will take when encoded as a ~A-bit integer." bits)
-       (declare #.$optimize-serialization)
-       (declare (type (unsigned-byte ,bits) val))
-       (let ((size 0))
-         (declare (type fixnum size))
-         (loop do (progn
-                    (setq val (,ash val -7))
-                    (iincf size))
-               until ,zerop-val)
-         size))))
-
-(gen-length 32)
-(gen-length 64)
-
+(defun varint-length (val)
+  "Return the length that 'val' will take when encoded as a varint integer."
+  (declare #.$optimize-serialization)
+  (loop repeat 10                       ;max length of varint
+        do (setq val (ash val -7))
+        count 1
+        until (zerop val)))
 
 ;;; Skipping elements
 ;;; This is called at the lowest level, so arg types are assumed to be correct

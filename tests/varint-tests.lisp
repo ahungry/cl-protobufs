@@ -14,25 +14,17 @@
 
 ;;; Varint unit tests
 
-(define-test length32-test ()
-  (assert-equal (length32 0) 1)
-  (assert-equal (length32 1) 1)
-  (assert-equal (length32 127) 1)
-  (assert-equal (length32 128) 2)
-  (assert-equal (length32 16383) 2)
-  (assert-equal (length32 16384) 3)
-  (assert-equal (length32 (ash 1 31)) 5))
-
-(define-test length64-test ()
-  (assert-equal (length64 0) 1)
-  (assert-equal (length64 1) 1)
-  (assert-equal (length64 127) 1)
-  (assert-equal (length64 128) 2)
-  (assert-equal (length64 16383) 2)
-  (assert-equal (length64 16384) 3)
-  (assert-equal (length64 (- (ash 1 21) 1)) 3)
-  (assert-equal (length64 (ash 1 21)) 4)
-  (assert-equal (length64 (ash 1 63)) 10))
+(define-test varint-length-test ()
+  (assert-equal (varint-length 0) 1)
+  (assert-equal (varint-length 1) 1)
+  (assert-equal (varint-length 127) 1)
+  (assert-equal (varint-length 128) 2)
+  (assert-equal (varint-length 16383) 2)
+  (assert-equal (varint-length 16384) 3)
+  (assert-equal (varint-length (ash 1 31)) 5)
+  (assert-equal (varint-length (- (ash 1 21) 1)) 3)
+  (assert-equal (varint-length (ash 1 21)) 4)
+  (assert-equal (varint-length (ash 1 63)) 10))
 
 
 (define-test uint32-test ()
@@ -131,8 +123,7 @@
 
 
 (define-test-suite varint-tests ()
-  (length32-test
-   length64-test
+  (varint-length-test
    uint32-test
    uint64-test
    powers-varint-test
