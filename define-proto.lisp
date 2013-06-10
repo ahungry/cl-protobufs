@@ -211,6 +211,67 @@
          ((with-proto-source-location (,type ,name protobuf-enum ,@source-location)
             ,@forms))))))
 
+;; Helper for message-like forms
+(defun generate-message-forms (type fields env &aux (index 0))
+  "Generates the forms used by DEFINE-MESSAGE and DEFINE-GROUP."
+  (with-accessors ((alias-for proto-alias-for)
+                   (conc-name proto-conc-name)
+                   (documentation proto-documentation))
+      *protobuf*
+    (with-collectors ((slots collect-slot)
+                      (forms collect-form)
+                      ;; The typedef needs to be first in forms otherwise ccl warns.
+                      ;; We'll collect them separately and splice them in first.
+                      (type-forms collect-type-form))
+      (dolist (field fields)
+        (case (car field)
+          ((define-enum define-message define-extend define-extension define-group
+             define-type-alias)
+           (destructuring-bind (&optional progn model-type model definers extra-field extra-slot)
+               (macroexpand-1 field env)
+             (assert (eq progn 'progn) ()
+                     "The macroexpansion for ~S failed" field)
+             (map () #'collect-form definers)
+             (ecase model-type
+               ((define-enum)
+                (appendf (proto-enums *protobuf*) (list model)))
+               ((define-type-alias)
+                (appendf (proto-type-aliases *protobuf*) (list model)))
+               ((define-message define-extend)
+                (setf (proto-parent model) *protobuf*)
+                (appendf (proto-messages *protobuf*) (list model))
+                (when (eq (proto-message-type model) :extends)
+                  (appendf (proto-extenders *protobuf*) (list model))))
+               ((define-group)
+                (setf (proto-parent model) *protobuf*)
+                (appendf (proto-messages *protobuf*) (list model))
+                (when extra-slot
+                  (collect-slot extra-slot))
+                (appendf (proto-fields *protobuf*) (list extra-field)))
+               ((define-extension)
+                (appendf (proto-extensions *protobuf*) (list model))))))
+          (otherwise
+           (multiple-value-bind (field slot idx)
+               (process-field field index :conc-name conc-name :alias-for alias-for)
+             (assert (not (find-field *protobuf* (proto-index field))) ()
+                     "The field ~S overlaps with another field in ~S"
+                     (proto-value field) (proto-class *protobuf*))
+             (setq index idx)
+             (when slot
+               (collect-slot slot))
+             (appendf (proto-fields *protobuf*) (list field))))))
+      (if alias-for
+        ;; If we've got an alias, define a type that is the subtype of
+        ;; the Lisp class that typep and subtypep work
+        (unless (or (eq type alias-for) (find-class type nil))
+          (collect-type-form `(deftype ,type () ',alias-for)))
+        ;; If no alias, define the class now
+        (collect-type-form `(defclass ,type (#+use-base-protobuf-message base-protobuf-message)
+                              ,slots
+                              ,@(and documentation `((:documentation ,documentation))))))
+      (nconc type-forms forms))))
+
+
 ;; Define a message named 'name' and a Lisp 'defclass'
 (defmacro define-message (type (&key name conc-name alias-for options
                                      documentation source-location)
@@ -226,7 +287,7 @@
    the case that trying to (de)serialize into a Lisp object won't work.
    'options' is a set of keyword/value pairs, both of which are strings.
 
-   Fields take the form (slot &key type name default reader)
+   Fields take the form (slot &key type name default reader writer)
    'slot' can be either a symbol giving the field name, or a list whose
    first element is the slot name and whose second element is the index.
    'type' is the type of the slot.
@@ -249,65 +310,13 @@
                     :options   (remove-options options "default" "packed")
                     :documentation documentation
                     :source-location source-location))
-         (index 0)
          ;; Only now can we bind *protobuf* to the new message
          (*protobuf* message))
-    (with-collectors ((slots collect-slot)
-                      (forms collect-form)
-                      ;; The typedef needs to be first in forms otherwise ccl warns.
-                      ;; We'll collect them separately and splice them in first.
-                      (type-forms collect-type-form))
-      (dolist (field fields)
-        (case (car field)
-          ((define-enum define-message define-extend define-extension define-group
-            define-type-alias)
-           (destructuring-bind (&optional progn model-type model definers extra-field extra-slot)
-               (macroexpand-1 field env)
-             (assert (eq progn 'progn) ()
-                     "The macroexpansion for ~S failed" field)
-             (map () #'collect-form definers)
-             (ecase model-type
-               ((define-enum)
-                (appendf (proto-enums message) (list model)))
-               ((define-type-alias)
-                (appendf (proto-type-aliases message) (list model)))
-               ((define-message define-extend)
-                (setf (proto-parent model) message)
-                (appendf (proto-messages message) (list model))
-                (when (eq (proto-message-type model) :extends)
-                  (appendf (proto-extenders message) (list model))))
-               ((define-group)
-                (setf (proto-parent model) message)
-                (appendf (proto-messages message) (list model))
-                (when extra-slot
-                  (collect-slot extra-slot))
-                (appendf (proto-fields message) (list extra-field)))
-               ((define-extension)
-                (appendf (proto-extensions message) (list model))))))
-          (otherwise
-           (multiple-value-bind (field slot idx)
-               (process-field field index :conc-name conc-name :alias-for alias-for)
-             (assert (not (find-field message (proto-index field))) ()
-                     "The field ~S overlaps with another field in ~S"
-                     (proto-value field) (proto-class message))
-             (setq index idx)
-             (when slot
-               (collect-slot slot))
-             (appendf (proto-fields message) (list field))))))
-      (if alias-for
-        ;; If we've got an alias, define a a type that is the subtype of
-        ;; the Lisp class that typep and subtypep work
-        (unless (or (eq type alias-for) (find-class type nil))
-          (collect-type-form `(deftype ,type () ',alias-for)))
-        ;; If no alias, define the class now
-        (collect-type-form `(defclass ,type (#+use-base-protobuf-message base-protobuf-message) (,@slots)
-                              ,@(and documentation `((:documentation ,documentation))))))
-      `(progn
-         define-message
-         ,message
-         ((with-proto-source-location (,type ,name protobuf-message ,@source-location)
-            ,@type-forms
-            ,@forms))))))
+    `(progn
+       define-message
+       ,message
+       ((with-proto-source-location (,type ,name protobuf-message ,@source-location)
+          ,@(generate-message-forms type fields env))))))
 
 (defun conc-name-for-type (type conc-name)
   (and conc-name
@@ -336,7 +345,7 @@
    The body consists only  of fields.
    'options' is a set of keyword/value pairs, both of which are strings.
 
-   Fields take the form (slot &key type name default reader)
+   Fields take the form (slot &key type name default reader writer)
    'slot' can be either a symbol giving the field name, or a list whose
    first element is the slot name and whose second element is the index.
    'type' is the type of the slot.
@@ -345,153 +354,124 @@
    'reader' is a Lisp slot reader function to use to get the value, instead of
    using 'slot-value'; this is often used when aliasing an existing class.
    'writer' is a Lisp slot writer function to use to set the value."
-  (let* ((name    (or name (class-name->proto type)))
-         (options (loop for (key val) on options by #'cddr
-                        collect (make-option (if (symbolp key) (slot-name->proto key) key) val)))
-         (message   (find-message *protobuf* type))
-         (conc-name (or (conc-name-for-type type conc-name)
-                        (and message (proto-conc-name message))))
-         (alias-for (and message (proto-alias-for message)))
-         (extends (and message
-                       (make-instance 'protobuf-message
-                         :class  (proto-class message)
-                         :name   (proto-name message)
-                         :qualified-name (proto-qualified-name message)
-                         :parent *protobuf*
-                         :alias-for alias-for
-                         :conc-name conc-name
-                         :enums    (copy-list (proto-enums message))
-                         :messages (copy-list (proto-messages message))
-                         :fields   (copy-list (proto-fields message))
-                         :extensions (copy-list (proto-extensions message))
-                         :options  (remove-options
-                                     (or options (copy-list (proto-options message))) "default" "packed")
-                         :message-type :extends         ;this message is an extension
-                         :documentation documentation
-                         :type-aliases  (copy-list (proto-type-aliases message)))))
-         ;; Only now can we bind *protobuf* to the new extended message
-         (*protobuf* extends)
-         (index 0))
-    (assert message ()
-            "There is no message named ~A to extend" name)
-    (assert (eq type (proto-class message)) ()
-            "The type ~S doesn't match the type of the message being extended ~S"
-            type message)
-    (with-collectors ((forms collect-form))
-      (dolist (field fields)
-        (assert (not (member (car field)
-                             '(define-enum define-message define-extend define-extension
-                               define-type-alias))) ()
-                "The body of ~S can only contain field and group definitions" 'define-extend)
-        (case (car field)
-          ((define-group)
-           (destructuring-bind (&optional progn model-type model definers extra-field extra-slot)
-               (macroexpand-1 field env)
-             (assert (eq progn 'progn) ()
-                     "The macroexpansion for ~S failed" field)
-             (map () #'collect-form definers)
-             (ecase model-type
-               ((define-group)
-                (setf (proto-parent model) extends)
-                (appendf (proto-messages extends) (list model))
-                (when extra-slot
-                  ;;--- Refactor to get rid of all this duplicated code!
-                  (let* ((inits  (cdr extra-slot))
-                         (sname  (car extra-slot))
-                         (stable (fintern "~A-VALUES" sname))
-                         (stype  (getf inits :type))
-                         (reader (or (getf inits :accessor)
-                                     (getf inits :reader)
-                                     (intern (if conc-name (format nil "~A~A" conc-name sname) (symbol-name sname))
-                                             *protobuf-package*)))
-                         (writer (or (getf inits :writer)
-                                     (intern (format nil "~A-~A" 'set reader) *protobuf-package*)))
-                         (default (getf inits :initform)))
-                    (collect-form `(without-redefinition-warnings ()
-                                     (let ((,stable (tg:make-weak-hash-table :weakness :value :test #'eq)))
-                                       ,@(and reader `((defmethod ,reader ((object ,type))
-                                                         (gethash object ,stable ,default))))
-                                       ,@(and writer `((defmethod ,writer ((object ,type) value)
-                                                         (declare (type ,stype value))
-                                                         (setf (gethash object ,stable) value))))
-                                       ;; For Python compatibility
-                                       (defmethod get-extension ((object ,type) (slot (eql ',sname)))
-                                         (values (gethash object ,stable ,default)))
-                                       (defmethod set-extension ((object ,type) (slot (eql ',sname)) value)
-                                         (setf (gethash object ,stable) value))
-                                       (defmethod has-extension ((object ,type) (slot (eql ',sname)))
-                                         (multiple-value-bind (value foundp)
-                                             (gethash object ,stable)
-                                           (declare (ignore value))
-                                           foundp))
-                                       (defmethod clear-extension ((object ,type) (slot (eql ',sname)))
-                                         (remhash object ,stable)))
-                                     ,@(and writer
-                                            ;; 'defsetf' needs to be visible at compile time
-                                            `((eval-when (:compile-toplevel :load-toplevel :execute)
-                                                (defsetf ,reader ,writer))))))))
-                (setf (proto-message-type extra-field) :extends)        ;this field is an extension
-                (appendf (proto-fields extends) (list extra-field))
-                (appendf (proto-extended-fields extends) (list extra-field))))))
-          (otherwise
-           (multiple-value-bind (field slot idx)
-               (process-field field index :conc-name conc-name :alias-for alias-for)
-             (assert (not (find-field extends (proto-index field))) ()
-                     "The field ~S overlaps with another field in ~S"
-                     (proto-value field) (proto-class extends))
-             (assert (index-within-extensions-p idx message) ()
-                     "The index ~D is not in range for extending ~S"
-                     idx (proto-class message))
-             (setq index idx)
-             (when slot
-               (let* ((inits  (cdr slot))
-                      (sname  (car slot))
-                      (stable (fintern "~A-VALUES" sname))
-                      (stype  (getf inits :type))
-                      (reader (or (getf inits :accessor)
-                                  (getf inits :reader)
-                                  (intern (if conc-name (format nil "~A~A" conc-name sname) (symbol-name sname))
-                                          *protobuf-package*)))
-                      (writer (or (getf inits :writer)
-                                  (intern (format nil "~A-~A" 'set reader) *protobuf-package*)))
-                      (default (getf inits :initform)))
-                 ;; For the extended slots, each slot gets its own table
-                 ;; keyed by the object, which lets us avoid having a slot in each
-                 ;; instance that holds a table keyed by the slot name
-                 ;; Multiple 'define-extends' on the same class in the same image
-                 ;; will result in harmless redefinitions, so squelch the warnings
-                 ;;--- Maybe these methods need to be defined in 'define-message'?
-                 (collect-form `(without-redefinition-warnings ()
-                                  (let ((,stable (tg:make-weak-hash-table :weakness :value :test #'eq)))
-                                    ,@(and reader `((defmethod ,reader ((object ,type))
-                                                      (gethash object ,stable ,default))))
-                                    ,@(and writer `((defmethod ,writer ((object ,type) value)
-                                                      (declare (type ,stype value))
-                                                      (setf (gethash object ,stable) value))))
-                                    (defmethod get-extension ((object ,type) (slot (eql ',sname)))
-                                      (values (gethash object ,stable ,default)))
-                                    (defmethod set-extension ((object ,type) (slot (eql ',sname)) value)
-                                      (setf (gethash object ,stable) value))
-                                    (defmethod has-extension ((object ,type) (slot (eql ',sname)))
-                                      (multiple-value-bind (value foundp)
-                                          (gethash object ,stable)
-                                        (declare (ignore value))
-                                        foundp))
-                                    (defmethod clear-extension ((object ,type) (slot (eql ',sname)))
-                                      (remhash object ,stable)))
-                                  ,@(and writer
-                                         `((eval-when (:compile-toplevel :load-toplevel :execute)
-                                             (defsetf ,reader ,writer))))))
-                 ;; This so that (de)serialization works
-                 (setf (proto-reader field) reader
-                       (proto-writer field) writer)))
-             (setf (proto-message-type field) :extends)         ;this field is an extension
-             (appendf (proto-fields extends) (list field))
-             (appendf (proto-extended-fields extends) (list field))))))
-      `(progn
-         define-extend
-         ,extends
-         ,forms))))
+  (flet ((gen-extend-field-forms (slot &optional field)
+           (let* ((inits  (cdr slot))
+                  (sname  (car slot))
+                  (stable (fintern "~A-VALUES" sname))
+                  (stype  (getf inits :type))
+                  (reader (or (getf inits :accessor)
+                              (getf inits :reader)
+                              (intern (if conc-name (format nil "~A~A" conc-name sname) (symbol-name sname))
+                                      *protobuf-package*)))
+                  (writer (or (getf inits :writer)
+                              (intern (format nil "~A-~A" 'set reader) *protobuf-package*)))
+                  (default (getf inits :initform)))
+             (when field
+               ;; This so that (de)serialization works
+               (setf (proto-reader field) reader
+                     (proto-writer field) writer))
+
+             ;; For the extended slots, each slot gets its own table
+             ;; keyed by the object, which lets us avoid having a slot in each
+             ;; instance that holds a table keyed by the slot name.
+             ;; Multiple 'define-extends' on the same class in the same image
+             ;; will result in harmless redefinitions, so squelch the warnings
+             ;;--- Maybe these methods need to be defined in 'define-message'?
+             `(without-redefinition-warnings ()
+                (let ((,stable (tg:make-weak-hash-table :weakness :value :test #'eq)))
+                  ,@(and reader `((defmethod ,reader ((object ,type))
+                                    (gethash object ,stable ,default))))
+                  ,@(and writer `((defmethod ,writer ((object ,type) value)
+                                    (declare (type ,stype value))
+                                    (setf (gethash object ,stable) value))))
+                  ;; For Python compatibility
+                  (defmethod get-extension ((object ,type) (slot (eql ',sname)))
+                    (values (gethash object ,stable ,default)))
+                  (defmethod set-extension ((object ,type) (slot (eql ',sname)) value)
+                    (setf (gethash object ,stable) value))
+                  (defmethod has-extension ((object ,type) (slot (eql ',sname)))
+                    (multiple-value-bind (value foundp)
+                        (gethash object ,stable)
+                      (declare (ignore value))
+                      foundp))
+                  (defmethod clear-extension ((object ,type) (slot (eql ',sname)))
+                    (remhash object ,stable)))
+                ;; 'defsetf' needs to be visible at compile time
+                ,@(and writer `((eval-when (:compile-toplevel :load-toplevel :execute)
+                                  (defsetf ,reader ,writer)))))))
+         (process-extend-field (field)
+           (setf (proto-message-type field) :extends) ;this field is an extension
+           (appendf (proto-fields *protobuf*) (list field))
+           (appendf (proto-extended-fields *protobuf*) (list field))))
+    (let* ((name    (or name (class-name->proto type)))
+           (options (loop for (key val) on options by #'cddr
+                          collect (make-option (if (symbolp key) (slot-name->proto key) key) val)))
+           (message   (find-message *protobuf* type))
+           (conc-name (or (conc-name-for-type type conc-name)
+                          (and message (proto-conc-name message))))
+           (alias-for (and message (proto-alias-for message)))
+           (extends (and message
+                         (make-instance 'protobuf-message
+                           :class  (proto-class message)
+                           :name   (proto-name message)
+                           :qualified-name (proto-qualified-name message)
+                           :parent *protobuf*
+                           :alias-for alias-for
+                           :conc-name conc-name
+                           :enums    (copy-list (proto-enums message))
+                           :messages (copy-list (proto-messages message))
+                           :fields   (copy-list (proto-fields message))
+                           :extensions (copy-list (proto-extensions message))
+                           :options  (remove-options
+                                      (or options (copy-list (proto-options message))) "default" "packed")
+                           :message-type :extends ;this message is an extension
+                           :documentation documentation
+                           :type-aliases  (copy-list (proto-type-aliases message)))))
+           ;; Only now can we bind *protobuf* to the new extended message
+           (*protobuf* extends)
+           (index 0))
+      (assert message ()
+              "There is no message named ~A to extend" name)
+      (assert (eq type (proto-class message)) ()
+              "The type ~S doesn't match the type of the message being extended ~S"
+              type message)
+      (with-collectors ((forms collect-form))
+        (dolist (field fields)
+          (assert (not (member (car field)
+                               '(define-enum define-message define-extend define-extension
+                                 define-type-alias))) ()
+                                 "The body of ~S can only contain field and group definitions" 'define-extend)
+          (case (car field)
+            ((define-group)
+             (destructuring-bind (&optional progn model-type model definers extra-field extra-slot)
+                 (macroexpand-1 field env)
+               (assert (and (eq progn 'progn)
+                            (eq model-type 'define-group))
+                            ()
+                       "The macroexpansion for ~S failed" field)
+               (map () #'collect-form definers)
+               (setf (proto-parent model) extends)
+               (appendf (proto-messages extends) (list model))
+               (when extra-slot
+                 (collect-form (gen-extend-field-forms extra-slot)))
+               (process-extend-field extra-field)))
+            (otherwise
+             (multiple-value-bind (field slot idx)
+                 (process-field field index :conc-name conc-name :alias-for alias-for)
+               (assert (not (find-field extends (proto-index field))) ()
+                       "The field ~S overlaps with another field in ~S"
+                       (proto-value field) (proto-class extends))
+               (assert (index-within-extensions-p idx message) ()
+                       "The index ~D is not in range for extending ~S"
+                       idx (proto-class message))
+               (setq index idx)
+               (when slot
+                 (collect-form (gen-extend-field-forms slot field)))
+               (process-extend-field field)))))
+        `(progn
+           define-extend
+           ,extends
+           ,forms)))))
 
 (defun index-within-extensions-p (index message)
   (let ((extensions (proto-extensions message)))
@@ -516,7 +496,7 @@
    the case that trying to (de)serialize into a Lisp object won't work.
    'options' is a set of keyword/value pairs, both of which are strings.
 
-   Fields take the form (slot &key type name default reader)
+   Fields take the form (slot &key type name default reader writer)
    'slot' can be either a symbol giving the field name, or a list whose
    first element is the slot name and whose second element is the index.
    'type' is the type of the slot.
@@ -571,67 +551,15 @@
                     :message-type :group                ;this message is a group
                     :documentation documentation
                     :source-location source-location))
-         (index 0)
          ;; Only now can we bind *protobuf* to the (group) message
          (*protobuf* message))
-    (with-collectors ((slots collect-slot)
-                      (forms collect-form)
-                      ;; The typedef needs to be first in forms otherwise ccl warns.
-                      ;; We'll collect them separately and splice them in first.
-                      (type-forms collect-type-form))
-      (dolist (field fields)
-        (case (car field)
-          ((define-enum define-message define-extend define-extension define-group
-            define-type-alias)
-           (destructuring-bind (&optional progn model-type model definers extra-field extra-slot)
-               (macroexpand-1 field env)
-             (assert (eq progn 'progn) ()
-                     "The macroexpansion for ~S failed" field)
-             (map () #'collect-form definers)
-             (ecase model-type
-               ((define-enum)
-                (appendf (proto-enums message) (list model)))
-               ((define-type-alias)
-                (appendf (proto-type-aliases message) (list model)))
-               ((define-message define-extend)
-                (setf (proto-parent model) message)
-                (appendf (proto-messages message) (list model))
-                (when (eq (proto-message-type model) :extends)
-                  (appendf (proto-extenders message) (list model))))
-               ((define-group)
-                (setf (proto-parent model) message)
-                (appendf (proto-messages message) (list model))
-                (when extra-slot
-                  (collect-slot extra-slot))
-                (appendf (proto-fields message) (list extra-field)))
-               ((define-extension)
-                (appendf (proto-extensions message) (list model))))))
-          (otherwise
-           (multiple-value-bind (field slot idx)
-               (process-field field index :conc-name conc-name :alias-for alias-for)
-             (assert (not (find-field message (proto-index field))) ()
-                     "The field ~S overlaps with another field in ~S"
-                     (proto-value field) (proto-class message))
-             (setq index idx)
-             (when slot
-               (collect-slot slot))
-             (appendf (proto-fields message) (list field))))))
-      (if alias-for
-        ;; If we've got an alias, define a a type that is the subtype of
-        ;; the Lisp class that typep and subtypep work
-        (unless (or (eq type alias-for) (find-class type nil))
-          (collect-type-form `(deftype ,type () ',alias-for)))
-        ;; If no alias, define the class now
-        (collect-type-form `(defclass ,type (#+use-base-protobuf-message base-protobuf-message) (,@slots)
-                              ,@(and documentation `((:documentation ,documentation))))))
-      `(progn
-         define-group
-         ,message
-         ((with-proto-source-location (,type ,name protobuf-message ,@source-location)
-            ,@type-forms
-            ,@forms))
-         ,mfield
-         ,mslot))))
+    `(progn
+       define-group
+       ,message
+       ((with-proto-source-location (,type ,name protobuf-message ,@source-location)
+          ,@(generate-message-forms type fields env)))
+       ,mfield
+       ,mslot)))
 
 (defun process-field (field index &key conc-name alias-for)
   "Process one field descriptor within 'define-message' or 'define-extend'.

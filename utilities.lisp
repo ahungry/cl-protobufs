@@ -72,6 +72,8 @@
 (defmacro ildb (bytespec value)
   `(the fixnum (ldb ,bytespec (the fixnum ,value))))
 
+(defmacro ilogbitp (index integer)
+  `(logbitp ,index (the fixnum ,integer)))
 
 ;;; String utilities
 
