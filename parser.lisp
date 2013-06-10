@@ -33,6 +33,12 @@
               (member ch '(#\_ #\.)))))
 
 
+(defun parse-error-position (stream)
+  (if (typep stream 'file-stream)
+    (format nil " ~A:~D" (pathname stream) (file-position stream))
+    (format nil " position ~D" (file-position stream))))
+
+
 (defun skip-whitespace (stream)
   "Skip all the whitespace characters that are coming up in the stream."
   (loop for ch = (peek-char nil stream nil)
@@ -48,8 +54,8 @@
           (member (peek-char nil stream nil) char)
           (eql (peek-char nil stream nil) char))
       (setq ch (read-char stream))
-      (error "No '~C' found~@[ within '~A'~] at position ~D"
-             char within (file-position stream)))
+      (error "No '~C' found~@[ within '~A'~] at ~A"
+             char within (parse-error-position stream)))
     (maybe-skip-chars stream chars)
     ch))
 
@@ -84,8 +90,8 @@
          (skip-whitespace stream)
          (return-from maybe-skip-comments))
         (otherwise
-         (error "Found a '~C' at position ~D to start a comment, but no following '~C' or '~C'"
-                #\/ (file-position stream) #\/ #\*))))))
+         (error "Found a '~C' at ~A to start a comment, but no following '~C' or '~C'"
+                #\/ (parse-error-position stream) #\/ #\*))))))
 
 (defun skip-line-comment (stream)
   "Skip to the end of a line comment, that is, to the end of the line.
@@ -357,7 +363,7 @@
                           (ensure-rpc-package)
                           (parse-proto-service stream schema)))))
                 (t
-                 (error "Syntax error at position ~D" (file-position stream)))))))))
+                 (error "Syntax error at ~A" (parse-error-position stream)))))))))
 
 (defun set-lisp-package (schema lisp-package-name)
   "Set the package for generated lisp names of 'schema'."
@@ -537,8 +543,8 @@
               ((string= token "extensions")
                (parse-proto-extension stream message))
               (t
-               (error "Unrecognized token ~A at position ~D"
-                      token (file-position stream))))))))
+               (error "Unrecognized token ~A at ~A"
+                      token (parse-error-position stream))))))))
 
 (defmethod resolve-lisp-names ((message protobuf-message))
   "Recursively resolves protobuf type names to lisp type names in nested messages and fields of 'message'."
@@ -592,8 +598,8 @@
               ((string= token "option")
                (parse-proto-option stream extends))
               (t
-               (error "Unrecognized token ~A at position ~D"
-                      token (file-position stream))))))))
+               (error "Unrecognized token ~A at ~A"
+                      token (parse-error-position stream))))))))
 
 (defun parse-proto-field (stream message required &optional extended-from)
   "Parse a Protobufs field from 'stream'.
@@ -718,9 +724,9 @@
                         (t (parse-token stream))))))
     (expect-char stream #\; () "message")
     (assert (or (null token) (string= token "to")) ()
-            "Expected 'to' in 'extensions' at position ~D" (file-position stream))
+            "Expected 'to' in 'extensions' at ~A" (parse-error-position stream))
     (assert (or (integerp to) (string= to "max")) ()
-            "Extension value is not an integer or 'max' as position ~D" (file-position stream))
+            "Extension value is not an integer or 'max' as ~A" (parse-error-position stream))
     (let ((extension (make-instance 'protobuf-extension
                        :from from
                        :to   (if (integerp to) to #.(1- (ash 1 29))))))
@@ -755,8 +761,8 @@
               ((string= token "rpc")
                (parse-proto-method stream service (iincf index)))
               (t
-               (error "Unrecognized token ~A at position ~D"
-                      token (file-position stream))))))))
+               (error "Unrecognized token ~A at ~A"
+                      token (parse-error-position stream))))))))
 
 (defmethod resolve-lisp-names ((service protobuf-service))
   "Recursively resolves protobuf type names to lisp type names for all methods of 'service'."
@@ -793,7 +799,7 @@
                    :options opts
                    :source-location (make-source-location stream loc (i+ loc (length name))))))
     (assert (string= ret "returns") ()
-            "Syntax error in 'message' at position ~D" (file-position stream))
+            "Syntax error in 'message' at ~A" (parse-error-position stream))
     (let* ((name (find-option method "lisp_name"))
            (stub (or (and name (make-lisp-symbol name))
                      stub)))
@@ -851,7 +857,7 @@
         (when (eql (peek-char nil stream nil) #\})
           (return))
         (assert (string= (parse-token stream) "option") ()
-                "Syntax error in 'message' at position ~D" (file-position stream))
+                "Syntax error in 'message' at ~A" (parse-error-position stream))
         (collect-option (parse-proto-option stream nil)))
       (expect-char stream #\} '(#\;) "service")
       (maybe-skip-comments stream)
