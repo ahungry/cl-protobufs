@@ -346,6 +346,8 @@
       (serialization-error "Error deserializing buffer ~S: ~A" buffer (princ-to-string e))))))
 
 ;; The default method uses metadata from the protobuf "schema" for the message
+;;--- Maybe complain if there were any unsent required fields (see 'object-initialized-p'),
+;;--- but Lisp itself will complain if you try to access them, so not critical
 (defmethod deserialize-object ((message protobuf-message) buffer &optional start end (end-tag 0))
   (declare (type (simple-array (unsigned-byte 8)) buffer))
   (let ((index   (or start 0))

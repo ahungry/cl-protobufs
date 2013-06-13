@@ -75,6 +75,7 @@
 (defmacro ilogbitp (index integer)
   `(logbitp ,index (the fixnum ,integer)))
 
+
 ;;; String utilities
 
 (defun starts-with (string prefix &key (start 0))
