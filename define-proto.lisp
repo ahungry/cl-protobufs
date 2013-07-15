@@ -198,6 +198,15 @@
                             :parent enum)))
           (collect-val val-name)
           (appendf (proto-values enum) (list enum-val))))
+      (multiple-value-bind (allow bool foundp) (find-option options "allow_alias")
+        (declare (ignore bool))
+        (when (and foundp (not (boolean-true-p allow)))
+          (dolist (v1 (proto-values enum))
+            (dolist (v2 (proto-values enum))
+              (unless (or (eq v1 v2)
+                          (not (eql (proto-index v1) (proto-index v2))))
+                (error "The enum values ~S and ~S in ~S have the same index and you have not used 'option allow_alias = true'"
+                       (proto-name v1) (proto-name v2) (proto-class enum)))))))
       (if alias-for
         ;; If we've got an alias, define a a type that is the subtype of
         ;; the Lisp enum so that typep and subtypep work

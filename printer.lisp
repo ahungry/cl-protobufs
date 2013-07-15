@@ -86,7 +86,8 @@
                                ("lisp_class"   string 195805)
                                ("lisp_slot"    string 195806)))
 
-(defparameter *option-types* '(("ctype"                 symbol)
+(defparameter *option-types* '(("allow_alias"          boolean)
+                               ("ctype"                 symbol)
                                ("deadline"               float)
                                ("deprecated"            symbol)
                                ("optimize_for"          symbol)
