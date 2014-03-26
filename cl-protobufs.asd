@@ -8,9 +8,6 @@
 ;;;                                                                  ;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(in-package "CL-USER")
-
-
 (asdf:defsystem :cl-protobufs
   :name "CL Protobufs"
   :author "Scott McKay"
@@ -67,4 +64,3 @@
                  (:file "asdf-support")
                  (:file "examples")))))
 
-(pushnew :cl-protobufs *features*)

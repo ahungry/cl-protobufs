@@ -8,9 +8,6 @@
 ;;;                                                                  ;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(in-package "CL-USER")
-
-
 (asdf:defsystem :cl-protobufs-tests
   :name "Protobufs Tests"
   :author "Scott McKay"
@@ -89,14 +86,14 @@
                  (:protobuf-file "forward_reference")
                  (:file "lisp-reference-tests")))
 
-     (module "nested-extend-test"
+     (:module "nested-extend-test"
              :serial t
              :pathname #p""
              :components
                ((:protobuf-file "extend-test")
                 (:file "lisp-extend-test")))
 
-     (module "case-preservation-test"
+     (:module "case-preservation-test"
              :serial t
              :pathname #p""
              :components
