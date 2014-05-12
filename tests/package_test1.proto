@@ -23,7 +23,7 @@ message MessageWithCrossPackageReference {
 
 message MessageWithCrossPackageExtension {
   extend protobuf_package_unittest2.MessageInOtherPackage {
-    required int32 baa = 1000;
+    optional int32 baa = 1000;
   }
   required protobuf_package_unittest2.MessageInOtherPackage boo = 1;
 }
