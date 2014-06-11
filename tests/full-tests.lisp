@@ -14,7 +14,7 @@
 
 ;;; Comprehensive functionality unit tests
 
-(define-test TEST-NAME ()
+(define-test TEST-NAME ())
 
 (define-test-suite SUITE-NAME ()
   (TEST-NAME)
