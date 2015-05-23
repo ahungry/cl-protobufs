@@ -272,7 +272,7 @@
            (imports-file (make-pathname :type "proto-imports"
                                         :defaults lisp-file))
            (fasl-file  (compile-file-pathname lisp-file))
-           (asdf:*asdf-verbose* nil)    ;for safe-file-write-date
+           #-asdf3 (asdf:*asdf-verbose* nil)    ;for safe-file-write-date
            (proto-date (asdf::safe-file-write-date proto-file))
            (lisp-date  (asdf::safe-file-write-date lisp-file))
            (fasl-date  (asdf::safe-file-write-date fasl-file))
