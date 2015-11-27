@@ -637,6 +637,11 @@
     (assert-equal (slot-value msg1 'test-field)
                   (slot-value dser1 'test-field))))
 
+(define-test base-types ()
+  (assert-equal
+   (proto-impl:clos-type-to-protobuf-type 'protobufs:sint32)
+   "sint32"))
+
 (define-test-suite serialization-tests ()
   (basic-serialization
    basic-optimized-serialization
@@ -647,6 +652,7 @@
    extension-serialization
    group-serialization
    empty-message-serialization
-   type-aliases))
+   type-aliases
+   base-types))
 
 (register-test 'serialization-tests)

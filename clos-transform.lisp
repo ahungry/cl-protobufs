@@ -352,6 +352,10 @@
                    (lisp-type-to-protobuf-type (first tail))
                  (values type class (packed-type-p class)))
                (lisp-type-to-protobuf-type type))))))
+      ((member type '(int32 uint32 int64 uint64 sint32 sint64
+                      fixed32 sfixed32 fixed64 sfixed64
+                      string bytes bool float double))
+       (lisp-type-to-protobuf-type type))
       (type-alias
        (values (proto-proto-type-str type-alias) type))
       ((not (or type-enum (equal type expanded-type)))
