@@ -8,12 +8,12 @@
 ;;;                                                                  ;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(asdf:defsystem :cl-protobufs-tests
+(defsystem "cl-protobufs-tests"
   :name "Protobufs Tests"
   :author "Scott McKay"
   :version "1.0"
   :licence "MIT-style"
-  :maintainer '("Scott McKay")
+  :maintainer ("Scott McKay")
   :description      "Test code for Protobufs for Common Lisp"
   :long-description "Test code for Protobufs for Common Lisp"
   :defsystem-depends-on (:cl-protobufs)
@@ -62,7 +62,7 @@
               :depends-on ("geodata-proto" "geodata-data")
               :components
                 ((:file "geodata")))
-     
+
      ;; Bob Brown's protocol buffers tests
      (:module "brown-tests-proto"
               :serial t

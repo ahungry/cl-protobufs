@@ -9,7 +9,7 @@
 ;;;                                                                  ;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(in-package "ASDF")
+(in-package :asdf)
 
 
 ;;; ASDF support for CL-Protobufs
@@ -53,11 +53,6 @@
   "Loading a protocol buffer file depends on generating Lisp source code for it."
   `((proto-to-lisp ,(component-name component))
     ,@(call-next-method)))
-
-(defmethod component-self-dependencies :around ((op load-op) (component protobuf-file))
-  (remove-if #'(lambda (x)
-                 (eq (car x) 'proto-to-lisp))
-             (call-next-method)))
 
 (defun protobuf-input-file (component)
   "Returns the pathname of the protocol buffer definition file that must be
@@ -133,7 +128,7 @@
               (proto-impl:parse-protobuf-file proto lisp imports
                                               :conc-name (proto-conc-name component)))))))))
 
-(defmethod operation-description ((op proto-to-lisp) (component protobuf-file))
+(defmethod action-description ((op proto-to-lisp) (component protobuf-file))
   (format nil (compatfmt "~@<proto-compiling ~3i~_~A~@:>")
           (first (input-files op component))))
 
@@ -144,55 +139,21 @@
 
 (defmethod perform ((op compile-op) (component protobuf-file))
   (destructuring-bind (lisp-file imports-file) (input-files op component)
-    (destructuring-bind (fasl-file
-                         &optional
-                           #+clisp lib-file
-                           #+(or ecl mkcl) object-file
-                           #+asdf3 warnings-file)
-        (output-files op component)
-      (let* ((proto-file (protobuf-input-file component))
-             (paths  (cons (directory-namestring proto-file)
-                           (resolve-search-path component)))
-             (proto-impl:*protobuf-search-path* paths)
-             (proto-impl:*protobuf-output-path* fasl-file)
-             (*compile-file-warnings-behaviour* (operation-on-warnings op))
-             (*compile-file-failure-behaviour* (operation-on-failure op)))
-        (proto-impl:process-imports-from-file imports-file)
-        (multiple-value-bind (output warnings-p failure-p)
-            (apply #'compile-file* lisp-file
-                   :output-file fasl-file
-                   #+asdf3 #+asdf3
-                   :warnings-file warnings-file
-                   (append
-                    #+clisp (list :lib-file lib-file)
-                    #+(or ecl mkcl) (list :object-file object-file)
-                    (compile-op-flags op)))
-          #+asdf3
-          (check-lisp-compile-results output warnings-p failure-p
-                                      "~/asdf-action::format-action/" (list (cons op component)))
-          #-asdf3
-          (progn
-            (when warnings-p
-              (case (operation-on-warnings op)
-                (:warn  (warn "~@<COMPILE-FILE warned while performing ~A on ~A.~@:>" op component))
-                (:error (error 'compile-warned
-                               :component component :operation op))
-                (:ignore nil)))
-            (when failure-p
-              (case (operation-on-failure op)
-                (:warn  (warn "~@<COMPILE-FILE failed while performing ~A on ~A.~@:>" op component))
-                (:error (error 'compile-failed
-                               :component component :operation op))
-                (:ignore nil)))
-            (unless output
-              (error 'compile-error
-                     :component component :operation op))))))))
+    (declare (ignore lisp-file))
+    (let* ((fasl-file (first (output-files op component)))
+           (proto-file (protobuf-input-file component))
+           (paths  (cons (directory-namestring proto-file)
+                         (resolve-search-path component)))
+           (proto-impl:*protobuf-search-path* paths)
+           (proto-impl:*protobuf-output-path* fasl-file))
+      (proto-impl:process-imports-from-file imports-file)
+      (perform-lisp-compilation op component))))
 
 (defmethod input-files ((op load-op) (component protobuf-file))
   "The input files are the .fasl and .proto-imports files."
   (declare (ignorable op))
-  (list (first (output-files (make-instance 'compile-op) component))       ;fasl
-        (second (output-files (make-instance 'proto-to-lisp) component)))) ;proto-imports
+  (list (first (output-files 'compile-op component))       ;fasl
+        (second (output-files 'proto-to-lisp component)))) ;proto-imports
 
 (defmethod perform ((op load-op) (component protobuf-file))
   (let* ((input  (protobuf-input-file component))
@@ -205,7 +166,7 @@
       (let ((proto-impl:*protobuf-pathname* (protobuf-input-file component)))
         (load fasl)))))
 
-(defmethod operation-description ((op compile-op) (component protobuf-file))
+(defmethod action-description ((op compile-op) (component protobuf-file))
   (format nil (compatfmt "~@<compiling ~3i~_~A~@:>")
           (first (input-files op component))))
 
@@ -272,7 +233,6 @@
            (imports-file (make-pathname :type "proto-imports"
                                         :defaults lisp-file))
            (fasl-file  (compile-file-pathname lisp-file))
-           #-asdf3 (asdf:*asdf-verbose* nil)    ;for safe-file-write-date
            (proto-date (asdf::safe-file-write-date proto-file))
            (lisp-date  (asdf::safe-file-write-date lisp-file))
            (fasl-date  (asdf::safe-file-write-date fasl-file))
