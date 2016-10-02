@@ -666,9 +666,11 @@
 
 ;; The 'value' slot really holds the name of the slot,
 ;; so let's give it a better name
+(defgeneric proto-slot (field))
 (defmethod proto-slot ((field protobuf-field))
   (proto-value field))
 
+(defgeneric (setf proto-slot) (slot field))
 (defmethod (setf proto-slot) (slot (field protobuf-field))
   (setf (proto-value field) slot))
 
