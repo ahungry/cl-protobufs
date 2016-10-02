@@ -182,7 +182,7 @@
 
 (defun cl-user::source-location (stream location colon-p atsign-p)
   (declare (ignore colon-p atsign-p))
-  (format stream "(~S ~D ~D)" 
+  (format stream "(~S ~D ~D)"
           (source-location-pathname location)
           (source-location-start-pos location) (source-location-end-pos location)))
 
@@ -260,7 +260,7 @@
                (write-schema-documentation type documentation stream :indentation indentation))
              (format stream "~&~@[~VT~]~A ~A {~%"
                      (and (not (zerop indentation)) indentation)
-                     (if (eq message-type :message) "message" "extend") 
+                     (if (eq message-type :message) "message" "extend")
                      (maybe-qualified-name message))
              (let ((other (and class (not (string-equal name (class-name->proto class))) class)))
                (when other

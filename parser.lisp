@@ -22,7 +22,7 @@
 
 (declaim (inline proto-eol-char-p))
 (defun proto-eol-char-p (ch)
-  (declare #.$optimize-fast-unsafe)   
+  (declare #.$optimize-fast-unsafe)
   (and ch (member ch '(#\return #\newline))))
 
 (declaim (inline proto-token-char-p))
