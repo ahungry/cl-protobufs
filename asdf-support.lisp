@@ -11,7 +11,6 @@
 
 (in-package :asdf)
 
-
 ;;; ASDF support for CL-Protobufs
 
 (defclass protobuf-file (cl-source-file)
@@ -118,8 +117,10 @@
          (paths  (cons (directory-namestring input) (resolve-search-path component)))
          (proto-impl:*protobuf-search-path* paths)
          (proto-impl:*protobuf-output-path* output))
-    (dolist (path paths (error 'compile-failed
-                          :component component :operation op))
+    (dolist (path paths (error 'compile-file-error
+                               :description "Failed to find the proto file"
+                               :context-format "~/asdf-action:format-action/"
+                               :context-arguments `((,op . ,component))))
       (let ((proto (merge-pathnames* path input)))
         (destructuring-bind (lisp imports)
             (output-files op component)
@@ -135,7 +136,7 @@
 (defmethod input-files ((op compile-op) (component protobuf-file))
   "The input files are the .lisp and .proto-imports files."
   (declare (ignorable op))
-  (output-files (make-instance 'proto-to-lisp) component))
+  (output-files 'proto-to-lisp component))
 
 (defmethod perform ((op compile-op) (component protobuf-file))
   (destructuring-bind (lisp-file imports-file) (input-files op component)

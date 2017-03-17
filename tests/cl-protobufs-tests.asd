@@ -117,4 +117,5 @@
               :components
                 ((:file "full-tests")
                  (:static-file "golden_message.data")
-                 (:static-file "golden_packed_message.data")))))
+                 (:static-file "golden_packed_message.data"))))
+    :perform (test-op (o c) (symbol-call :proto-test :run-all-tests)))
