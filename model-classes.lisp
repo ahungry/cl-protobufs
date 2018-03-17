@@ -380,6 +380,17 @@
 
 
 ;; A Protobufs enumeration
+(defclass protobuf-oneof (base-protobuf)
+  ((fields :type (list-of protobuf-field)       ;all the fields of this message
+           :accessor proto-fields               ;this includes local ones and extended ones
+           :initarg :fields
+           :initform ()))
+  (:documentation
+   "The model class that represents a Protobufs oneof type."))
+
+(defmethod make-load-form ((oneof protobuf-oneof) &optional environment)
+  (make-load-form-saving-slots oneof :environment environment))
+
 (defclass protobuf-enum (base-protobuf)
   ((alias :type (or null symbol)                ;use this if you want to make this enum
           :accessor proto-alias-for             ;  be an alias for an existing Lisp enum
@@ -463,6 +474,10 @@
            :accessor proto-fields               ;this includes local ones and extended ones
            :initarg :fields
            :initform ())
+   (oneofs :type (list-of protobuf-oneof)
+	   :accessor proto-oneofs
+	   :initarg :oneofs
+	   :initform ())
    (extended-fields :type (list-of protobuf-field) ;the extended fields defined in this message
                     :accessor proto-extended-fields
                     :initform ())
@@ -575,6 +590,9 @@
   (declare (ignore relative-to))
   (find index (proto-fields message) :key #'proto-index))
 
+(defmethod proto-syntax ((message protobuf-message))
+  (proto-syntax (proto-parent message)))
+
 
 ;; Extensions protocol
 (defgeneric get-extension (object slot)
@@ -639,7 +657,12 @@
    (message-type :type (member :message :group :extends)
                  :accessor proto-message-type
                  :initarg :message-type
-                 :initform :message))
+                 :initform :message)
+   (oneof :type (or null proto-oneof)
+	  :accessor proto-oneof
+	  :initarg :oneof
+	  :initform nil)
+   )
   (:documentation
    "The model class that represents one field within a Protobufs message."))
 
@@ -649,6 +672,74 @@
     (assert (and (plusp (proto-index field))
                  (not (<= 19000 (proto-index field) 19999))) ()
             "Protobuf field indexes must be positive and not between 19000 and 19999 (inclusive)")))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
+;;; Special Hack for Allegro
+;;;
+;;; The "class" slot of a field might contain an actual class object (see more below)
+;;;
+;;; The base method below will do the right thing in all Lisps; 
+;;; Except in Allegro where in some situations it will cause an error
+;;;
+;;; The situation is when a Message type is defined and used in the same file
+;;; In that case there's a subtle problem in the way the code in define-proto works.
+;;; That code zt macro-expansion time generates both a tree structured object -- the Schema --
+;;; as well as a bunch of defclass forms for all the message types in the file.
+;;;
+;;; The actual form to be compiled into fasl form contains both the class defs (first)
+;;; followed by the schema object.
+;;; 
+;;; The compiler eventually winds up calling make-load-form on the Schema object which 
+;;; recursively calls make-load form on each message object and each field object
+;;; in the schema.
+;;;
+;;; Now, the schema object is built during macroexpansion time
+;;; while constructing the forms to be compiled.  
+;;; So the class objects in the class slot of the field objects are found before the defclass forms are evaluated.
+;;;
+;;; As a result, these classes are not the same classes as those in the compiler environment
+;;; at the time that make-load-form is called on the Schema object.
+;;; 
+;;; Allegro has a check for that (labelled with a bug number) that signals an error.
+;;;
+;;; Note on the class field:
+;;; If type of a field specificatoin in the define-message is a symbol naming an existing class, then the 
+;;; class slot of the field object in the Schema will be that class.
+;;; If it's symbol naming a non-existent class then the slot will contain the symbol 
+;;;    (and in this case it should be an error, I think)
+;;; But if the type is (list-of symbol) where symbol names an existing class, then 
+;;; the class slot holds the symbol not the class object!!!!
+;;; and the required slot is :repeated
+;;; If it's another compound type such as and, or, member
+;;;  Then: For OR it will be the class(es)
+;;;        for AND it will be the symbol
+;;;        for Member it will be a symbol (or string?)
+;;; The difference is whether it calls clos-type-to-protobuf-type, lisp-type-to-protobuf-type
+;;;  or class-name->proto (member).
+;;; 
+;;; I have no idea why this is true, and whether this matters to wire format reading or generation
+;;; A quick perusal of the serialize and deserialize code indicates that it doesn't matter whether it's
+;;; a symbol or a class.  It's always used by calling find-message which can be called with either.
+;;;
+;;; In any event this now generates a fasl
+;;; that will recreate the Schema as it existed (subject to these wacko variations
+;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+#+Allegro
+(defmethod make-load-form :around ((f protobuf-field) &optional environment)
+  (if (or (not (slot-boundp f 'class))
+          (symbolp (slot-value f 'class)))
+      (call-next-method f environment)
+    (multiple-value-bind (create init) (call-next-method)
+      (loop for pairs on (rest init) by #'cddr
+          for (nil nil name) = (first pairs)
+          for (nil object) = (second pairs)
+          when (equal name ''class)
+          do (setf (second pairs)  `(find-class ',(class-name object)))
+             (return))
+      (values create init))))
 
 (defmethod make-load-form ((f protobuf-field) &optional environment)
   (make-load-form-saving-slots f :environment environment))

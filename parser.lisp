@@ -448,6 +448,75 @@
            ;; If nothing to graft the option into, just return it as the value
            (values option terminator)))))
 
+(defun parse-proto-oneof (stream message)
+  "Parse a Messages 'oneof' from 'stream'.
+   Updates the 'message-schema' or 'message-message' object to have the oneof"
+  (check-type message protobuf-message)
+  (let* ((loc  (file-position stream))
+         (name (prog1 (parse-token stream)
+                 (expect-char stream #\{ () "oneof")
+                 (maybe-skip-comments stream)))
+         (oneof (make-instance 'protobuf-oneof
+                  :class (proto->class-name name *protobuf-package*)
+                  :name (proto->slot-name name *protobuf-package*)
+                  :qualified-name (make-qualified-name message name)
+                  :parent message
+                  :source-location (make-source-location stream loc (i+ loc (length name))))))
+    (loop
+      (let ((type (parse-token stream)))
+        (when (null type)
+          (expect-char stream #\} '(#\;) "oneof")
+          (maybe-skip-comments stream)
+          (appendf (proto-oneofs message) (list oneof))
+          (let ((type (find-option oneof "lisp_name")))
+            (when type
+              (setf (proto-class oneof) (make-lisp-symbol type))))
+          (let ((alias (find-option oneof "lisp_alias")))
+            (when alias
+              (setf (proto-alias-for oneof) (make-lisp-symbol alias))))
+          (return-from parse-proto-oneof oneof))
+        (parse-proto-oneof-field stream oneof message type)))))
+
+(defun parse-proto-oneof-field (stream oneof message type)
+  "Parse a Oneofs field from 'stream'.
+   Updates the 'protobuf-oneof' object to have the field."
+  (check-type oneof protobuf-oneof)
+  (check-type message protobuf-message)
+  (let* ((name (prog1 (parse-token stream)
+		 (expect-char stream #\= () "oneof")))
+	 (idx  (parse-unsigned-int stream))
+	 (slot   (proto->slot-name name *protobuf-package*))
+	 (opts (prog1 (parse-proto-field-options stream)
+		 (expect-char stream #\; () "oneof")
+		 (maybe-skip-comments stream)))
+	 (field  (make-instance 'protobuf-field
+		   :name  name
+		   :type  type
+		   :qualified-name (make-qualified-name message name)
+		   ;; the field is an actual field in the message
+		   ;; the oneof is a constraint that only one of these
+		   ;;
+		   :parent message
+		   ;; One of :required, :optional or :repeated
+		   :required nil
+		   :index idx
+		   :value slot
+		   ;; Fields parsed from .proto files usually get an accessor
+		   :reader (let ((conc-name (proto-conc-name message)))
+			     (and conc-name
+				  (intern (format nil "~A~A" conc-name slot) *protobuf-package*)))
+		   :message-type (proto-message-type message)
+		   :oneof oneof
+		   )))
+    (let ((slot (find-option opts "lisp_name")))
+      (when slot
+	(setf (proto-value field) (make-lisp-symbol type))))
+    ;; both the message and the one-of want to know about the field
+    (appendf (proto-fields message) (list field))
+    (appendf (proto-fields oneof) (list field))
+    field))
+
+
 
 (defun parse-proto-enum (stream protobuf)
   "Parse a Protobufs 'enum' from 'stream'.
@@ -508,12 +577,13 @@
                  (expect-char stream #\{ () "message")
                  (maybe-skip-comments stream)))
          (class (proto->class-name name *protobuf-package*))
+	 (syntax (proto-syntax *protobuf*))
          (message (make-instance 'protobuf-message
                     :class class
                     :name  name
                     :qualified-name (make-qualified-name protobuf name)
                     :parent protobuf
-                    ;; Maybe force accessors for all slots
+		    ;; Maybe force accessors for all slots
                     :conc-name (conc-name-for-type class *protobuf-conc-name*)
                     :source-location (make-source-location stream loc (i+ loc (length name)))))
          (*protobuf* message))
@@ -532,6 +602,8 @@
           (return-from parse-proto-message message))
         (cond ((string= token "enum")
                (parse-proto-enum stream message))
+	      ((string= token "oneof")
+	       (parse-proto-oneof stream message))
               ((string= token "extend")
                (parse-proto-extend stream message))
               ((string= token "message")
@@ -542,9 +614,26 @@
                (parse-proto-option stream message))
               ((string= token "extensions")
                (parse-proto-extension stream message))
-              (t
+	      ((and (string-equal syntax "proto3")
+		    (or (member token '("int32" "int64" "uint32" "uint64" "sint32" "sint64"
+					"fixed32" "fixed64" "sfixed32" "sfixed64"
+					"string" "bytes" "bool" "float" "double") :test #'string=)
+			(valid-type protobuf token)))
+	       ;; in proto3 you don't have the required/optional etc prefix, just treat it like we 
+	       ;; saw one; I think all fields are optional in proto3
+	       (parse-proto-field stream message "optional"  nil token))
+              (t 
                (error "Unrecognized token ~A at ~A"
                       token (parse-error-position stream))))))))
+
+(defmethod valid-type ((schema protobuf-schema) (name string))
+  (flet ((ok-in-this-schema (schema name)
+	   (or (member name (proto-enums schema) :test #'string= :key #'proto-name )
+	       (member name (proto-messages schema) :test #'string= :key #'proto-name))))
+    (or (ok-in-this-schema schema name)
+	(loop for sub-schema in (proto-imported-schemas schema)
+	    thereis (ok-in-this-schema sub-schema name)))))
+
 
 (defmethod resolve-lisp-names ((message protobuf-message))
   "Recursively resolves protobuf type names to lisp type names in nested messages and fields of 'message'."
@@ -601,11 +690,11 @@
                (error "Unrecognized token ~A at ~A"
                       token (parse-error-position stream))))))))
 
-(defun parse-proto-field (stream message required &optional extended-from)
+(defun parse-proto-field (stream message required &optional extended-from alredy-seen-token)
   "Parse a Protobufs field from 'stream'.
    Updates the 'protobuf-message' object to have the field."
   (check-type message protobuf-message)
-  (let ((type (parse-token stream)))
+  (let ((type (or alredy-seen-token (parse-token stream))))
     (if (string= type "group")
       (parse-proto-group stream message required extended-from)
       (let* ((name (prog1 (parse-token stream)

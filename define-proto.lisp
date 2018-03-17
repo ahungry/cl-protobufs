@@ -235,11 +235,11 @@
       (dolist (field fields)
         (case (car field)
           ((define-enum define-message define-extend define-extension define-group
-             define-type-alias)
+                        define-type-alias)
            (destructuring-bind (&optional progn model-type model definers extra-field extra-slot)
                (macroexpand-1 field env)
              (assert (eq progn 'progn) ()
-                     "The macroexpansion for ~S failed" field)
+               "The macroexpansion for ~S failed" field)
              (map () #'collect-form definers)
              (ecase model-type
                ((define-enum)
@@ -259,21 +259,49 @@
                 (appendf (proto-fields *protobuf*) (list extra-field)))
                ((define-extension)
                 (appendf (proto-extensions *protobuf*) (list model))))))
+          (protobuf-oneof
+           (destructuring-bind (name options . oneof-fields) (rest field)
+             (let* ((message *protobuf*)
+                    (source-location (getf options :source-location))
+                    (qualified-name (getf options :qualified-name))
+                    (oneof (make-instance 'protobuf-oneof
+                             :class name
+                             :name (getf options :name)
+                             :qualified-name qualified-name
+                             :parent message
+                             :source-location source-location
+                             )))
+               (appendf (proto-oneofs message) (list oneof))
+               (loop with processed-fields = nil
+                   for oneof-field in oneof-fields
+                   do (multiple-value-bind (field slot idx)
+                          (process-field oneof-field index :conc-name conc-name :alias-for alias-for)
+                        (assert (not (find-field *protobuf* (proto-index field))) ()
+                          "The field ~S overlaps with another field in ~S"
+                          (proto-value field) (proto-class *protobuf*))
+                        (push field processed-fields)
+                        (setq index idx)
+                        (when slot
+                          (collect-slot slot))
+                        (appendf (proto-fields *protobuf*) (list field))
+                        (appendf (proto-fields oneof) (list field))
+                        ))
+               )))
           (otherwise
            (multiple-value-bind (field slot idx)
                (process-field field index :conc-name conc-name :alias-for alias-for)
              (assert (not (find-field *protobuf* (proto-index field))) ()
-                     "The field ~S overlaps with another field in ~S"
-                     (proto-value field) (proto-class *protobuf*))
+               "The field ~S overlaps with another field in ~S"
+               (proto-value field) (proto-class *protobuf*))
              (setq index idx)
              (when slot
                (collect-slot slot))
              (appendf (proto-fields *protobuf*) (list field))))))
       (if alias-for
-        ;; If we've got an alias, define a type that is the subtype of
-        ;; the Lisp class that typep and subtypep work
-        (unless (or (eq type alias-for) (find-class type nil))
-          (collect-type-form `(deftype ,type () ',alias-for)))
+          ;; If we've got an alias, define a type that is the subtype of
+          ;; the Lisp class that typep and subtypep work
+          (unless (or (eq type alias-for) (find-class type nil))
+            (collect-type-form `(deftype ,type () ',alias-for)))
         ;; If no alias, define the class now
         (collect-type-form `(defclass ,type (#+use-base-protobuf-message base-protobuf-message)
                               ,slots

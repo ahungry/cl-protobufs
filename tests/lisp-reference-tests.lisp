@@ -140,7 +140,6 @@ message DefinedMessage {
 
 ")
 
-
 (define-test undefined-types-test ()
   (labels ((parse-schema-containing (string)
              (with-input-from-string (s (concatenate 'string *test-proto-preamble* string))
@@ -164,8 +163,8 @@ message DefinedMessage {
                     for expected-string in expected-strings
                     as position = (search expected-string actual-string :start2 index)
                     always position
-                    do (setf index (+ position (length expected-string))))))
-           (do-field-test (field-type)
+		  do (setf index (+ position (length expected-string))))))
+	   (do-field-test (field-type)
              (let ((condition (assert-error undefined-field-type
                                 (parse-message-with-field-type field-type))))
                (poor-mans-assert-regex-equal
@@ -184,7 +183,11 @@ message DefinedMessage {
                     "in service "
                     "ServiceWithUndefinedMethodType"
                     (format nil "has unknown type ~A" type))
-              (princ-to-string condition))
+              (let ((*package* (find-package :proto-test)))
+		;; The format string for the condition includes @< ... @> which justifies
+		;; and might introduce a newline which would cause a mismatch.  So 
+		;; replace that by a space
+		(substitute #\space #\newline (princ-to-string condition) :test #'char-equal)))
              (assert-equal type (error-type-name condition))
              (assert-equal method-proto-name (proto-name (error-method condition))))
            (do-method-input-test (input-type)
@@ -219,7 +222,11 @@ message DefinedMessage {
 
     (parse-service-with-rpc
      "rpc MethodWithDefinedInputOutput (DefinedMessage) returns (DefinedMessage);")
+
+
     (do-method-input-test "UndefinedMessage")
+    
+
     ;; my understanding is that primitive types are not allowed for method input/output; if this is
     ;; incorrect, change to "int"
     (do-method-input-test "int32")

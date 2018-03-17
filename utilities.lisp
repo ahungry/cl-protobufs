@@ -356,8 +356,10 @@
 ;; "outer-class.inner-class" -> "InnerClass", ("OuterClass" "InnerClass")
 (defun class-name->proto (x)
   "Given a Lisp class name, returns a Protobufs message or enum name.
-   The second value is the fully qualified name, as a list."
-  (let* ((xs (split-string (string x) :separators '(#\.)))
+   The second value is the fully qualified name, as a list. At least one caller 
+   passes in the class, not the name, so check for that first."
+  (let* ((real-class-name (if (typep x 'class) (class-name x) x))
+	 (xs (split-string (string real-class-name) :separators '(#\.)))
          (ns (loop for x in (butlast xs)
                    collect (remove-if-not #'alphanumericp
                                           (camel-case (format nil "~A" x) *proto-name-separators*))))

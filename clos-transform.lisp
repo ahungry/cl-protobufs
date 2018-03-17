@@ -361,7 +361,11 @@
       ((not (or type-enum (equal type expanded-type)))
        (clos-type-to-protobuf-type expanded-type))
       (t
-       (lisp-type-to-protobuf-type type)))))
+       (multiple-value-bind (name class) (lisp-type-to-protobuf-type type)
+	 (values name
+		 ;; always return class-name as opposed to actual class
+		 (if (typep class 'class) (class-name class) class))
+	 )))))
 
 (defun lisp-type-to-protobuf-type (type)
   (case type

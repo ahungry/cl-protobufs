@@ -8,7 +8,7 @@
 ;;;                                                                  ;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defsystem "cl-protobufs-tests"
+(asdf:defsystem "cl-protobufs-tests"
   :name "Protobufs Tests"
   :author "Scott McKay"
   :version "1.0"

@@ -8,7 +8,9 @@
 ;;;                                                                  ;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defsystem "cl-protobufs"
+(in-package :asdf)
+
+(asdf:defsystem "cl-protobufs"
   :name "CL Protobufs"
   :author "Scott McKay"
   :version "1.0"

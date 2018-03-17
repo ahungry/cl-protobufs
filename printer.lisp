@@ -229,6 +229,10 @@
     (format stream "~&~@[~VT~]~%"
             (and (not (zerop indentation)) indentation))))
 
+;;; ToDo: Add code to generate proto format for OneOf's following the pattern
+;;; in the :lisp format.  I.e. fields in oneofs aren't generated in the message
+;;; and the oneof generates code with those fields.
+
 (defmethod write-schema-as ((type (eql :proto)) (message protobuf-message) stream
                             &key (indentation 0) more index arity)
   (declare (ignore more arity))
@@ -249,7 +253,7 @@
                (format stream "~&~VToption ~:/protobuf-option/;~%"
                        (+ indentation 2) option))
              (loop for (enum . more) on (proto-enums message) doing
-               (write-schema-as type enum stream :indentation (+ indentation 2) :more more))
+		   (write-schema-as type enum stream :indentation (+ indentation 2) :more more))
              (loop for (field . more) on (proto-fields message) doing
                (write-schema-as type field stream
                                 :indentation (+ indentation 2) :more more :message message))
@@ -454,7 +458,7 @@
            ;; read back correctly.
            ;; (The :keyword package does not use any other packages, so
            ;; all symbols will be printed with package prefixes.
-           ;; Keywords are always printed as :keyword.)
+           ;; Keywords are always printed as :keyword.)esee
            (*package* (or *protobuf-package*
                           (when *use-common-lisp-package* (find-package :common-lisp))
                           (find-package :keyword)))
@@ -475,7 +479,8 @@
                             ~%  (cl:unless (cl:find-package \"~A\")~
                             ~%    (cl:defpackage ~A (:use~@[ ~(~S~)~]))))~
                             ~%(cl:in-package \"~A\")~
-                            ~%(cl:export '(~{~A~^~%             ~}))~%~%"
+                            ~&(cl:eval-when (:execute :compile-toplevel :load-toplevel)~
+                            ~% (cl:export '(~{~A~^~%             ~})))~%~%"
                     pkg pkg (and *use-common-lisp-package* :common-lisp) pkg
                     rpc-exports))))
       (when (or lisp-pkg pkg)
@@ -484,7 +489,8 @@
                           ~%  (cl:unless (cl:find-package \"~A\")~
                           ~%    (cl:defpackage ~A (:use~@[ ~(~S~)~]))))~
                           ~%(cl:in-package \"~A\")~
-                          ~%(cl:export '(~{~A~^~%             ~}))~%~%"
+                          ~&(cl:eval-when (:execute :compile-toplevel :load-toplevel)~
+                            ~% (cl:export '(~{~A~^~%             ~})))~%~%"
                   pkg pkg (and *use-common-lisp-package* :common-lisp) pkg
                   (remove-if-not
                    #'(lambda (sym)
@@ -531,7 +537,7 @@
           (format stream "~A:documentation ~S" spaces documentation)))
       (format stream ")")
       (loop for (enum . more) on (proto-enums schema) doing
-        (write-schema-as type enum stream :indentation 2 :more more))
+	    (write-schema-as type enum stream :indentation 2 :more more))
       (loop for (alias . more) on (proto-type-aliases schema) doing
         (write-schema-as type alias stream :indentation 2 :more more))
       (loop for (msg . more) on (proto-messages schema) doing
@@ -550,6 +556,35 @@
 (defmethod write-schema-header ((type (eql :lisp)) (schema protobuf-schema) stream)
   (declare (ignorable type stream))
   nil)
+
+
+(defmethod write-schema-as ((type (eql :lisp)) (oneof protobuf-oneof) stream
+			    &key (indentation 0) more)
+  (terpri stream)
+  (with-prefixed-accessors (name class documentation source-location fields qualified-name) (proto- oneof)
+    (when documentation
+      (write-schema-documentation type documentation stream :indentation indentation))
+    (format stream "~@[~VT~](proto:protobuf-oneof ~(~S~)"
+	    (and (not (zerop indentation)) indentation) class)
+    (let ((other (and name (string/= name (class-name->proto class)) name)))
+      (cond ((or other documentation source-location)
+	     (format stream "~%~@[~VT~](~:[~2*~;:name ~(~S~)~@[~%~VT~]~]~
+                                        ~:[~2*~;:documentation ~S~@[~%~VT~]~]~
+                                        ~:[~*~;:source-location ~/source-location/~]
+                                        ~:[~*~;:qualified-name ~s~])"
+		     (+ indentation 4)
+		     other other 
+		     (and (or documentation source-location) (+ indentation 5))
+		     documentation documentation (and source-location (+ indentation 5))
+		     source-location source-location
+             qualified-name qualified-name))
+	    (t
+	     (format stream " ()")))
+      (loop for (field . more) on (proto-fields oneof) 
+	  for message = (proto-parent field)
+	  do (write-schema-as type field stream :indentation (+ indentation 2) :more more :message message))
+      (when more (terpri stream))
+      (format stream ")"))))
 
 (defmethod write-schema-as ((type (eql :lisp)) (enum protobuf-enum) stream
                             &key (indentation 0) more)
@@ -638,12 +673,13 @@
                (write-schema-as type enum stream :indentation (+ indentation 2) :more more)
                (when more
                  (terpri stream)))
-             (loop for (field . more) on (proto-fields message) doing
-               (write-schema-as type field stream
+             (loop for (field . more) on (proto-fields message)
+		 unless (proto-oneof field)
+		 do (write-schema-as type field stream
                                 :indentation (+ indentation 2) :more more
                                 :message message)
-               (when more
-                 (terpri stream))))
+		    (when more
+		      (terpri stream))))
             (t
              (when documentation
                (write-schema-documentation type documentation stream :indentation indentation))
@@ -668,12 +704,14 @@
                      (t
                       (format stream " ()"))))
              (cond ((eq message-type :extends)
-                    (loop for (field . more) on (proto-extended-fields message) doing
-                      (write-schema-as type field stream
+                    (loop for (field . more) on (proto-extended-fields message) 
+			unless (proto-oneof field)
+			do
+			  (write-schema-as type field stream
                                        :indentation (+ indentation 2) :more more
                                        :message message)
-                      (when more
-                        (terpri stream))))
+			  (when more
+			    (terpri stream))))
                    (t
                     (loop for (enum . more) on (proto-enums message) doing
                       (write-schema-as type enum stream :indentation (+ indentation 2) :more more)
@@ -684,12 +722,17 @@
                         (write-schema-as type msg stream :indentation (+ indentation 2) :more more)
                         (when more
                           (terpri stream))))
-                    (loop for (field . more) on (proto-fields message) doing
-                      (write-schema-as type field stream
+		    (loop for (oneof . more) on (proto-oneofs message)
+			do (write-schema-as type oneof stream
+					    :indentation (+ indentation 2) 
+					    :more more
+					    :message message))
+                    (loop for (field . more) on (proto-fields message) 
+			unless (proto-oneof field)
+			do (write-schema-as type field stream
                                        :indentation (+ indentation 2) :more more
                                        :message message)
-                      (when more
-                        (terpri stream)))
+			   (when more (terpri stream)))
                     (loop for (extension . more) on (proto-extensions message) doing
                       (write-schema-as type extension stream :indentation (+ indentation 2) :more more)
                       (when more
@@ -768,7 +811,7 @@
                (format stream (if (and (keywordp class) (not (eq class :bool)))
                                 ;; Keyword class means a primitive type, print default with ~S
                                 "~&~@[~VT~](~A :type ~(~S~)~:[~*~; :default ~S~]~
-                                 ~@[ :reader ~(~S~)~]~@[ :writer ~(~S~)~]~@[ :packed ~(~S~)~]~
+                                 ~@[ :reader ~(~S~)~]~@[ :writer ~(~S~)~]~@[ :~packed ~(~S~)~]~
                                  ~@[ :options (~{~/protobuf-option/~^ ~})~])~
                                  ~:[~2*~;~VT; ~A~]"
                                 ;; Non-keyword class means an enum type, print default with ~(~S~)
@@ -777,7 +820,8 @@
                                  ~@[ :options (~{~/protobuf-option/~^ ~})~])~
                                  ~:[~2*~;~VT; ~A~]")
                        (and (not (zerop indentation)) indentation)
-                       slot-name type defaultp default reader writer packed options
+                       slot-name type 
+		       defaultp default reader writer packed options
                        ;; Don't write the comment if we'll insert a close paren after it
                        (and more documentation) *protobuf-slot-comment-column* documentation)))))))
 
