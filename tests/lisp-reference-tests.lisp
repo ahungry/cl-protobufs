@@ -163,19 +163,8 @@ message DefinedMessage {
                     for expected-string in expected-strings
                     as position = (search expected-string actual-string :start2 index)
                     always position
-		  do (setf index (+ position (length expected-string))))))
-	   (do-field-test (field-type)
-             (let ((condition (assert-error undefined-field-type
-                                (parse-message-with-field-type field-type))))
-               (poor-mans-assert-regex-equal
-                (list "Undefined type: Field "
-                      "BAR"
-                      "in message "
-                      "MESSAGE-WITH-UNDEFINED-FIELD-TYPE"
-                      (format nil "has unknown type ~A" field-type))
-                (princ-to-string condition))
-               (assert-equal field-type (error-type-name condition))
-               (assert-equal "bar" (proto-name (error-field condition)))))
+                    do (setf index (+ position (length expected-string))))))
+           
            (method-test-assertions (condition where method-lisp-name method-proto-name type)
              (poor-mans-assert-regex-equal
               (list (format nil "Undefined type: ~A type for RPC " where)

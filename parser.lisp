@@ -498,7 +498,7 @@
 		   ;;
 		   :parent message
 		   ;; One of :required, :optional or :repeated
-		   :required nil
+		   :required :optional
 		   :index idx
 		   :value slot
 		   ;; Fields parsed from .proto files usually get an accessor
