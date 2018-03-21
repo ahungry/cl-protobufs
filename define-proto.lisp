@@ -279,6 +279,7 @@
                         (assert (not (find-field *protobuf* (proto-index field))) ()
                           "The field ~S overlaps with another field in ~S"
                           (proto-value field) (proto-class *protobuf*))
+			(setf (proto-oneof field) oneof)
                         (push field processed-fields)
                         (setq index idx)
                         (when slot
@@ -286,6 +287,10 @@
                         (appendf (proto-fields *protobuf*) (list field))
                         (appendf (proto-fields oneof) (list field))
                         ))
+	       ;;also need to generate and collect setf
+	       ;; methods for the slots that participate in a
+	       ;; oneof, so that setting one unsets the
+	       ;; others.
                )))
           (otherwise
            (multiple-value-bind (field slot idx)
@@ -306,8 +311,25 @@
         (collect-type-form `(defclass ,type (#+use-base-protobuf-message base-protobuf-message)
                               ,slots
                               ,@(and documentation `((:documentation ,documentation))))))
-      (nconc type-forms forms))))
+      (nconc type-forms forms (generate-oneof-setf-methods (proto-oneofs *protobuf*) type)))))
 
+(defun generate-oneof-setf-methods (oneofs class)
+  (loop for oneof in oneofs
+      for fields = (proto-fields oneof)
+      for slot-names = (mapcar #'proto-value fields)
+      append (loop for field in fields
+		 for his-slot-name = (proto-value field)
+		 collect `(defmethod (setf ,his-slot-name) (new-value (object ,class))
+			    (with-slots ,slot-names object
+			      (setq ,his-slot-name new-value)
+			      ,@(loop for other-field in fields
+				    for other-slot-name = (proto-value other-field)
+				    unless (eql other-field field)
+				    if (eql (proto-class other-field) :bool)
+				    collect `(slot-makunbound object ',other-slot-name)
+				    else collect `(setq ,other-slot-name nil)))
+			    new-value)))
+  )
 
 ;; Define a message named 'name' and a Lisp 'defclass'
 (defmacro define-message (type (&key name conc-name alias-for options
